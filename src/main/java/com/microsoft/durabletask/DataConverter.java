@@ -2,6 +2,11 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.google.protobuf.Timestamp;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 public interface DataConverter {
     String serialize(Object value);
     <T> T deserialize(String data, Class<T> target);
@@ -14,5 +19,25 @@ public interface DataConverter {
         public DataConverterException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    static Instant getInstantFromTimestamp(Timestamp ts) {
+        if (ts == null) {
+            return null;
+        }
+
+        // We don't include nanoseconds because of round-trip issues
+        return Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos()).truncatedTo(ChronoUnit.MILLIS);
+    }
+
+    static Timestamp getTimestampFromInstant(Instant instant) {
+        if (instant == null) {
+            return null;
+        }
+
+        return Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
+                .build();
     }
 }

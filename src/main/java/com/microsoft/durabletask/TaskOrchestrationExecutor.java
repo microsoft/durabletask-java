@@ -46,11 +46,6 @@ public class TaskOrchestrationExecutor {
         return context.pendingActions.values();
     }
 
-    static Instant getInstantFromTimestamp(Timestamp ts) {
-        // We don't include nanoseconds because of round-trip issues
-        return Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos()).truncatedTo(ChronoUnit.MILLIS);
-    }
-
     private class ContextImplTask implements TaskOrchestrationContext {
 
         private String orchestratorName;
@@ -63,7 +58,7 @@ public class TaskOrchestrationExecutor {
 
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
         private final LinkedHashMap<Integer, OrchestratorAction> pendingActions = new LinkedHashMap<>();
-        private final HashMap<Integer, TaskRecord> openTasks = new HashMap<>();
+        private final HashMap<Integer, TaskRecord<?>> openTasks = new HashMap<>();
         private final DataConverter dataConverter = TaskOrchestrationExecutor.this.dataConverter;
         private final Logger logger = TaskOrchestrationExecutor.this.logger;
         private final OrchestrationHistoryIterator historyEventPlayer;
@@ -94,8 +89,7 @@ public class TaskOrchestrationExecutor {
                 return null;
             }
 
-            T input = this.dataConverter.deserialize(this.rawInput, targetType);
-            return input;
+            return this.dataConverter.deserialize(this.rawInput, targetType);
         }
 
         @Override
@@ -207,7 +201,7 @@ public class TaskOrchestrationExecutor {
         private void handleTaskCompleted(HistoryEvent e) {
             TaskCompletedEvent completedEvent = e.getTaskCompleted();
             int taskId = completedEvent.getTaskScheduledId();
-            TaskRecord record = this.openTasks.remove(taskId);
+            TaskRecord<?> record = this.openTasks.remove(taskId);
             if (record == null) {
                 // TODO: Log a warning about a potential duplicate task completion event
                 return;
@@ -235,7 +229,7 @@ public class TaskOrchestrationExecutor {
         private void handleTaskFailed(HistoryEvent e) {
             TaskFailedEvent failedEvent = e.getTaskFailed();
             int taskId = failedEvent.getTaskScheduledId();
-            TaskRecord record = this.openTasks.remove(taskId);
+            TaskRecord<?> record = this.openTasks.remove(taskId);
             if (record == null) {
                 // TODO: Log a warning about a potential duplicate task completion event
                 return;
@@ -247,17 +241,14 @@ public class TaskOrchestrationExecutor {
                 // TODO: Log task failure, including the number of bytes in the result
             }
 
-            CompletableTask task = record.getTask();
+            CompletableTask<?> task = record.getTask();
             task.completeExceptionally(new TaskFailedException(taskId, reason));
         }
 
         public Task<Void> createTimer(Duration duration) {
             int id = this.sequenceNumber++;
             Instant fireAt = this.currentInstant.plus(duration);
-            Timestamp ts = Timestamp.newBuilder()
-                    .setSeconds(fireAt.getEpochSecond())
-                    .setNanos(fireAt.getNano())
-                    .build();
+            Timestamp ts = DataConverter.getTimestampFromInstant(fireAt);
             this.pendingActions.put(id, OrchestratorAction.newBuilder()
                     .setId(id)
                     .setCreateTimer(CreateTimerAction.newBuilder().setFireAt(ts))
@@ -290,7 +281,7 @@ public class TaskOrchestrationExecutor {
                 String message = String.format(
                         "Non-deterministic orchestrator detected: a history event creating a timer with ID %d and fire-at time %s was replayed but the current orchestrator implementation didn't actually create this timer. Was a change made to the orchestrator code after this instance had already started running?",
                         timerEventId,
-                        getInstantFromTimestamp(timerCreatedEvent.getFireAt()));
+                        DataConverter.getInstantFromTimestamp(timerCreatedEvent.getFireAt()));
                 throw new NonDeterministicOrchestratorException(message);
             }
         }
@@ -298,7 +289,7 @@ public class TaskOrchestrationExecutor {
         public void handleTimerFired(HistoryEvent e) {
             TimerFiredEvent timerFiredEvent = e.getTimerFired();
             int timerEventId = timerFiredEvent.getTimerId();
-            TaskRecord record = this.openTasks.remove(timerEventId);
+            TaskRecord<?> record = this.openTasks.remove(timerEventId);
             if (record == null) {
                 // TODO: Log a warning about a potential duplicate timer fired event
                 return;
@@ -308,7 +299,7 @@ public class TaskOrchestrationExecutor {
                 // TODO: Log timer fired, including the scheduled fire-time
             }
 
-            CompletableTask<Void> task = record.getTask();
+            CompletableTask<?> task = record.getTask();
             task.complete(null);
         }
 
@@ -346,7 +337,7 @@ public class TaskOrchestrationExecutor {
         private void processEvent(HistoryEvent e) throws OrchestratorYieldEvent {
             switch (e.getEventTypeCase()) {
                 case ORCHESTRATORSTARTED:
-                    Instant instant = getInstantFromTimestamp(e.getTimestamp());
+                    Instant instant = DataConverter.getInstantFromTimestamp(e.getTimestamp());
                     this.setCurrentInstant(instant);
                     break;
                 case ORCHESTRATORCOMPLETED:

@@ -4,7 +4,7 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
-import com.microsoft.durabletask.protobuf.TaskHubServiceGrpc.*;
+import com.microsoft.durabletask.protobuf.TaskHubWorkerServiceGrpc.*;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
@@ -20,13 +20,26 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class TaskHubServer {
+    private static final int DEFAULT_PORT = 4000;
+
     private static final Logger logger = Logger.getLogger(TaskHubServer.class.getPackage().getName());
     private Server grpcServer;
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
-    // TODO: Make this configurable in the builder
-    private final DataConverter dataConverter = new JacksonDataConverter();
+
+    private final int port;
+    private final DataConverter dataConverter;
+
+    private TaskHubServer(Builder builder) {
+        if (builder.port > 0) {
+            this.port = builder.port;
+        } else {
+            this.port = DEFAULT_PORT;
+        }
+
+        this.dataConverter = Objects.requireNonNullElse(builder.dataConverter, new JacksonDataConverter());
+    }
 
     // TODO: Put these methods behind a builder abstraction
     public void addOrchestration(TaskOrchestrationFactory factory) {
@@ -52,13 +65,12 @@ public class TaskHubServer {
     }
 
     public void start() throws IOException {
-        int port = 4000;
         this.grpcServer = ServerBuilder
-            .forPort(port)
-            .addService((new TaskHubServiceImpl()))
+            .forPort(this.port)
+            .addService((new TaskHubWorkerServiceImpl()))
             .build()
             .start();
-        logger.info("Server started, listening on " + port);
+        logger.info("Server started, listening on " + this.port);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
@@ -91,7 +103,34 @@ public class TaskHubServer {
      * Main launches the server from the command line.
      */
     public static void main(String[] args) throws IOException, InterruptedException {
-        final TaskHubServer server = new TaskHubServer();
+        final TaskHubServer server = TaskHubServer.newBuilder().build();
+        server.addOrchestration(new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return "ActivityChaining"; }
+
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    int initial = ctx.getInput(int.class);
+
+                    int x = ctx.callActivity("PlusOne", initial, int.class).get();
+                    int y = ctx.callActivity("PlusOne", x, int.class).get();
+                    int z = ctx.callActivity("PlusOne", y, int.class).get();
+
+                    ctx.complete(z);
+                };
+            }
+        });
+        server.addActivity(new TaskActivityFactory() {
+            @Override
+            public String getName() { return "PlusOne"; }
+
+            @Override
+            public TaskActivity create() {
+                return ctx -> ctx.getInput(int.class) + 1;
+            }
+        });
+
         server.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() {
@@ -278,15 +317,6 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addActivity(new TaskActivityFactory() {
-            @Override
-            public String getName() { return "PlusOne"; }
-
-            @Override
-            public TaskActivity create() {
-                return ctx -> ctx.getInput(Integer.class) + 1;
-            }
-        });
 
         server.addOrchestration(new TaskOrchestrationFactory() {
             @Override
@@ -343,12 +373,36 @@ public class TaskHubServer {
         server.blockUntilShutdown();
     }
 
-    class TaskHubServiceImpl extends TaskHubServiceImplBase {
+    public static Builder newBuilder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private int port;
+        private DataConverter dataConverter;
+
+        private Builder() {
+        }
+
+        public void setPort(int port) {
+            this.port = port;
+        }
+
+        public void setDataConverter(DataConverter dataConverter) {
+            this.dataConverter = dataConverter;
+        }
+
+        public TaskHubServer build() {
+            return new TaskHubServer(this);
+        }
+    }
+
+    class TaskHubWorkerServiceImpl extends TaskHubWorkerServiceImplBase {
 
         private final TaskOrchestrationExecutor taskOrchestrationExecutor;
         private final TaskActivityExecutor taskActivityExecutor;
 
-        public TaskHubServiceImpl() {
+        public TaskHubWorkerServiceImpl() {
             this.taskOrchestrationExecutor = new TaskOrchestrationExecutor(
                     TaskHubServer.this.orchestrationFactories,
                     TaskHubServer.this.dataConverter,

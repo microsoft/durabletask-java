@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-class OrchestratorYieldEvent extends Throwable {
+public class OrchestratorYieldEvent extends Throwable {
     OrchestratorYieldEvent(String message) {
         super(message);
     }
