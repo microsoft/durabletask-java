@@ -1,0 +1,29 @@
+plugins {
+    id "java"
+    // Generate IntelliJ IDEA's .idea & .iml project files
+    id 'idea'
+}
+
+group 'com.microsoft'
+version = '0.1.0'
+archivesBaseName = 'durabletask'
+
+def grpcVersion = '1.38.0'
+def jacksonVersion = '2.12.3'
+
+dependencies {
+    implementation fileTree('../libs')
+
+    // https://github.com/grpc/grpc-java#download
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
+
+    // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-core
+    implementation "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-annotations:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
+
+    compile 'org.jetbrains:annotations:20.1.0'
+}

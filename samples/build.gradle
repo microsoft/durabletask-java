@@ -1,0 +1,11 @@
+plugins {
+    id 'java'
+}
+
+group 'io.durabletask'
+version = '0.1.0'
+archivesBaseName = 'durabletask-samples'
+
+dependencies {
+    implementation project(':sdk')
+}
