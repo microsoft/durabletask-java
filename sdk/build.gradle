@@ -25,5 +25,13 @@ dependencies {
     implementation "com.fasterxml.jackson.core:jackson-annotations:${jacksonVersion}"
     implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
 
-    compile 'org.jetbrains:annotations:20.1.0'
+    testImplementation(platform('org.junit:junit-bom:5.7.2'))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+}
+
+test {
+    useJUnitPlatform()
+
+    // Integration tests require the dt agent to be running
+    exclude 'com/microsoft/durabletask/IntegrationTests.class'
 }

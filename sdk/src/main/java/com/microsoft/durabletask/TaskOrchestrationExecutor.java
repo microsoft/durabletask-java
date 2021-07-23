@@ -6,10 +6,10 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
+import com.microsoft.durabletask.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -35,12 +35,24 @@ public class TaskOrchestrationExecutor {
     public Collection<OrchestratorAction> execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
         ContextImplTask context = new ContextImplTask(pastEvents, newEvents);
 
+        boolean completed = false;
         try {
             // Play through the history events until either we've played through everything
             // or we receive a yield signal
             while (context.processNextEvent()) { /* no method body */ }
+            completed = true;
+        } catch (Exception e) {
+            // The orchestrator threw an unhandled exception - fail it
+            // TODO: What's the right way to log this?
+            logger.warning("The orchestrator failed with an unhandled exception: " + e.toString());
+            context.fail(new ErrorDetails(e));
         } catch (OrchestratorYieldEvent orchestratorYieldEvent) {
             logger.fine("The orchestrator has yielded and will await for new events.");
+        }
+
+        if (completed && context.pendingActions.isEmpty() && !context.waitingForEvents()) {
+            // There are no further actions for the orchestrator to take so auto-complete the orchestration.
+            context.complete(null);
         }
 
         return context.pendingActions.values();
@@ -155,23 +167,25 @@ public class TaskOrchestrationExecutor {
 
         public <V> Task<V> callActivity(String name, Object input, Class<V> returnType) {
             int id = this.sequenceNumber++;
+
             String serializedInput = this.dataConverter.serialize(input);
+            Builder scheduleTaskBuilder = ScheduleTaskAction.newBuilder().setName(name);
+            if (serializedInput != null) {
+                scheduleTaskBuilder.setInput(StringValue.of(serializedInput));
+            }
 
             this.pendingActions.put(id, OrchestratorAction.newBuilder()
                     .setId(id)
-                    .setScheduleTask(ScheduleTaskAction.newBuilder()
-                            .setName(name)
-                            .setInput(StringValue.of(serializedInput)))
+                    .setScheduleTask(scheduleTaskBuilder)
                     .build());
 
             if (!this.isReplaying) {
-                // TODO: Structured logging
-                this.logger.info(String.format(
-                        "%s: calling activity '%s' (#%d) with %d chars of input",
+                this.logger.fine(() -> String.format(
+                        "%s: calling activity '%s' (#%d) with serialized input: %s",
                         this.instanceId,
                         name,
                         id,
-                        serializedInput != null ? serializedInput.length() : 0));
+                        serializedInput != null ? serializedInput : "(null)"));
             }
 
             CompletableTask<V> task = new CompletableTask<>();
@@ -198,6 +212,7 @@ public class TaskOrchestrationExecutor {
             }
         }
 
+        @SuppressWarnings("unchecked")
         private void handleTaskCompleted(HistoryEvent e) {
             TaskCompletedEvent completedEvent = e.getTaskCompleted();
             int taskId = completedEvent.getTaskScheduledId();
@@ -212,12 +227,12 @@ public class TaskOrchestrationExecutor {
             if (!this.isReplaying) {
                 // TODO: Structured logging
                 // TODO: Would it make more sense to put this log in the activity executor?
-                this.logger.info(String.format(
-                        "%s: Activity '%s' (#%d) completed with %d chars of serialized output",
+                this.logger.fine(() -> String.format(
+                        "%s: Activity '%s' (#%d) completed with serialized output: %s",
                         this.instanceId,
                         record.getTaskName(),
                         taskId,
-                        rawResult != null ? rawResult.length() : 0));
+                        rawResult != null ? rawResult : "(null)"));
 
             }
 
@@ -305,13 +320,23 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public void complete(Object output) {
+            this.completeInternal(output, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
+        }
+
+        @Override
+        public void fail(Object errorOutput) {
+            // TODO: How does a parent orchestration use the output to construct an exception?
+            this.completeInternal(errorOutput, OrchestrationStatus.ORCHESTRATION_STATUS_FAILED);
+        }
+
+        private void completeInternal(Object output, OrchestrationStatus runtimeStatus) {
             if (this.isComplete) {
-                throw new IllegalStateException("An orchestrator can only be completed once.");
+                throw new IllegalStateException("The orchestrator was already completed.");
             }
 
             int id = this.sequenceNumber++;
             CompleteOrchestrationAction.Builder builder = CompleteOrchestrationAction.newBuilder();
-            builder.setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
+            builder.setOrchestrationStatus(runtimeStatus);
 
             if (output != null) {
                 String resultAsJson = TaskOrchestrationExecutor.this.dataConverter.serialize(output);
@@ -328,6 +353,11 @@ public class TaskOrchestrationExecutor {
                     .build();
             this.pendingActions.put(id, action);
             this.isComplete = true;
+        }
+        
+        private boolean waitingForEvents() {
+            // TODO: Return true if we're waiting for any external events
+            return false;
         }
 
         private boolean processNextEvent() throws OrchestratorYieldEvent {

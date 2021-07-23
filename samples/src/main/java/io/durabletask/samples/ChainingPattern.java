@@ -10,10 +10,7 @@ import java.time.Duration;
 final class ChainingPattern {
     public static void main(String[] args) throws IOException, InterruptedException {
         // The TaskHubServer listens over gRPC for new orchestration and activity execution requests
-        final TaskHubServer server = TaskHubServer.newBuilder().build();
-
-        // Orchestration and activity tasks must be registered with the server
-        registerDurableTasks(server);
+        final TaskHubServer server = createTaskHubServer();
 
         // Start the server to begin processing orchestration and activity requests
         server.start();
@@ -37,9 +34,11 @@ final class ChainingPattern {
         server.stop();
     }
 
-    private static void registerDurableTasks(TaskHubServer server) {
+    private static TaskHubServer createTaskHubServer() {
+        TaskHubServer.Builder builder = TaskHubServer.newBuilder();
+
         // Orchestrations can be defined inline as anonymous classes or as concrete classes
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "ActivityChaining"; }
 
@@ -53,13 +52,14 @@ final class ChainingPattern {
                     String y = ctx.callActivity("Capitalize", x, String.class).get();
                     String z = ctx.callActivity("ReplaceWhitespace", y, String.class).get();
 
+                    // Save the output of the orchestration
                     ctx.complete(z);
                 };
             }
         });
 
         // Activities can be defined inline as anonymous classes or as concrete classes
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "Reverse"; }
 
@@ -74,7 +74,7 @@ final class ChainingPattern {
             }
         });
 
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "Capitalize"; }
 
@@ -84,7 +84,7 @@ final class ChainingPattern {
             }
         });
 
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "ReplaceWhitespace"; }
 
@@ -96,5 +96,7 @@ final class ChainingPattern {
                 };
             }
         });
+
+        return builder.build();
     }
 }

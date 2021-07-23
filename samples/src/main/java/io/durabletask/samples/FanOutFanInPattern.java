@@ -11,12 +11,10 @@ import java.util.StringTokenizer;
 import java.util.stream.Collectors;
 
 class FanOutFanInPattern {
+
     public static void main(String[] args) throws IOException, InterruptedException {
         // The TaskHubServer listens over gRPC for new orchestration and activity execution requests
-        final TaskHubServer server = TaskHubServer.newBuilder().build();
-
-        // Orchestration and activity tasks must be registered with the server
-        registerDurableTasks(server);
+        final TaskHubServer server = createTaskHubServer();
 
         // Start the server to begin processing orchestration and activity requests
         server.start();
@@ -50,9 +48,11 @@ class FanOutFanInPattern {
         server.stop();
     }
 
-    private static void registerDurableTasks(TaskHubServer server) {
+    private static TaskHubServer createTaskHubServer() {
+        TaskHubServer.Builder builder = TaskHubServer.newBuilder();
+
         // Orchestrations can be defined inline as anonymous classes or as concrete classes
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "FanOutFanIn_WordCount"; }
 
@@ -79,7 +79,7 @@ class FanOutFanInPattern {
         });
 
         // Activities can be defined inline as anonymous classes or as concrete classes
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "CountWords"; }
 
@@ -93,5 +93,7 @@ class FanOutFanInPattern {
                 };
             }
         });
+
+        return builder.build();
     }
 }

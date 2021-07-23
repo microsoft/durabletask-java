@@ -30,44 +30,59 @@ public class TaskHubClient {
             port = DEFAULT_PORT;
         }
 
+        String host = builder.host;
+        if (host == null || host.length() == 0) {
+            host = System.getenv("DURABLETASK_WORKER_HOST");
+            if (host == null || host.length() == 0) {
+                host = "127.0.0.1";
+            }
+        }
+
         // We assume unencrypted localhost for all communication.
         // Requests that need to cross trust boundaries should go through secure gRPC proxies, like Dapr.
         ManagedChannel channel = ManagedChannelBuilder
-                .forAddress("localhost", port)
+                .forAddress(host, port)
                 .usePlaintext()
                 .build();
         this.grpcClient = TaskHubClientServiceGrpc.newBlockingStub(channel);
     }
 
-    public String scheduleNewOrchestrationInstance(String orchestrationName, Object input) {
-        String randomInstanceId = UUID.randomUUID().toString();
-        return this.scheduleNewOrchestrationInstance(orchestrationName, input, randomInstanceId);
+    public String scheduleNewOrchestrationInstance(String orchestratorName) {
+        return this.scheduleNewOrchestrationInstance(orchestratorName, null, null);
     }
 
-    public String scheduleNewOrchestrationInstance(String orchestrationName, Object input, String instanceId) {
+    public String scheduleNewOrchestrationInstance(String orchestratorName, Object input) {
+        return this.scheduleNewOrchestrationInstance(orchestratorName, input, null);
+    }
+
+    public String scheduleNewOrchestrationInstance(String orchestratorName, Object input, String instanceId) {
         NewOrchestrationInstanceOptions options = NewOrchestrationInstanceOptions.newBuilder()
                 .setInput(input)
                 .setInstanceId(instanceId)
                 .build();
-        return this.scheduleNewOrchestrationInstance(orchestrationName, options);
+        return this.scheduleNewOrchestrationInstance(orchestratorName, options);
     }
 
     // TODO: Create async flavors of these APIs
     public String scheduleNewOrchestrationInstance(
-            String orchestrationName,
+            String orchestratorName,
             NewOrchestrationInstanceOptions options) {
-        if (orchestrationName == null || orchestrationName.length() == 0) {
+        if (orchestratorName == null || orchestratorName.length() == 0) {
             throw new IllegalArgumentException("A non-empty orchestrator name must be specified.");
         }
 
+        if (options == null) {
+            throw new IllegalArgumentException("Options must not be null.");
+        }
+
         CreateInstanceRequest.Builder builder = CreateInstanceRequest.newBuilder();
-        builder.setName(orchestrationName);
+        builder.setName(orchestratorName);
 
         String instanceId = options.getInstanceId();
         if (instanceId == null) {
             instanceId = UUID.randomUUID().toString();
-            builder.setInstanceId(instanceId);
         }
+        builder.setInstanceId(instanceId);
 
         String version = options.getVersion();
         if (version != null) {
@@ -139,14 +154,18 @@ public class TaskHubClient {
 
     public static class Builder {
         private DataConverter dataConverter;
+        private String host;
         private int port;
 
-        public void setDataConverter(DataConverter dataConverter) {
+        public Builder setDataConverter(DataConverter dataConverter) {
             this.dataConverter = dataConverter;
+            return this;
         }
 
-        public void setPort(int port) {
+        public Builder forAddress(String host, int port) {
+            this.host = host;
             this.port = port;
+            return this;
         }
 
         // TODO: Have this return an interface?

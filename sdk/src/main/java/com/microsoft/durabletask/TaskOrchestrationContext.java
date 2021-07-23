@@ -17,4 +17,14 @@ public interface TaskOrchestrationContext {
     <V> Task<V> callActivity(String name, Object input, Class<V> returnType);
     Task<Void> createTimer(Duration delay);
     void complete(Object output);
+    void fail(Object errorOutput);
+
+    default Task<Void> callActivity(String name) {
+        return this.callActivity(name, null);
+    }
+
+    default Task<Void> callActivity(String name, Object input) {
+        return this.callActivity(name, input, Void.class);
+    }
+
 }

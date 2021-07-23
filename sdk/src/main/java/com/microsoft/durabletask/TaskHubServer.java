@@ -7,6 +7,8 @@ import com.microsoft.durabletask.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.protobuf.TaskHubWorkerServiceGrpc.*;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.Status;
+import io.grpc.StatusException;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
@@ -21,9 +23,7 @@ import java.util.stream.IntStream;
 
 public class TaskHubServer {
     private static final int DEFAULT_PORT = 4000;
-
     private static final Logger logger = Logger.getLogger(TaskHubServer.class.getPackage().getName());
-    private Server grpcServer;
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
@@ -31,7 +31,12 @@ public class TaskHubServer {
     private final int port;
     private final DataConverter dataConverter;
 
+    private Server grpcServer;
+
     private TaskHubServer(Builder builder) {
+        this.orchestrationFactories.putAll(builder.orchestrationFactories);
+        this.activityFactories.putAll(builder.activityFactories);
+
         if (builder.port > 0) {
             this.port = builder.port;
         } else {
@@ -39,29 +44,6 @@ public class TaskHubServer {
         }
 
         this.dataConverter = Objects.requireNonNullElse(builder.dataConverter, new JacksonDataConverter());
-    }
-
-    // TODO: Put these methods behind a builder abstraction
-    public void addOrchestration(TaskOrchestrationFactory factory) {
-        // TODO: Input validation
-        String key = factory.getName();
-        if (this.orchestrationFactories.containsKey(key)) {
-            throw new IllegalArgumentException(
-                String.format("A task orchestration factory named %s is already registered.", key));
-        }
-
-        this.orchestrationFactories.put(key, factory);
-    }
-
-    public void addActivity(TaskActivityFactory factory) {
-        // TODO: Input validation
-        String key = factory.getName();
-        if (this.activityFactories.containsKey(key)) {
-            throw new IllegalArgumentException(
-                    String.format("A task activity factory named %s is already registered.", key));
-        }
-
-        this.activityFactories.put(key, factory);
     }
 
     public void start() throws IOException {
@@ -73,20 +55,23 @@ public class TaskHubServer {
         logger.info("Server started, listening on " + this.port);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-            System.err.println("Shutting down gRPC server since JVM is shutting down...");
-            try {
-                TaskHubServer.this.stop();
-            } catch (InterruptedException e) {
-                e.printStackTrace(System.err);
+            if (this.grpcServer != null) {
+                // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+                System.err.println("Shutting down gRPC server since JVM is shutting down...");
+                try {
+                    TaskHubServer.this.stop();
+                } catch (InterruptedException e) {
+                    e.printStackTrace(System.err);
+                }
+                System.err.println("gRPC server shutdown completed.");
             }
-            System.err.println("gRPC server shutdown completed.");
         }));
     }
 
     public void stop() throws InterruptedException {
         if (this.grpcServer != null) {
             this.grpcServer.shutdown().awaitTermination(30, TimeUnit.SECONDS);
+            this.grpcServer = null;
         }
     }
 
@@ -103,8 +88,8 @@ public class TaskHubServer {
      * Main launches the server from the command line.
      */
     public static void main(String[] args) throws IOException, InterruptedException {
-        final TaskHubServer server = TaskHubServer.newBuilder().build();
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        TaskHubServer.Builder builder = TaskHubServer.newBuilder();
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "ActivityChaining"; }
 
@@ -121,7 +106,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "PlusOne"; }
 
@@ -131,7 +116,7 @@ public class TaskHubServer {
             }
         });
 
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() {
                 return "Test";
@@ -146,7 +131,7 @@ public class TaskHubServer {
             }
         });
 
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() {
                 return "OrchestrationWithTimer";
@@ -160,7 +145,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() {
                 return "OrchestrationWithTimer2";
@@ -175,7 +160,7 @@ public class TaskHubServer {
             }
         });
 
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "TwoTimerReplayTester"; }
 
@@ -195,7 +180,7 @@ public class TaskHubServer {
             }
         });
 
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "OrchestrationWithActivity"; }
 
@@ -208,7 +193,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "SayHello"; }
 
@@ -221,7 +206,7 @@ public class TaskHubServer {
             }
         });
 
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "CurrentDateTimeUtc"; }
 
@@ -246,7 +231,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "CurrentDateTimeUtc2"; }
 
@@ -268,7 +253,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "Echo"; }
 
@@ -278,7 +263,7 @@ public class TaskHubServer {
             }
         });
 
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "OrchestrationsWithActivityChain"; }
 
@@ -301,7 +286,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "OrchestrationsWithActivityChain2"; }
 
@@ -318,7 +303,7 @@ public class TaskHubServer {
             }
         });
 
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "ActivityFanOut"; }
 
@@ -339,7 +324,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addOrchestration(new TaskOrchestrationFactory() {
+        builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "ActivityFanOut2"; }
 
@@ -359,7 +344,7 @@ public class TaskHubServer {
                 };
             }
         });
-        server.addActivity(new TaskActivityFactory() {
+        builder.addActivity(new TaskActivityFactory() {
             @Override
             public String getName() { return "ToString"; }
 
@@ -369,6 +354,7 @@ public class TaskHubServer {
             }
         });
 
+        final TaskHubServer server = builder.build();
         server.start();
         server.blockUntilShutdown();
     }
@@ -378,18 +364,47 @@ public class TaskHubServer {
     }
 
     public static class Builder {
+        private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
+        private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();    
         private int port;
         private DataConverter dataConverter;
 
         private Builder() {
         }
 
-        public void setPort(int port) {
-            this.port = port;
+        
+        public Builder addOrchestration(TaskOrchestrationFactory factory) {
+            // TODO: Input validation
+            String key = factory.getName();
+            if (this.orchestrationFactories.containsKey(key)) {
+                throw new IllegalArgumentException(
+                    String.format("A task orchestration factory named %s is already registered.", key));
+            }
+
+            this.orchestrationFactories.put(key, factory);
+            return this;
         }
 
-        public void setDataConverter(DataConverter dataConverter) {
+        public Builder addActivity(TaskActivityFactory factory) {
+            // TODO: Input validation
+            String key = factory.getName();
+            if (this.activityFactories.containsKey(key)) {
+                throw new IllegalArgumentException(
+                        String.format("A task activity factory named %s is already registered.", key));
+            }
+
+            this.activityFactories.put(key, factory);
+            return this;
+        }
+
+        public Builder setPort(int port) {
+            this.port = port;
+            return this;
+        }
+
+        public Builder setDataConverter(DataConverter dataConverter) {
             this.dataConverter = dataConverter;
+            return this;
         }
 
         public TaskHubServer build() {
@@ -401,8 +416,10 @@ public class TaskHubServer {
 
         private final TaskOrchestrationExecutor taskOrchestrationExecutor;
         private final TaskActivityExecutor taskActivityExecutor;
+        private final DataConverter dataConverter;
 
         public TaskHubWorkerServiceImpl() {
+            this.dataConverter =  TaskHubServer.this.dataConverter;
             this.taskOrchestrationExecutor = new TaskOrchestrationExecutor(
                     TaskHubServer.this.orchestrationFactories,
                     TaskHubServer.this.dataConverter,
@@ -431,12 +448,19 @@ public class TaskHubServer {
             // TODO: Error handling for when the activity isn't registered
             String activityName = request.getName();
             String activityInput = request.getInput().getValue();
-            String result = this.taskActivityExecutor.execute(activityName, activityInput);
-            ActivityResponse response = ActivityResponse.newBuilder()
-                    .setResult(StringValue.of(result))
-                    .build();
-            responses.onNext(response);
-            responses.onCompleted();
+            try {
+                ActivityResponse.Builder response = ActivityResponse.newBuilder();
+                String output = this.taskActivityExecutor.execute(activityName, activityInput);
+                if (output != null) {
+                    response.setResult(StringValue.of(output));
+                }
+                responses.onNext(response.build());
+                responses.onCompleted();
+            } catch (Exception ex) {
+                String details = ErrorDetails.getFullStackTrace(ex);
+                Status errorStatus = Status.UNKNOWN.withDescription(details);
+                responses.onError(new StatusException(errorStatus));
+            }
         }
     }
 }

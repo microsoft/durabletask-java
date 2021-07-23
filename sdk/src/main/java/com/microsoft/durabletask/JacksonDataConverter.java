@@ -34,7 +34,7 @@ public class JacksonDataConverter implements DataConverter {
         try {
             return jsonObjectMapper.readValue(jsonText, targetType);
         } catch (JsonProcessingException e) {
-            throw this.wrapConverterException("Failed to deserialize the input.", e);
+            throw this.wrapConverterException(String.format("Failed to deserialize the JSON text to %s.", targetType.getName()), e);
         }
     }
 }

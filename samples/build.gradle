@@ -1,5 +1,7 @@
 plugins {
+    id 'org.springframework.boot' version '2.5.2'
     id 'java'
+    id 'application'
 }
 
 group 'io.durabletask'
@@ -8,4 +10,8 @@ archivesBaseName = 'durabletask-samples'
 
 dependencies {
     implementation project(':sdk')
+    
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation platform("org.springframework.boot:spring-boot-dependencies:2.5.2")
+    implementation 'org.springframework.boot:spring-boot-starter'
 }

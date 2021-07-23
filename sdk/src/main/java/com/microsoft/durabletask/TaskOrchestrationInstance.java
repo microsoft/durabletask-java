@@ -46,7 +46,9 @@ public class TaskOrchestrationInstance {
 
     public <T> T getInputAs(Class<T> type) {
         String serializedInput = this.getSerializedInput();
-        if (serializedInput == null) {
+
+        // Note that the Java gRPC implementation converts null protobuf strings into empty Java strings
+        if (serializedInput == null || serializedInput.isEmpty()) {
             return null;
         }
 
@@ -55,7 +57,9 @@ public class TaskOrchestrationInstance {
 
     public <T> T getOutputAs(Class<T> type) {
         String serializedOutput = this.getSerializedOutput();
-        if (serializedOutput == null) {
+
+        // Note that the Java gRPC implementation converts null protobuf strings into empty Java strings
+        if (serializedOutput == null || serializedOutput.isEmpty()) {
             return null;
         }
 
