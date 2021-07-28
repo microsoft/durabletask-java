@@ -27,7 +27,7 @@ public class JacksonDataConverter implements DataConverter {
 
     @Override
     public <T> T deserialize(String jsonText, Class<T> targetType) {
-        if (jsonText == null) {
+        if (jsonText == null || jsonText.length() == 0 || targetType == Void.class) {
             return null;
         }
 

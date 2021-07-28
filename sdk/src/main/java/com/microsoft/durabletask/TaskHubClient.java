@@ -71,9 +71,7 @@ public class TaskHubClient {
             throw new IllegalArgumentException("A non-empty orchestrator name must be specified.");
         }
 
-        if (options == null) {
-            throw new IllegalArgumentException("Options must not be null.");
-        }
+        Helpers.throwIfArgumentNull(options, "options");
 
         CreateInstanceRequest.Builder builder = CreateInstanceRequest.newBuilder();
         builder.setName(orchestratorName);
@@ -104,6 +102,27 @@ public class TaskHubClient {
         CreateInstanceRequest request = builder.build();
         CreateInstanceResponse response = this.grpcClient.startInstance(request);
         return response.getInstanceId();
+    }
+
+    // TODO: Async version
+    public void raiseEvent(String instanceId, String eventName) {
+        this.raiseEvent(instanceId, eventName, null);
+    }
+
+    public void raiseEvent(String instanceId, String eventName, Object eventPayload) {
+        Helpers.throwIfArgumentNull(instanceId, "instanceId");
+        Helpers.throwIfArgumentNull(eventName, "eventName");
+
+        RaiseEventRequest.Builder builder = RaiseEventRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .setName(eventName);
+        if (eventPayload != null) {
+            String serializedPayload = this.dataConverter.serialize(eventPayload);
+            builder.setInput(StringValue.of(serializedPayload));
+        }
+
+        RaiseEventRequest request = builder.build();
+        this.grpcClient.raiseEvent(request);
     }
 
     // TODO: More parameters

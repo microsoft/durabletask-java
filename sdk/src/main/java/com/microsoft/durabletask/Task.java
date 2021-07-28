@@ -16,8 +16,12 @@ public abstract class Task<V> {
     public boolean isDone() {
         return this.future.isDone();
     }
+    
+    public boolean isCancelled() { 
+        return this.future.isCancelled();
+    }
 
-    public abstract V get() throws OrchestratorYieldEvent;
+    public abstract V get() throws TaskFailedException, OrchestratorYieldEvent;
     public abstract Task<Void> thenRun(Runnable fn);
     public abstract Task<Void> thenAccept(Consumer<? super V> fn);
     public abstract <R> Task<R> thenApply(Function<? super V, ? extends R> fn);

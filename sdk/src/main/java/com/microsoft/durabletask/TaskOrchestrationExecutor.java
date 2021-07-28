@@ -11,7 +11,9 @@ import com.microsoft.durabletask.protobuf.OrchestratorService.ScheduleTaskAction
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -71,6 +73,8 @@ public class TaskOrchestrationExecutor {
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
         private final LinkedHashMap<Integer, OrchestratorAction> pendingActions = new LinkedHashMap<>();
         private final HashMap<Integer, TaskRecord<?>> openTasks = new HashMap<>();
+        private final LinkedHashMap<String, Queue<TaskRecord<?>>> outstandingEvents = new LinkedHashMap<>();
+        private final LinkedList<EventRaisedEvent> unprocessedEvents = new LinkedList<>();
         private final DataConverter dataConverter = TaskOrchestrationExecutor.this.dataConverter;
         private final Logger logger = TaskOrchestrationExecutor.this.logger;
         private final OrchestrationHistoryIterator historyEventPlayer;
@@ -144,6 +148,8 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public <V> Task<List<V>> allOf(List<Task<V>> tasks) {
+            Helpers.throwIfArgumentNull(tasks, "tasks");
+
             CompletableFuture<V>[] futures = tasks.stream()
                     .map(t -> t.future)
                     .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
@@ -165,7 +171,34 @@ public class TaskOrchestrationExecutor {
             }));
         }
 
+        @Override
+        public Task<Task<?>> anyOf(List<Task<?>> tasks) {
+            Helpers.throwIfArgumentNull(tasks, "tasks");
+
+            CompletableFuture<?>[] futures = tasks.stream()
+                    .map(t -> t.future)
+                    .toArray((IntFunction<CompletableFuture<?>[]>) CompletableFuture[]::new);
+
+            return new CompletableTask<>(CompletableFuture.anyOf(futures).thenApply(x -> {
+                // Return the first completed task in the list. Unlike the implementation in other languages,
+                // this might not necessarily be the first task that completed, so calling code shouldn't make
+                // assumptions about this. Note that changing this behavior later could be breaking.
+                for (Task<?> task : tasks) {
+                    if (task.isDone()) {
+                        return task;
+                    }
+                }
+
+                // Should never get here
+                return completedTask(null);
+            }));
+        }
+
+        @Override
         public <V> Task<V> callActivity(String name, Object input, Class<V> returnType) {
+            Helpers.throwIfArgumentNull(name, "name");
+            Helpers.throwIfArgumentNull(returnType, "returnType");
+
             int id = this.sequenceNumber++;
 
             String serializedInput = this.dataConverter.serialize(input);
@@ -194,6 +227,57 @@ public class TaskOrchestrationExecutor {
             return task;
         }
 
+        public <V> Task<V> waitForExternalEvent(String name, Duration timeout, Class<V> dataType) {
+            Helpers.throwIfArgumentNull(name, "name");
+            Helpers.throwIfArgumentNull(dataType, "dataType");
+
+            int id = this.sequenceNumber++;
+
+            CompletableTask<V> eventTask = new ExternalEventTask<>(name, id, timeout);
+            
+            // Check for a previously received event with the same name
+            for (EventRaisedEvent existing : this.unprocessedEvents) {
+                if (name.equalsIgnoreCase(existing.getName())) {
+                    String rawEventData = existing.getInput().getValue();
+                    V data = this.dataConverter.deserialize(rawEventData, dataType);
+                    eventTask.complete(data);
+                    this.unprocessedEvents.remove(existing);
+                    return eventTask;
+                }
+            }
+
+            boolean hasTimeout = !Helpers.isInfiniteTimeout(timeout);
+
+            // Immediately cancel the task and return if the timeout is zero.
+            if (hasTimeout && timeout.isZero()) {
+                eventTask.cancel();
+                return eventTask;
+            }
+
+            // Add this task to the list of tasks waiting for an external event.
+            TaskRecord<V> record = new TaskRecord<>(eventTask, name, dataType);
+            Queue<TaskRecord<?>> eventQueue = this.outstandingEvents.computeIfAbsent(name, k -> new LinkedList<>());
+            eventQueue.add(record);
+
+            // If a non-infinite timeout is specified, schedule an internal durable timer.
+            // If the timer expires and the external event task hasn't yet completed, we'll cancel the task.
+            if (hasTimeout) {
+                this.createTimer(timeout).thenRun(() -> {
+                    if (!eventTask.isDone()) {
+                        // Book-keeping - remove the task record for the canceled task
+                        eventQueue.removeIf(t -> t.task == eventTask);
+                        if (eventQueue.isEmpty()) {
+                            this.outstandingEvents.remove(name);
+                        }
+
+                        eventTask.cancel();
+                    }
+                });
+            }
+
+            return eventTask;
+        }
+
         private void handleTaskScheduled(HistoryEvent e) {
             int taskId = e.getEventId();
 
@@ -218,7 +302,7 @@ public class TaskOrchestrationExecutor {
             int taskId = completedEvent.getTaskScheduledId();
             TaskRecord<?> record = this.openTasks.remove(taskId);
             if (record == null) {
-                // TODO: Log a warning about a potential duplicate task completion event
+                this.logger.warning("Discarding a potentially duplicate TaskCompleted event with ID = " + taskId);
                 return;
             }
 
@@ -257,10 +341,38 @@ public class TaskOrchestrationExecutor {
             }
 
             CompletableTask<?> task = record.getTask();
-            task.completeExceptionally(new TaskFailedException(taskId, reason));
+            TaskFailedException exception = TaskFailedException.forTaskActivity(record.taskName, taskId, reason);
+            task.completeExceptionally(exception);
+        }
+
+        @SuppressWarnings("unchecked")
+        private void handleEventRaised(HistoryEvent e) {
+            EventRaisedEvent eventRaised = e.getEventRaised();
+            String eventName = eventRaised.getName();
+
+            Queue<TaskRecord<?>> outstandingEventQueue = this.outstandingEvents.get(eventName);
+            if (outstandingEventQueue == null) {
+                // No code is waiting for this event. Buffer it in case user-code waits for it later.
+                this.unprocessedEvents.add(eventRaised);
+                return;
+            }
+
+            // Signal the first waiter in the queue with this event payload.
+            TaskRecord<?> matchingTaskRecord = outstandingEventQueue.remove();
+            if (outstandingEventQueue.isEmpty()) {
+                this.outstandingEvents.remove(eventName);
+            }
+            String rawResult = eventRaised.getInput().getValue();
+            Object result = this.dataConverter.deserialize(
+                    rawResult,
+                    matchingTaskRecord.getDataType());
+            CompletableTask task = matchingTaskRecord.getTask();
+            task.complete(result);
         }
 
         public Task<Void> createTimer(Duration duration) {
+            Helpers.throwIfArgumentNull(duration, "duration");
+
             int id = this.sequenceNumber++;
             Instant fireAt = this.currentInstant.plus(duration);
             Timestamp ts = DataConverter.getTimestampFromInstant(fireAt);
@@ -360,11 +472,11 @@ public class TaskOrchestrationExecutor {
             return false;
         }
 
-        private boolean processNextEvent() throws OrchestratorYieldEvent {
+        private boolean processNextEvent() throws TaskFailedException, OrchestratorYieldEvent {
             return this.historyEventPlayer.moveNext();
         }
 
-        private void processEvent(HistoryEvent e) throws OrchestratorYieldEvent {
+        private void processEvent(HistoryEvent e) throws TaskFailedException, OrchestratorYieldEvent {
             switch (e.getEventTypeCase()) {
                 case ORCHESTRATORSTARTED:
                     Instant instant = DataConverter.getInstantFromTimestamp(e.getTimestamp());
@@ -415,8 +527,9 @@ public class TaskOrchestrationExecutor {
 //                    break;
 //                case EVENTSENT:
 //                    break;
-//                case EVENTRAISED:
-//                    break;
+                case EVENTRAISED:
+                    this.handleEventRaised(e);
+                    break;
 //                case GENERICEVENT:
 //                    break;
 //                case HISTORYSTATE:
@@ -467,7 +580,7 @@ public class TaskOrchestrationExecutor {
                 this.currentHistoryList = pastEvents;
             }
 
-            public boolean moveNext() throws OrchestratorYieldEvent {
+            public boolean moveNext() throws TaskFailedException, OrchestratorYieldEvent {
                 if (this.currentHistoryList == pastEvents && this.currentHistoryIndex >= pastEvents.size()) {
                     // Move forward to the next list
                     this.currentHistoryList = this.newEvents;
@@ -488,6 +601,33 @@ public class TaskOrchestrationExecutor {
             }
         }
 
+        private class ExternalEventTask<V> extends CompletableTask<V> {
+            private final String eventName;
+            private final Duration timeout;
+            private final int taskId;
+
+            public ExternalEventTask(String eventName, int taskId, Duration timeout) {
+                this.eventName = eventName;
+                this.taskId = taskId;
+                this.timeout = timeout;
+            }
+
+            @Override
+            protected void handleException(Throwable e) throws TaskFailedException {
+                // Cancellation is caused by user-specified timeouts
+                if (e instanceof CancellationException) {
+                    String message = String.format(
+                            "Timeout of %s expired while waiting for an event named '%s' (ID = %d).",
+                            this.timeout,
+                            this.eventName,
+                            this.taskId);
+                    throw new TaskCanceledException(message, this.eventName, this.taskId);
+                }
+
+                super.handleException(e);
+            }
+        }
+
         private class CompletableTask<V> extends Task<V> {
 
             public CompletableTask() {
@@ -499,14 +639,16 @@ public class TaskOrchestrationExecutor {
             }
 
             @Override
-            public V get() throws OrchestratorYieldEvent {
+            public final V get() throws TaskFailedException, OrchestratorYieldEvent {
                 do {
                     // If the future is done, return its value right away
                     if (this.future.isDone()) {
                         try {
                             return this.future.get();
+                        } catch (ExecutionException e) {
+                            this.handleException(e.getCause());
                         } catch (Exception e) {
-                            throw new RuntimeException("Unexpected failure in the task execution", e);
+                            this.handleException(e);
                         }
                     }
                 } while (ContextImplTask.this.processNextEvent());
@@ -515,7 +657,15 @@ public class TaskOrchestrationExecutor {
                 // The OrchestratorYieldEvent throwable allows us to yield the current thread back to the executor so
                 // that we can send the current set of actions back to the worker and wait for new events to come in.
                 // This is *not* an exception - it's a normal part of orchestrator control flow.
-                throw new OrchestratorYieldEvent("The orchestrator is yielding. This throwable should never be caught by user code.");
+                throw new OrchestratorYieldEvent("The orchestrator is yielding. This Throwable should never be caught by user code.");
+            }
+
+            protected void handleException(Throwable e) throws TaskFailedException {
+                if (e instanceof TaskFailedException) {
+                    throw (TaskFailedException)e;
+                }
+
+                throw new RuntimeException("Unexpected failure in the task execution", e);
             }
 
             @Override
@@ -525,6 +675,10 @@ public class TaskOrchestrationExecutor {
 
             public boolean complete(V value) {
                 return this.future.complete(value);
+            }
+
+            private boolean cancel() {
+                return this.future.cancel(true);
             }
 
             public boolean completeExceptionally(Throwable ex) {

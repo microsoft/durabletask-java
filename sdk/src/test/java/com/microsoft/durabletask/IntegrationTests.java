@@ -18,6 +18,8 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class IntegrationTests {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
@@ -222,31 +224,49 @@ public class IntegrationTests {
         assertTrue(details.getFullText().contains(errorMessage));
     }
 
-    @Test
-    void activityException() throws IOException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void activityException(boolean handleException) throws IOException {
         final String orchestratorName = "OrchestratorWithActivityException";
         final String activityName = "Throw";
         final String errorMessage = "Kah-BOOOOOM!!!";
 
         this.createServerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
-                ctx.callActivity(activityName).get();
+                try {
+                    ctx.callActivity(activityName).get();
+                } catch (TaskFailedException ex) {
+                    if (handleException) {
+                        ctx.complete(ex.getMessage());
+                    } else {
+                        throw ex;
+                    }
+                }
             })
             .addActivity(activityName, ctx -> {
                 throw new RuntimeException(errorMessage);
             })
             .buildAndStart();
 
-
         TaskHubClient client = TaskHubClient.newBuilder().build();
         String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
         TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
         assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
 
-        ErrorDetails details = instance.getOutputAs(ErrorDetails.class);
-        assertNotNull(details);
-        assertTrue(details.getFullText().contains(errorMessage));
+        if (handleException) {
+            String expected = String.format(
+                    "Activity '%s' with task ID 0 failed: java.lang.RuntimeException: %s",
+                    activityName,
+                    errorMessage);
+            String actual = instance.getOutputAs(String.class);
+            assertTrue(actual.startsWith(expected));
+        } else {
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            ErrorDetails details = instance.getOutputAs(ErrorDetails.class);
+            assertNotNull(details);
+            assertTrue(details.getFullText().contains(errorMessage));
+        }
     }
 
     @Test
@@ -287,6 +307,80 @@ public class IntegrationTests {
         for (int i = 0; i < activityCount; i++) {
             String expected = String.valueOf(activityCount - i - 1);
             assertEquals(expected, output.get(i).toString());
+        }
+    }
+
+    @Test
+    void externalEvents() throws IOException {
+        final String orchestratorName = "ExternalEvents";
+        final String eventName = "MyEvent";
+        final int eventCount = 10;
+
+        this.createServerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                int i;
+                for (i = 0; i < eventCount; i++) {
+                    // block until the event is received
+                    int payload = ctx.waitForExternalEvent(eventName, int.class).get();
+                    if (payload != i) {
+                        ctx.complete(-1);
+                        return;
+                    }
+                }
+
+                ctx.complete(i);
+            })
+            .buildAndStart();
+
+        TaskHubClient client = TaskHubClient.newBuilder().build();
+        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+
+        for (int i = 0; i < eventCount; i++) {
+            client.raiseEvent(instanceId, eventName, i);
+        }
+
+        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+        assertNotNull(instance);
+        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+        int output = instance.getOutputAs(int.class);
+        assertEquals(eventCount, output);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void externalEventsWithTimeouts(boolean raiseEvent) throws IOException {
+        final String orchestratorName = "ExternalEventsWithTimeouts";
+        final String eventName = "MyEvent";
+
+        this.createServerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                try {
+                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).get();
+                    ctx.complete("received");
+                } catch (TaskCanceledException e) {
+                    ctx.complete(e.getMessage());
+                }
+            })
+            .buildAndStart();
+
+        TaskHubClient client = TaskHubClient.newBuilder().build();
+        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+
+        client.waitForInstanceStart(instanceId, defaultTimeout);
+        if (raiseEvent) {
+            client.raiseEvent(instanceId, eventName);
+        }
+
+        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+        assertNotNull(instance);
+        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+        String output = instance.getOutputAs(String.class);
+        if (raiseEvent) {
+            assertEquals("received", output);
+        } else {
+            assertEquals("Timeout of PT3S expired while waiting for an event named '" + eventName + "' (ID = 0).", output);
         }
     }
 
