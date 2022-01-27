@@ -5,26 +5,45 @@ package com.microsoft.durabletask;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-public class ErrorDetails {
-    
-    private String fullText;
+import com.fasterxml.jackson.annotation.*;
 
-    public ErrorDetails() {
-    }
-    
-    public ErrorDetails(Exception e) {
-        this.fullText = getFullStackTrace(e);
+// NOTE: This type is serializable and represents a strict error contract for Durable Tasks
+//       across multiple languages.
+class ErrorDetails {
+    private final String errorName;
+    private final String errorMessage;
+    private final String errorDetails;
+
+    @JsonCreator
+    public ErrorDetails(
+            @JsonProperty("errorName") String errorName,
+            @JsonProperty("errorMessage") String errorMessage,
+            @JsonProperty("errorDetails") String errorDetails) {
+        this.errorName = errorName;
+        this.errorMessage = errorMessage;
+        this.errorDetails = errorDetails;
     }
 
-    public String getFullText() {
-        return this.fullText;
+    public ErrorDetails(Exception exception) {
+        this(exception.getClass().getName(), exception.getMessage(), getFullStackTrace(exception));
     }
 
-    void setFullText(String fullText) {
-        this.fullText = fullText;
+    @JsonGetter("errorName")
+    public String getErrorName() {
+        return this.errorName;
     }
 
-    static String getFullStackTrace(Exception e) {
+    @JsonGetter("errorMessage")
+    public String getErrorMessage() {
+        return this.errorMessage;
+    }
+
+    @JsonGetter("errorDetails")
+    public String getErrorDetails() {
+        return this.errorDetails;
+    }
+
+    static String getFullStackTrace(Throwable e) {
         StringWriter writer = new StringWriter();
         PrintWriter printWriter = new PrintWriter( writer );
         e.printStackTrace(printWriter);

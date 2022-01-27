@@ -3,13 +3,13 @@
 package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
+
+import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
-import com.microsoft.durabletask.protobuf.TaskHubWorkerServiceGrpc.*;
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.Status;
-import io.grpc.StatusException;
-import io.grpc.stub.StreamObserver;
+import com.microsoft.durabletask.protobuf.OrchestratorService.WorkItem.RequestCase;
+import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc.*;
+
+import io.grpc.*;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -17,78 +17,173 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class TaskHubServer {
-    private static final int DEFAULT_PORT = 4000;
-    private static final Logger logger = Logger.getLogger(TaskHubServer.class.getPackage().getName());
+public class DurableTaskGrpcWorker implements AutoCloseable {
+    private static final int DEFAULT_PORT = 4001;
+    private static final Logger logger = Logger.getLogger(DurableTaskGrpcWorker.class.getPackage().getName());
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
 
-    private final int port;
+    private final ManagedChannel managedSidecarChannel;
     private final DataConverter dataConverter;
 
-    private Server grpcServer;
+    private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
-    private TaskHubServer(Builder builder) {
+    private DurableTaskGrpcWorker(Builder builder) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
 
-        if (builder.port > 0) {
-            this.port = builder.port;
+        Channel sidecarGrpcChannel;
+        if (builder.channel != null) {
+            // The caller is responsible for managing the channel lifetime
+            this.managedSidecarChannel = null;
+            sidecarGrpcChannel = builder.channel;
         } else {
-            this.port = DEFAULT_PORT;
+            // Construct our own channel using localhost + a port number
+            int port = DEFAULT_PORT;
+            if (builder.port > 0) {
+                port = builder.port;
+            }
+
+            // Need to keep track of this channel so we can dispose it on close()
+            this.managedSidecarChannel = ManagedChannelBuilder
+                    .forAddress("127.0.0.1", port)
+                    .usePlaintext()
+                    .build();
+            sidecarGrpcChannel = this.managedSidecarChannel;
         }
 
+        this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
         this.dataConverter = Objects.requireNonNullElse(builder.dataConverter, new JacksonDataConverter());
     }
 
-    public void start() throws IOException {
-        this.grpcServer = ServerBuilder
-            .forPort(this.port)
-            .addService((new TaskHubWorkerServiceImpl()))
-            .build()
-            .start();
-        logger.info("Server started, listening on " + this.port);
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (this.grpcServer != null) {
-                // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-                System.err.println("Shutting down gRPC server since JVM is shutting down...");
-                try {
-                    TaskHubServer.this.stop();
-                } catch (InterruptedException e) {
-                    e.printStackTrace(System.err);
-                }
-                System.err.println("gRPC server shutdown completed.");
+    public void start() {
+        new Thread(() -> {
+            try {
+                this.runAndBlock();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        }));
+        }).start();
     }
 
-    public void stop() throws InterruptedException {
-        if (this.grpcServer != null) {
-            this.grpcServer.shutdown().awaitTermination(30, TimeUnit.SECONDS);
-            this.grpcServer = null;
+    public void close() {
+        if (this.managedSidecarChannel != null) {
+            try {
+                this.managedSidecarChannel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                // Best effort. Also note that AutoClose documentation recommends NOT having
+                // close() methods throw InterruptedException:
+                // https://docs.oracle.com/javase/7/docs/api/java/lang/AutoCloseable.html
+            }
         }
     }
 
-    /**
-     * Await termination on the main thread since the grpc library uses daemon threads.
-     */
-    public void blockUntilShutdown() throws InterruptedException {
-        if (this.grpcServer != null) {
-            this.grpcServer.awaitTermination();
+    private String getSidecarAddress() {
+        return this.sidecarClient.getChannel().authority();
+    }
+
+    public void runAndBlock() throws InterruptedException {
+        logger.log(Level.INFO, "Durable Task worker is connecting to sidecar at {0}.", this.getSidecarAddress());
+
+        var taskOrchestrationExecutor = new TaskOrchestrationExecutor(
+                this.orchestrationFactories,
+                this.dataConverter,
+                logger);
+        var taskActivityExecutor = new TaskActivityExecutor(
+                this.activityFactories,
+                this.dataConverter,
+                logger);
+
+        // TODO: How do we interrupt manually?
+        while (true) {
+            try {
+                GetWorkItemsRequest getWorkItemsRequest = GetWorkItemsRequest.newBuilder().build();
+                Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(getWorkItemsRequest);
+                while (workItemStream.hasNext()) {
+                    WorkItem workItem = workItemStream.next();
+                    RequestCase requestType = workItem.getRequestCase();
+                    if (requestType == RequestCase.ORCHESTRATORREQUEST) {
+                        OrchestratorRequest orchestratorRequest = workItem.getOrchestratorRequest();
+
+                        // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
+                        // TODO: Error handling
+                        Collection<OrchestratorAction> actions = taskOrchestrationExecutor.execute(
+                                orchestratorRequest.getPastEventsList(),
+                                orchestratorRequest.getNewEventsList());
+
+                        // TODO: Need to get custom status from executor
+                        OrchestratorResponse response = OrchestratorResponse.newBuilder()
+                                .setInstanceId(orchestratorRequest.getInstanceId())
+                                .addAllActions(actions)
+                                .build();
+
+                        this.sidecarClient.completeOrchestratorTask(response);
+                    } else if (requestType == RequestCase.ACTIVITYREQUEST) {
+                        ActivityRequest activityRequest = workItem.getActivityRequest();
+
+                        // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
+                        String output = null;
+                        TaskFailureDetails failureDetails = null;
+                        try {
+                            output = taskActivityExecutor.execute(
+                                activityRequest.getName(),
+                                activityRequest.getInput().getValue(),
+                                activityRequest.getTaskId());
+                        } catch (Throwable e) {
+                            failureDetails = TaskFailureDetails.newBuilder()
+                                .setErrorName(e.getClass().getName())
+                                .setErrorMessage(e.getMessage())
+                                .setErrorDetails(ErrorDetails.getFullStackTrace(e))
+                                .build();
+                        }
+
+                        ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
+                                .setInstanceId(activityRequest.getOrchestrationInstance().getInstanceId())
+                                .setTaskId(activityRequest.getTaskId());
+
+                        if (output != null) {
+                            responseBuilder.setResult(StringValue.of(output));
+                        }
+
+                        if (failureDetails != null) {
+                            responseBuilder.setFailureDetails(failureDetails);
+                        }
+
+                        this.sidecarClient.completeActivityTask(responseBuilder.build());
+                    } else {
+                        logger.log(Level.WARNING, "Received and dropped an unknown '{0}' work-item from the sidecar.", requestType);
+                    }
+                }
+            } catch (StatusRuntimeException e) {
+                if (e.getStatus().getCode() == Status.Code.UNAVAILABLE) {
+                    logger.log(Level.INFO, "The sidecar at address {0} is unavailable. Will continue retrying.", this.getSidecarAddress());
+                } else if (e.getStatus().getCode() == Status.Code.CANCELLED) {
+                    logger.log(Level.INFO, "Durable Task worker has disconnected from {0}.", this.getSidecarAddress()); 
+                } else {
+                    logger.log(Level.WARNING, "Unexpected failure connecting to {0}.", this.getSidecarAddress());
+                }
+
+                // Retry after 5 seconds
+                Thread.sleep(5000);
+            }
         }
     }
 
+    public void stop() {
+        this.close();
+    }
+
     /**
-     * Main launches the server from the command line.
+     * Main launches the worker from the command line.
      */
     public static void main(String[] args) throws IOException, InterruptedException {
-        TaskHubServer.Builder builder = TaskHubServer.newBuilder();
+        DurableTaskGrpcWorker.Builder builder = DurableTaskGrpcWorker.newBuilder();
         builder.addOrchestration(new TaskOrchestrationFactory() {
             @Override
             public String getName() { return "ActivityChaining"; }
@@ -354,9 +449,8 @@ public class TaskHubServer {
             }
         });
 
-        final TaskHubServer server = builder.build();
-        server.start();
-        server.blockUntilShutdown();
+        final DurableTaskGrpcWorker server = builder.build();
+        server.runAndBlock();
     }
 
     public static Builder newBuilder() {
@@ -365,20 +459,23 @@ public class TaskHubServer {
 
     public static class Builder {
         private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
-        private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();    
+        private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
         private int port;
+        private Channel channel;
         private DataConverter dataConverter;
 
         private Builder() {
         }
 
-        
         public Builder addOrchestration(TaskOrchestrationFactory factory) {
-            // TODO: Input validation
             String key = factory.getName();
+            if (key == null || key.length() == 0) {
+                throw new IllegalArgumentException("A non-empty task orchestration name is required.");
+            }
+
             if (this.orchestrationFactories.containsKey(key)) {
                 throw new IllegalArgumentException(
-                    String.format("A task orchestration factory named %s is already registered.", key));
+                        String.format("A task orchestration factory named %s is already registered.", key));
             }
 
             this.orchestrationFactories.put(key, factory);
@@ -388,6 +485,10 @@ public class TaskHubServer {
         public Builder addActivity(TaskActivityFactory factory) {
             // TODO: Input validation
             String key = factory.getName();
+            if (key == null || key.length() == 0) {
+                throw new IllegalArgumentException("A non-empty task activity name is required.");
+            }
+
             if (this.activityFactories.containsKey(key)) {
                 throw new IllegalArgumentException(
                         String.format("A task activity factory named %s is already registered.", key));
@@ -397,7 +498,12 @@ public class TaskHubServer {
             return this;
         }
 
-        public Builder setPort(int port) {
+        public Builder useGrpcChannel(Channel channel) {
+            this.channel = channel;
+            return this;
+        }
+
+        public Builder forPort(int port) {
             this.port = port;
             return this;
         }
@@ -407,60 +513,60 @@ public class TaskHubServer {
             return this;
         }
 
-        public TaskHubServer build() {
-            return new TaskHubServer(this);
+        public DurableTaskGrpcWorker build() {
+            return new DurableTaskGrpcWorker(this);
         }
     }
 
-    class TaskHubWorkerServiceImpl extends TaskHubWorkerServiceImplBase {
+    // class TaskHubWorkerServiceImpl extends TaskHubWorkerServiceImplBase {
 
-        private final TaskOrchestrationExecutor taskOrchestrationExecutor;
-        private final TaskActivityExecutor taskActivityExecutor;
-        private final DataConverter dataConverter;
+    //     private final TaskOrchestrationExecutor taskOrchestrationExecutor;
+    //     private final TaskActivityExecutor taskActivityExecutor;
+    //     private final DataConverter dataConverter;
 
-        public TaskHubWorkerServiceImpl() {
-            this.dataConverter =  TaskHubServer.this.dataConverter;
-            this.taskOrchestrationExecutor = new TaskOrchestrationExecutor(
-                    TaskHubServer.this.orchestrationFactories,
-                    TaskHubServer.this.dataConverter,
-                    TaskHubServer.logger);
-            this.taskActivityExecutor = new TaskActivityExecutor(
-                    TaskHubServer.this.activityFactories,
-                    TaskHubServer.this.dataConverter,
-                    TaskHubServer.logger);
-        }
+    //     public TaskHubWorkerServiceImpl() {
+    //         this.dataConverter =  DurableTaskGrpcWorker.this.dataConverter;
+    //         this.taskOrchestrationExecutor = new TaskOrchestrationExecutor(
+    //                 DurableTaskGrpcWorker.this.orchestrationFactories,
+    //                 DurableTaskGrpcWorker.this.dataConverter,
+    //                 DurableTaskGrpcWorker.logger);
+    //         this.taskActivityExecutor = new TaskActivityExecutor(
+    //                 DurableTaskGrpcWorker.this.activityFactories,
+    //                 DurableTaskGrpcWorker.this.dataConverter,
+    //                 DurableTaskGrpcWorker.logger);
+    //     }
 
-        @Override
-        public void executeOrchestrator(OrchestratorRequest req, StreamObserver<OrchestratorResponse> responses) {
-            // TODO: Error handling for when the orchestrator isn't registered
-            Collection<OrchestratorAction> actions = this.taskOrchestrationExecutor.execute(
-                    req.getPastEventsList(),
-                    req.getNewEventsList());
-            OrchestratorResponse response = OrchestratorResponse.newBuilder()
-                    .addAllActions(actions)
-                    .build();
-            responses.onNext(response);
-            responses.onCompleted();
-        }
+    //     @Override
+    //     public void executeOrchestrator(OrchestratorRequest req, StreamObserver<OrchestratorResponse> responses) {
+    //         // TODO: Error handling for when the orchestrator isn't registered
+    //         Collection<OrchestratorAction> actions = this.taskOrchestrationExecutor.execute(
+    //                 req.getPastEventsList(),
+    //                 req.getNewEventsList());
+    //         OrchestratorResponse response = OrchestratorResponse.newBuilder()
+    //                 .addAllActions(actions)
+    //                 .build();
+    //         responses.onNext(response);
+    //         responses.onCompleted();
+    //     }
 
-        @Override
-        public void executeActivity(ActivityRequest request, StreamObserver<ActivityResponse> responses) {
-            // TODO: Error handling for when the activity isn't registered
-            String activityName = request.getName();
-            String activityInput = request.getInput().getValue();
-            try {
-                ActivityResponse.Builder response = ActivityResponse.newBuilder();
-                String output = this.taskActivityExecutor.execute(activityName, activityInput);
-                if (output != null) {
-                    response.setResult(StringValue.of(output));
-                }
-                responses.onNext(response.build());
-                responses.onCompleted();
-            } catch (Exception ex) {
-                String details = ErrorDetails.getFullStackTrace(ex);
-                Status errorStatus = Status.UNKNOWN.withDescription(details);
-                responses.onError(new StatusException(errorStatus));
-            }
-        }
-    }
+    //     @Override
+    //     public void executeActivity(ActivityRequest request, StreamObserver<ActivityResponse> responses) {
+    //         // TODO: Error handling for when the activity isn't registered
+    //         String activityName = request.getName();
+    //         String activityInput = request.getInput().getValue();
+    //         try {
+    //             ActivityResponse.Builder response = ActivityResponse.newBuilder();
+    //             String output = this.taskActivityExecutor.execute(activityName, activityInput);
+    //             if (output != null) {
+    //                 response.setResult(StringValue.of(output));
+    //             }
+    //             responses.onNext(response.build());
+    //             responses.onCompleted();
+    //         } catch (Exception ex) {
+    //             String details = ErrorDetails.getFullStackTrace(ex);
+    //             Status errorStatus = Status.UNKNOWN.withDescription(details);
+    //             responses.onError(new StatusException(errorStatus));
+    //         }
+    //     }
+    // }
 }

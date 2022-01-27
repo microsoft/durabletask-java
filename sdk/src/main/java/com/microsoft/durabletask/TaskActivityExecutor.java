@@ -19,14 +19,22 @@ public class TaskActivityExecutor {
         this.logger = logger;
     }
 
-    public String execute(String activityName, String input) {
-        TaskActivityFactory factory = this.activityFactories.get(activityName);
-        // TODO: Throw if the factory is null (activity by that name doesn't exist)
+    public String execute(String taskName, String input, int taskId) throws Throwable {
+        TaskActivityFactory factory = this.activityFactories.get(taskName);
+        if (factory == null) {
+            throw new IllegalStateException(
+                    String.format("No activity task named '%s' is registered.", taskName));
+        }
+        
         TaskActivity activity = factory.create();
+        if (activity == null) {
+            throw new IllegalStateException(
+                    String.format("The task factory '%s' returned a null TaskActivity object.", taskName));
+        }
 
-        TaskActivityContextImpl context = new TaskActivityContextImpl(activityName, input);
+        TaskActivityContextImpl context = new TaskActivityContextImpl(taskName, input);
 
-        // TODO: What is the story for async activity functions?
+        // Unhandled exceptions are allowed to escape
         Object output = activity.run(context);
         if (output != null) {
             return this.dataConverter.serialize(output);

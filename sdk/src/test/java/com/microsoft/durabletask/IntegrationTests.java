@@ -21,11 +21,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/**
+ * These integration tests are designed to exercise the core, high-level features of
+ * the Durable Task programming model.
+ * <p/>
+ * These tests currently require a sidecar process to be
+ * running on the local machine (the sidecar is what accepts the client operations and
+ * sends invocation instructions to the DurableTaskWorker).
+ */
 public class IntegrationTests {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
 
     // All tests that create a server should save it to this variable for proper shutdown
-    private TaskHubServer server;
+    private DurableTaskGrpcWorker server;
 
     @AfterEach
     private void shutdown() throws InterruptedException {
@@ -35,51 +43,55 @@ public class IntegrationTests {
     }
 
     @Test
-    void emptyOrchestration() throws IOException {
+    void emptyOrchestration() {
         final String orchestratorName = "EmptyOrchestration";
         final String input = "Hello " + Instant.now();
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> ctx.complete(ctx.getInput(String.class)))
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(
-            instanceId,
-            defaultTimeout,
-            true);
-        
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-        assertEquals(input, instance.getInputAs(String.class));
-        assertEquals(input, instance.getOutputAs(String.class));
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId,
+                defaultTimeout,
+                true);
+            
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(input, instance.readInputAs(String.class));
+            assertEquals(input, instance.readOutputAs(String.class));
+        }
     }
 
     @Test
     void singleTimer() throws IOException {
         final String orchestratorName = "SingleTimer";
         final Duration delay = Duration.ofSeconds(3);
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).get())
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-        Duration timeout = delay.plus(defaultTimeout);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, timeout, false);
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            Duration timeout = delay.plus(defaultTimeout);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, timeout, false);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
 
-        // Verify that the delay actually happened
-        long expectedCompletionSecond = instance.getCreatedTime().plus(delay).getEpochSecond();
-        long actualCompletionSecond = instance.getLastUpdatedTime().getEpochSecond();
-        assertTrue(expectedCompletionSecond <= actualCompletionSecond);
+            // Verify that the delay actually happened
+            long expectedCompletionSecond = instance.getCreatedAt().plus(delay).getEpochSecond();
+            long actualCompletionSecond = instance.getLastUpdatedAt().getEpochSecond();
+            assertTrue(expectedCompletionSecond <= actualCompletionSecond);
+        }
     }
 
     @Test
     public void isReplaying() throws IOException, InterruptedException {
         final String orchestratorName = "SingleTimer";
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 ArrayList<Boolean> list = new ArrayList<Boolean>();
                 list.add(ctx.getIsReplaying());
@@ -91,23 +103,25 @@ public class IntegrationTests {
             })
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(
-            instanceId,
-            defaultTimeout,
-            true);
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId,
+                defaultTimeout,
+                true);
 
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
 
-        // Verify that the orchestrator reported the correct isReplaying values.
-        // Note that only the values of the *final* replay are returned.
-        List<?> results = instance.getOutputAs(List.class);
-        assertEquals(3, results.size());
-        assertTrue((Boolean)results.get(0));
-        assertTrue((Boolean)results.get(1));
-        assertFalse((Boolean)results.get(2));
+            // Verify that the orchestrator reported the correct isReplaying values.
+            // Note that only the values of the *final* replay are returned.
+            List<?> results = instance.readOutputAs(List.class);
+            assertEquals(3, results.size());
+            assertTrue((Boolean)results.get(0));
+            assertTrue((Boolean)results.get(1));
+            assertFalse((Boolean)results.get(2));
+        }
     }
 
     @Test
@@ -115,7 +129,7 @@ public class IntegrationTests {
         final String orchestratorName = "SingleActivity";
         final String activityName = "Echo";
         final String input = Instant.now().toString();
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 String activityInput = ctx.getInput(String.class);
                 String output = ctx.callActivity(activityName, activityInput, String.class).get();
@@ -126,18 +140,20 @@ public class IntegrationTests {
             })
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(
-            instanceId,
-            defaultTimeout,
-            true);
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId,
+                defaultTimeout,
+                true);
 
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-        String output = instance.getOutputAs(String.class);
-        String expected = String.format("Hello, %s!", input);
-        assertEquals(expected, output);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            String output = instance.readOutputAs(String.class);
+            String expected = String.format("Hello, %s!", input);
+            assertEquals(expected, output);
+        }
     }
 
     @Test
@@ -145,7 +161,7 @@ public class IntegrationTests {
         final String orchestratorName = "CurrentDateTimeUtc";
         final String echoActivityName = "Echo";
 
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 Instant currentInstant1 = ctx.getCurrentInstant();
                 Instant originalInstant1 = ctx.callActivity(echoActivityName, currentInstant1, Instant.class).get();
@@ -169,12 +185,14 @@ public class IntegrationTests {
             })
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-        assertTrue(instance.getOutputAs(boolean.class));
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertTrue(instance.readOutputAs(boolean.class));
+        }
     }
 
     @Test
@@ -182,7 +200,7 @@ public class IntegrationTests {
         final String orchestratorName = "ActivityChain";
         final String plusOneActivityName = "PlusOne";
 
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 int value = ctx.getInput(int.class);
                 for (int i = 0; i < 10; i++) {
@@ -194,12 +212,14 @@ public class IntegrationTests {
             .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-        assertEquals(10, instance.getOutputAs(int.class));
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(10, instance.readOutputAs(int.class));
+        }
     }
 
     @Test
@@ -207,21 +227,23 @@ public class IntegrationTests {
         final String orchestratorName = "OrchestratorWithException";
         final String errorMessage = "Kah-BOOOOOM!!!";
 
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 throw new RuntimeException(errorMessage);
             })
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
 
-        ErrorDetails details = instance.getOutputAs(ErrorDetails.class);
-        assertNotNull(details);
-        assertTrue(details.getFullText().contains(errorMessage));
+            ErrorDetails details = instance.readOutputAs(ErrorDetails.class);
+            assertNotNull(details);
+            assertTrue(details.getErrorDetails().contains(errorMessage));
+        }
     }
 
     @ParameterizedTest
@@ -231,13 +253,13 @@ public class IntegrationTests {
         final String activityName = "Throw";
         final String errorMessage = "Kah-BOOOOOM!!!";
 
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 try {
                     ctx.callActivity(activityName).get();
                 } catch (TaskFailedException ex) {
                     if (handleException) {
-                        ctx.complete(ex.getMessage());
+                        ctx.complete("handled");
                     } else {
                         throw ex;
                     }
@@ -248,24 +270,31 @@ public class IntegrationTests {
             })
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        assertNotNull(instance);
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
 
-        if (handleException) {
-            String expected = String.format(
-                    "Activity '%s' with task ID 0 failed: java.lang.RuntimeException: %s",
+            if (handleException) {
+                String result = instance.readOutputAs(String.class);
+                assertNotNull(result);
+                assertEquals("handled", result);
+            } else {
+                assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+                ErrorDetails details = instance.readOutputAs(ErrorDetails.class);
+                assertNotNull(details);
+
+                String expectedMessage = String.format(
+                    "Activity task '%s' with ID 0 failed with an unhandled exception.",
                     activityName,
                     errorMessage);
-            String actual = instance.getOutputAs(String.class);
-            assertTrue(actual.startsWith(expected));
-        } else {
-            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
-
-            ErrorDetails details = instance.getOutputAs(ErrorDetails.class);
-            assertNotNull(details);
-            assertTrue(details.getFullText().contains(errorMessage));
+                assertEquals(expectedMessage, details.getErrorMessage());
+                assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorName());
+                assertNotNull(details.getErrorDetails());
+                // CONSIDER: Additional validation of getErrorDetails?
+            }
         }
     }
 
@@ -275,7 +304,7 @@ public class IntegrationTests {
         final String activityName = "ToString";
         final int activityCount = 10;
 
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 // Schedule each task to run in parallel
                 List<Task<String>> parallelTasks = IntStream.range(0, activityCount)
@@ -291,22 +320,23 @@ public class IntegrationTests {
             .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
             .buildAndStart();
 
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            List<?> output = instance.readOutputAs(List.class);
+            assertNotNull(output);
+            assertEquals(activityCount, output.size());
+            assertEquals(String.class, output.get(0).getClass());
 
-        List<?> output = instance.getOutputAs(List.class);
-        assertNotNull(output);
-        assertEquals(activityCount, output.size());
-        assertEquals(String.class, output.get(0).getClass());
-
-        // Expected: ["9", "8", "7", "6", "5", "4", "3", "2", "1", "0"]
-        for (int i = 0; i < activityCount; i++) {
-            String expected = String.valueOf(activityCount - i - 1);
-            assertEquals(expected, output.get(i).toString());
+            // Expected: ["9", "8", "7", "6", "5", "4", "3", "2", "1", "0"]
+            for (int i = 0; i < activityCount; i++) {
+                String expected = String.valueOf(activityCount - i - 1);
+                assertEquals(expected, output.get(i).toString());
+            }
         }
     }
 
@@ -316,7 +346,7 @@ public class IntegrationTests {
         final String eventName = "MyEvent";
         final int eventCount = 10;
 
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 int i;
                 for (i = 0; i < eventCount; i++) {
@@ -332,19 +362,21 @@ public class IntegrationTests {
             })
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
 
-        for (int i = 0; i < eventCount; i++) {
-            client.raiseEvent(instanceId, eventName, i);
+            for (int i = 0; i < eventCount; i++) {
+                client.raiseEvent(instanceId, eventName, i);
+            }
+
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            int output = instance.readOutputAs(int.class);
+            assertEquals(eventCount, output);
         }
-
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-
-        int output = instance.getOutputAs(int.class);
-        assertEquals(eventCount, output);
     }
 
     @ParameterizedTest
@@ -353,7 +385,7 @@ public class IntegrationTests {
         final String orchestratorName = "ExternalEventsWithTimeouts";
         final String eventName = "MyEvent";
 
-        this.createServerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 try {
                     ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).get();
@@ -364,45 +396,47 @@ public class IntegrationTests {
             })
             .buildAndStart();
 
-        TaskHubClient client = TaskHubClient.newBuilder().build();
-        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
 
-        client.waitForInstanceStart(instanceId, defaultTimeout);
-        if (raiseEvent) {
-            client.raiseEvent(instanceId, eventName);
-        }
+            client.waitForInstanceStart(instanceId, defaultTimeout);
+            if (raiseEvent) {
+                client.raiseEvent(instanceId, eventName);
+            }
 
-        TaskOrchestrationInstance instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        assertNotNull(instance);
-        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
 
-        String output = instance.getOutputAs(String.class);
-        if (raiseEvent) {
-            assertEquals("received", output);
-        } else {
-            assertEquals("Timeout of PT3S expired while waiting for an event named '" + eventName + "' (ID = 0).", output);
+            String output = instance.readOutputAs(String.class);
+            if (raiseEvent) {
+                assertEquals("received", output);
+            } else {
+                assertEquals("Timeout of PT3S expired while waiting for an event named '" + eventName + "' (ID = 0).", output);
+            }
         }
     }
 
-    private TestTaskHubServerBuilder createServerBuilder() {
-        return new TestTaskHubServerBuilder();
+    private TestDurableTaskWorkerBuilder createWorkerBuilder() {
+        return new TestDurableTaskWorkerBuilder();
     }
 
-    public class TestTaskHubServerBuilder {
-        final TaskHubServer.Builder innerBuilder;
+    public class TestDurableTaskWorkerBuilder {
+        final DurableTaskGrpcWorker.Builder innerBuilder;
 
-        private TestTaskHubServerBuilder() {
-            this.innerBuilder = TaskHubServer.newBuilder();
+        private TestDurableTaskWorkerBuilder() {
+            this.innerBuilder = DurableTaskGrpcWorker.newBuilder();
         }
 
-        public TaskHubServer buildAndStart() throws IOException {
-            TaskHubServer server = this.innerBuilder.build();
+        public DurableTaskGrpcWorker buildAndStart() {
+            DurableTaskGrpcWorker server = this.innerBuilder.build();
             IntegrationTests.this.server = server;
             server.start();
             return server;
         }
 
-        public TestTaskHubServerBuilder addOrchestrator(
+        public TestDurableTaskWorkerBuilder addOrchestrator(
                 String name,
                 TaskOrchestration implementation) {
             this.innerBuilder.addOrchestration(new TaskOrchestrationFactory() {
@@ -415,7 +449,7 @@ public class IntegrationTests {
             return this;
         }
 
-        public <R> TestTaskHubServerBuilder addActivity(
+        public <R> TestDurableTaskWorkerBuilder addActivity(
             String name,
             TaskActivity implementation)
         {

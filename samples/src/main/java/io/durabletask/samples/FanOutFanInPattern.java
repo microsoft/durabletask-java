@@ -14,13 +14,13 @@ class FanOutFanInPattern {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         // The TaskHubServer listens over gRPC for new orchestration and activity execution requests
-        final TaskHubServer server = createTaskHubServer();
+        final DurableTaskGrpcWorker worker = createWorker();
 
         // Start the server to begin processing orchestration and activity requests
-        server.start();
+        worker.start();
 
         // Start a new instance of the registered "ActivityChaining" orchestration
-        final TaskHubClient client = TaskHubClient.newBuilder().build();
+        final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
 
         // The input is an arbitrary list of strings.
         List<String> listOfStrings = List.of(
@@ -37,19 +37,19 @@ class FanOutFanInPattern {
         System.out.printf("Started new orchestration instance: %s%n", instanceId);
 
         // Block until the orchestration completes. Then print the final status, which includes the output.
-        TaskOrchestrationInstance completedInstance = client.waitForInstanceCompletion(
+        OrchestrationMetadata completedInstance = client.waitForInstanceCompletion(
                 instanceId,
                 Duration.ofSeconds(30),
                 true);
         System.out.printf("Orchestration completed: %s%n", completedInstance);
-        System.out.printf("Output: %d%n", completedInstance.getOutputAs(int.class));
+        System.out.printf("Output: %d%n", completedInstance.readOutputAs(int.class));
 
         // Shutdown the server and exit
-        server.stop();
+        worker.stop();
     }
 
-    private static TaskHubServer createTaskHubServer() {
-        TaskHubServer.Builder builder = TaskHubServer.newBuilder();
+    private static DurableTaskGrpcWorker createWorker() {
+        DurableTaskGrpcWorker.Builder builder = DurableTaskGrpcWorker.newBuilder();
 
         // Orchestrations can be defined inline as anonymous classes or as concrete classes
         builder.addOrchestration(new TaskOrchestrationFactory() {

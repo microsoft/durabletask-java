@@ -4,7 +4,7 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
-
+import com.microsoft.durabletask.DataConverter.DataConverterException;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 
@@ -334,14 +334,32 @@ public class TaskOrchestrationExecutor {
                 return;
             }
 
-            String reason = failedEvent.getReason().getValue();
+            // The taskFailed.details field is expected to contain a structured payload
+            // describing the failure details
+            String reason = failedEvent.getDetails().getValue();
+            ErrorDetails details;
+            try {
+                details = this.dataConverter.deserialize(reason, ErrorDetails.class);
+            } catch (DataConverterException deserializeException) {
+                // Not expected - but we try to handle it gracefully.
+                details = new ErrorDetails(
+                        "_UnknownException",
+                        String.format(
+                                "The exception details could not be deserialized. See the error details for the raw error payload: %s",
+                                deserializeException.getMessage()),
+                        reason);
+            }
 
             if (!this.isReplaying) {
                 // TODO: Log task failure, including the number of bytes in the result
             }
 
             CompletableTask<?> task = record.getTask();
-            TaskFailedException exception = TaskFailedException.forTaskActivity(record.taskName, taskId, reason);
+            TaskFailedException exception = new TaskFailedException(
+                String.format("Activity task '%s' with ID %d failed with an unhandled exception.", record.taskName, taskId),
+                record.taskName,
+                taskId,
+                details);
             task.completeExceptionally(exception);
         }
 
@@ -612,6 +630,7 @@ public class TaskOrchestrationExecutor {
                 this.timeout = timeout;
             }
 
+            // TODO: Shouldn't this be throws TaskCanceledException?
             @Override
             protected void handleException(Throwable e) throws TaskFailedException {
                 // Cancellation is caused by user-specified timeouts

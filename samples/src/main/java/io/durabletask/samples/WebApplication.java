@@ -12,16 +12,16 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class WebApplication {
  
-    public static void main(String[] args) throws IOException {
-        TaskHubServer server = createTaskHubServer();
+    public static void main(String[] args) throws InterruptedException {
+        DurableTaskGrpcWorker server = createTaskHubServer();
         server.start();
 
         System.out.println("Starting up Spring web API...");
         SpringApplication.run(WebApplication.class, args);
     }
 
-    private static TaskHubServer createTaskHubServer() {
-        TaskHubServer.Builder builder = TaskHubServer.newBuilder();
+    private static DurableTaskGrpcWorker createTaskHubServer() {
+        DurableTaskGrpcWorker.Builder builder = DurableTaskGrpcWorker.newBuilder();
         
         // Orchestrations can be defined inline as anonymous classes or as concrete classes
         builder.addOrchestration(new TaskOrchestrationFactory() {

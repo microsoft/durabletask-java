@@ -2,8 +2,7 @@
 // Licensed under the MIT License.
 package io.durabletask.samples;
 
-import com.microsoft.durabletask.NewOrchestrationInstanceOptions;
-import com.microsoft.durabletask.TaskHubClient;
+import com.microsoft.durabletask.*;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -12,10 +11,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class OrchestrationController {
 
-    final TaskHubClient client;
+    final DurableTaskClient client;
 
     public OrchestrationController() {
-        this.client = TaskHubClient.newBuilder().build();
+        this.client = DurableTaskGrpcClient.newBuilder().build();
     }
 
     @GetMapping("/hello")

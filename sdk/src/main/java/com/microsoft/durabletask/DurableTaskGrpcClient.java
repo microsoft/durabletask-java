@@ -5,10 +5,10 @@ package com.microsoft.durabletask;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
-import com.microsoft.durabletask.protobuf.TaskHubClientServiceGrpc;
-import com.microsoft.durabletask.protobuf.TaskHubClientServiceGrpc.*;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc;
+import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc.*;
+
+import io.grpc.*;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -16,54 +16,54 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-public class TaskHubClient {
+// TODO: Create async flavors of the public APIs that call into the sidecar
+public class DurableTaskGrpcClient extends DurableTaskClient {
     private static final int DEFAULT_PORT = 4001;
 
     private final DataConverter dataConverter;
-    private final TaskHubClientServiceBlockingStub grpcClient;
+    private final ManagedChannel managedSidecarChannel;
+    private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
-    private TaskHubClient(Builder builder) {
+    private DurableTaskGrpcClient(Builder builder) {
         this.dataConverter = Objects.requireNonNullElseGet(builder.dataConverter, JacksonDataConverter::new);
 
-        int port = builder.port;
-        if (port <= 0) {
-            port = DEFAULT_PORT;
+        Channel sidecarGrpcChannel;
+        if (builder.channel != null) {
+            // The caller is responsible for managing the channel lifetime
+            this.managedSidecarChannel = null;
+            sidecarGrpcChannel = builder.channel;
+        } else {
+            // Construct our own channel using localhost + a port number
+            int port = DEFAULT_PORT;
+            if (builder.port > 0) {
+                port = builder.port;
+            }
+
+            // Need to keep track of this channel so we can dispose it on close()
+            this.managedSidecarChannel = ManagedChannelBuilder
+                    .forAddress("127.0.0.1", port)
+                    .usePlaintext()
+                    .build();
+            sidecarGrpcChannel = this.managedSidecarChannel;
         }
 
-        String host = builder.host;
-        if (host == null || host.length() == 0) {
-            host = System.getenv("DURABLETASK_WORKER_HOST");
-            if (host == null || host.length() == 0) {
-                host = "127.0.0.1";
+        this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
+    }
+
+    @Override
+    public void close() {
+        if (this.managedSidecarChannel != null) {
+            try {
+                this.managedSidecarChannel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                // Best effort. Also note that AutoClose documentation recommends NOT having
+                // close() methods throw InterruptedException:
+                // https://docs.oracle.com/javase/7/docs/api/java/lang/AutoCloseable.html
             }
         }
-
-        // We assume unencrypted localhost for all communication.
-        // Requests that need to cross trust boundaries should go through secure gRPC proxies, like Dapr.
-        ManagedChannel channel = ManagedChannelBuilder
-                .forAddress(host, port)
-                .usePlaintext()
-                .build();
-        this.grpcClient = TaskHubClientServiceGrpc.newBlockingStub(channel);
     }
 
-    public String scheduleNewOrchestrationInstance(String orchestratorName) {
-        return this.scheduleNewOrchestrationInstance(orchestratorName, null, null);
-    }
-
-    public String scheduleNewOrchestrationInstance(String orchestratorName, Object input) {
-        return this.scheduleNewOrchestrationInstance(orchestratorName, input, null);
-    }
-
-    public String scheduleNewOrchestrationInstance(String orchestratorName, Object input, String instanceId) {
-        NewOrchestrationInstanceOptions options = NewOrchestrationInstanceOptions.newBuilder()
-                .setInput(input)
-                .setInstanceId(instanceId)
-                .build();
-        return this.scheduleNewOrchestrationInstance(orchestratorName, options);
-    }
-
-    // TODO: Create async flavors of these APIs
+    @Override
     public String scheduleNewOrchestrationInstance(
             String orchestratorName,
             NewOrchestrationInstanceOptions options) {
@@ -100,15 +100,11 @@ public class TaskHubClient {
         }
 
         CreateInstanceRequest request = builder.build();
-        CreateInstanceResponse response = this.grpcClient.startInstance(request);
+        CreateInstanceResponse response = this.sidecarClient.startInstance(request);
         return response.getInstanceId();
     }
 
-    // TODO: Async version
-    public void raiseEvent(String instanceId, String eventName) {
-        this.raiseEvent(instanceId, eventName, null);
-    }
-
+    @Override
     public void raiseEvent(String instanceId, String eventName, Object eventPayload) {
         Helpers.throwIfArgumentNull(instanceId, "instanceId");
         Helpers.throwIfArgumentNull(eventName, "eventName");
@@ -122,35 +118,39 @@ public class TaskHubClient {
         }
 
         RaiseEventRequest request = builder.build();
-        this.grpcClient.raiseEvent(request);
+        this.sidecarClient.raiseEvent(request);
     }
 
-    // TODO: More parameters
-    public TaskOrchestrationInstance getOrchestrationInstance(String instanceId, boolean getInputsAndOutputs) {
+    @Override
+    public OrchestrationMetadata getInstanceMetadata(String instanceId, boolean getInputsAndOutputs) {
         GetInstanceRequest request = GetInstanceRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .setGetInputsAndOutputs(getInputsAndOutputs)
                 .build();
-        GetInstanceResponse response = this.grpcClient.getInstance(request);
-        return new TaskOrchestrationInstance(request, response, this.dataConverter);
+        GetInstanceResponse response = this.sidecarClient.getInstance(request);
+        return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
-    // TODO: What other parameters do we want to support? Input/output fetching?
-    public TaskOrchestrationInstance waitForInstanceStart(String instanceId, Duration timeout) {
-        GetInstanceRequest request = GetInstanceRequest.newBuilder().setInstanceId(instanceId).build();
+    @Override
+    public OrchestrationMetadata waitForInstanceStart(String instanceId, Duration timeout, boolean getInputsAndOutputs) {
+        GetInstanceRequest request = GetInstanceRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .setGetInputsAndOutputs(getInputsAndOutputs)
+                .build();
 
         if (timeout == null || timeout.isNegative() || timeout.isZero()) {
             timeout = Duration.ofMinutes(10);
         }
 
-        TaskHubClientServiceBlockingStub grpcClient = this.grpcClient.withDeadlineAfter(
+        TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
                 timeout.toMillis(),
                 TimeUnit.MILLISECONDS);
         GetInstanceResponse response = grpcClient.waitForInstanceStart(request);
-        return new TaskOrchestrationInstance(request, response, this.dataConverter);
+        return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
-    public TaskOrchestrationInstance waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs) {
+    @Override
+    public OrchestrationMetadata waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs) {
         GetInstanceRequest request = GetInstanceRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .setGetInputsAndOutputs(getInputsAndOutputs)
@@ -160,11 +160,11 @@ public class TaskHubClient {
             timeout = Duration.ofMinutes(10);
         }
 
-        TaskHubClientServiceBlockingStub grpcClient = this.grpcClient.withDeadlineAfter(
+        TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
                 timeout.toMillis(),
                 TimeUnit.MILLISECONDS);
         GetInstanceResponse response = grpcClient.waitForInstanceCompletion(request);
-        return new TaskOrchestrationInstance(request, response, this.dataConverter);
+        return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
     public static Builder newBuilder() {
@@ -173,23 +173,26 @@ public class TaskHubClient {
 
     public static class Builder {
         private DataConverter dataConverter;
-        private String host;
         private int port;
+        private Channel channel;
 
         public Builder setDataConverter(DataConverter dataConverter) {
             this.dataConverter = dataConverter;
             return this;
         }
 
-        public Builder forAddress(String host, int port) {
-            this.host = host;
+        public Builder useGrpcChannel(Channel channel) {
+            this.channel = channel;
+            return this;
+        }
+
+        public Builder forPort(int port) {
             this.port = port;
             return this;
         }
 
-        // TODO: Have this return an interface?
-        public TaskHubClient build() {
-            return new TaskHubClient(this);
+        public DurableTaskClient build() {
+            return new DurableTaskGrpcClient(this);
         }
     }
 }

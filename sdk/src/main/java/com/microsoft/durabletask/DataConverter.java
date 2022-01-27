@@ -9,12 +9,14 @@ import java.time.temporal.ChronoUnit;
 
 public interface DataConverter {
     String serialize(Object value);
-    <T> T deserialize(String data, Class<T> target);
+    <T> T deserialize(String data, Class<T> target) throws DataConverterException;
 
     default DataConverterException wrapConverterException(String message, Throwable cause) {
         return new DataConverterException(message, cause);
     }
 
+    // TODO: Should this be a checked exception? Probably, but if so, we should change the programming model so
+    //       that most developers don't need to catch it for things like handling  task inputs.
     class DataConverterException extends RuntimeException {
         public DataConverterException(String message, Throwable cause) {
             super(message, cause);
