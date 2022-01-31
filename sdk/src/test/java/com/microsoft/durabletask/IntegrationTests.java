@@ -89,7 +89,7 @@ public class IntegrationTests {
     }
 
     @Test
-    public void isReplaying() throws IOException, InterruptedException {
+    void isReplaying() throws IOException, InterruptedException {
         final String orchestratorName = "SingleTimer";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
