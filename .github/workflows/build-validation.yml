@@ -42,9 +42,9 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: Test report
-        path: build/reports/tests/test
+        path: sdk/build/reports/tests/test
     - name: Upload JAR output
       uses: actions/upload-artifact@v2
       with:
         name: Package
-        path: build/libs
+        path: sdk/build/libs
