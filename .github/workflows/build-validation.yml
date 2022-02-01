@@ -38,3 +38,13 @@ jobs:
       uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
       with:
         arguments: integrationTest
+    - name: Archive test report
+      uses: actions/upload-artifact@v2
+      with:
+        name: Test report
+        path: build/reports/tests/test
+    - name: Upload JAR output
+      uses: actions/upload-artifact@v2
+      with:
+        name: Package
+        path: build/libs
