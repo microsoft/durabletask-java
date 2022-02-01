@@ -41,8 +41,8 @@ jobs:
     - name: Archive test report
       uses: actions/upload-artifact@v2
       with:
-        name: Test report
-        path: sdk/build/reports/tests/test
+        name: Integration test report
+        path: sdk/build/reports/tests/integrationTest
     - name: Upload JAR output
       uses: actions/upload-artifact@v2
       with:

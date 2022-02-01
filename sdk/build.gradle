@@ -72,5 +72,6 @@ task integrationTest(type: Test) {
     }
     dependsOn build
     shouldRunAfter test
+    testLogging.showStandardStreams = true
 }
 
