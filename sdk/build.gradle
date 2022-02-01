@@ -1,5 +1,5 @@
 plugins {
-    id "java"
+    id 'java'
     id 'com.google.protobuf' version '0.8.16'
     // Generate IntelliJ IDEA's .idea & .iml project files
     id 'idea'
@@ -55,8 +55,22 @@ sourceSets {
 }
 
 test {
-    useJUnitPlatform()
-
-    // Integration tests require the dt sidecar to be running
-    exclude 'com/microsoft/durabletask/IntegrationTests.class'
+    useJUnitPlatform {
+        // Skip tests tagged as "integration" since those are slower
+        // and require external dependencies.
+        excludeTags "integration"
+    }
 }
+
+// Unlike normal unit tests, some tests are considered "integration tests" and shouldn't be
+// run during a build. We instead tag them as "integration" tests and only run them as part
+// of this custom integrationTest task. Normal builds won't execute this, but CI builds will
+// by running "gradle check" (see the dependsOn() further down).
+task integrationTest(type: Test) {
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter test
+}
+
+check.dependsOn(integrationTest)

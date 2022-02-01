@@ -31,3 +31,10 @@ jobs:
       uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
       with:
         arguments: build
+      # TODO: Move the sidecar into a central image repository
+    - name: Initialize Durable Task Sidecar
+      run: docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d cgillum/durabletask-sidecar:latest start --backend Emulator
+    - name: Integration Tests with Gradle
+      uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
+      with:
+        arguments: check
