@@ -1,5 +1,7 @@
 # Java SDK for the Durable Task Framework
 
+[![Build](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml/badge.svg)](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml)
+
 This repo contains the Java SDK for the Durable Task Framework.
 
 ⚠ This README is currently under construction ⚠

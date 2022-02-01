@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -29,6 +30,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * running on the local machine (the sidecar is what accepts the client operations and
  * sends invocation instructions to the DurableTaskWorker).
  */
+@Tag("integration")
 public class IntegrationTests {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
 
@@ -89,7 +91,7 @@ public class IntegrationTests {
     }
 
     @Test
-    public void isReplaying() throws IOException, InterruptedException {
+    void isReplaying() throws IOException, InterruptedException {
         final String orchestratorName = "SingleTimer";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
