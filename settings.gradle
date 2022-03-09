@@ -1,2 +1,3 @@
 include ":sdk"
+include ":azurefunctions"
 include ":samples"
