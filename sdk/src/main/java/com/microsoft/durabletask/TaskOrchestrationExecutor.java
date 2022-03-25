@@ -48,7 +48,7 @@ public class TaskOrchestrationExecutor {
             // TODO: What's the right way to log this?
             logger.warning("The orchestrator failed with an unhandled exception: " + e.toString());
             context.fail(new ErrorDetails(e));
-        } catch (OrchestratorYieldEvent orchestratorYieldEvent) {
+        } catch (OrchestratorBlockedEvent orchestratorBlockedEvent) {
             logger.fine("The orchestrator has yielded and will await for new events.");
         }
 
@@ -490,11 +490,11 @@ public class TaskOrchestrationExecutor {
             return false;
         }
 
-        private boolean processNextEvent() throws TaskFailedException, OrchestratorYieldEvent {
+        private boolean processNextEvent() throws TaskFailedException, OrchestratorBlockedEvent {
             return this.historyEventPlayer.moveNext();
         }
 
-        private void processEvent(HistoryEvent e) throws TaskFailedException, OrchestratorYieldEvent {
+        private void processEvent(HistoryEvent e) throws TaskFailedException, OrchestratorBlockedEvent {
             switch (e.getEventTypeCase()) {
                 case ORCHESTRATORSTARTED:
                     Instant instant = DataConverter.getInstantFromTimestamp(e.getTimestamp());
@@ -512,6 +512,10 @@ public class TaskOrchestrationExecutor {
                     String input = startedEvent.getInput().getValue();
                     this.setInput(input);
                     TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
+                    if (factory == null) {
+                        // Try getting the default orchestrator
+                        factory = TaskOrchestrationExecutor.this.orchestrationFactories.get("*");
+                    }
                     // TODO: Throw if the factory is null (orchestration by that name doesn't exist)
                     TaskOrchestration orchestrator = factory.create();
                     orchestrator.run(this);
@@ -598,7 +602,7 @@ public class TaskOrchestrationExecutor {
                 this.currentHistoryList = pastEvents;
             }
 
-            public boolean moveNext() throws TaskFailedException, OrchestratorYieldEvent {
+            public boolean moveNext() throws TaskFailedException, OrchestratorBlockedEvent {
                 if (this.currentHistoryList == pastEvents && this.currentHistoryIndex >= pastEvents.size()) {
                     // Move forward to the next list
                     this.currentHistoryList = this.newEvents;
@@ -658,7 +662,7 @@ public class TaskOrchestrationExecutor {
             }
 
             @Override
-            public final V get() throws TaskFailedException, OrchestratorYieldEvent {
+            public final V get() throws TaskFailedException, OrchestratorBlockedEvent {
                 do {
                     // If the future is done, return its value right away
                     if (this.future.isDone()) {
@@ -673,10 +677,11 @@ public class TaskOrchestrationExecutor {
                 } while (ContextImplTask.this.processNextEvent());
 
                 // There's no more history left to replay and the current task is still not completed. This is normal.
-                // The OrchestratorYieldEvent throwable allows us to yield the current thread back to the executor so
+                // The OrchestratorBlockedEvent throwable allows us to yield the current thread back to the executor so
                 // that we can send the current set of actions back to the worker and wait for new events to come in.
                 // This is *not* an exception - it's a normal part of orchestrator control flow.
-                throw new OrchestratorYieldEvent("The orchestrator is yielding. This Throwable should never be caught by user code.");
+                throw new OrchestratorBlockedEvent(
+                        "The orchestrator is blocked and waiting for new inputs. This Throwable should never be caught by user code.");
             }
 
             protected void handleException(Throwable e) throws TaskFailedException {

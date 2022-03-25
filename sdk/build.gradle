@@ -1,13 +1,14 @@
 plugins {
-    id 'java'
+    id 'java-library'
     id 'com.google.protobuf' version '0.8.16'
     // Generate IntelliJ IDEA's .idea & .iml project files
     id 'idea'
+    id 'maven-publish'
 }
 
-group 'com.microsoft'
+group 'com.microsoft.durabletask'
 version = '0.1.0'
-archivesBaseName = 'durabletask'
+archivesBaseName = 'durabletask-sdk'
 
 def grpcVersion = '1.38.0'
 def protocVersion = '3.12.0'
@@ -75,3 +76,11 @@ task integrationTest(type: Test) {
     testLogging.showStandardStreams = true
 }
 
+publishing {
+    publications {
+        mavenPublication(MavenPublication) {
+            artifactId = archivesBaseName
+            from components.java
+        }
+    }
+}

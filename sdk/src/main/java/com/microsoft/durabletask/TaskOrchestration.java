@@ -3,5 +3,5 @@
 package com.microsoft.durabletask;
 
 public interface TaskOrchestration {
-    void run(TaskOrchestrationContext ctx) throws TaskFailedException, OrchestratorYieldEvent;
+    void run(TaskOrchestrationContext ctx) throws TaskFailedException, OrchestratorBlockedEvent;
 }
