@@ -4,7 +4,6 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
-import com.microsoft.durabletask.DataConverter.DataConverterException;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 
@@ -47,7 +46,7 @@ public class TaskOrchestrationExecutor {
             // The orchestrator threw an unhandled exception - fail it
             // TODO: What's the right way to log this?
             logger.warning("The orchestrator failed with an unhandled exception: " + e.toString());
-            context.fail(new ErrorDetails(e));
+            context.fail(new FailureDetails(e));
         } catch (OrchestratorBlockedEvent orchestratorBlockedEvent) {
             logger.fine("The orchestrator has yielded and will await for new events.");
         }
@@ -334,21 +333,7 @@ public class TaskOrchestrationExecutor {
                 return;
             }
 
-            // The taskFailed.details field is expected to contain a structured payload
-            // describing the failure details
-            String reason = failedEvent.getDetails().getValue();
-            ErrorDetails details;
-            try {
-                details = this.dataConverter.deserialize(reason, ErrorDetails.class);
-            } catch (DataConverterException deserializeException) {
-                // Not expected - but we try to handle it gracefully.
-                details = new ErrorDetails(
-                        "_UnknownException",
-                        String.format(
-                                "The exception details could not be deserialized. See the error details for the raw error payload: %s",
-                                deserializeException.getMessage()),
-                        reason);
-            }
+            FailureDetails details = new FailureDetails(failedEvent.getFailureDetails());
 
             if (!this.isReplaying) {
                 // TODO: Log task failure, including the number of bytes in the result
@@ -356,7 +341,6 @@ public class TaskOrchestrationExecutor {
 
             CompletableTask<?> task = record.getTask();
             TaskFailedException exception = new TaskFailedException(
-                String.format("Activity task '%s' with ID %d failed with an unhandled exception.", record.taskName, taskId),
                 record.taskName,
                 taskId,
                 details);
@@ -450,16 +434,16 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public void complete(Object output) {
-            this.completeInternal(output, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
+            this.completeInternal(output, null, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
         }
 
         @Override
-        public void fail(Object errorOutput) {
+        public void fail(FailureDetails failureDetails) {
             // TODO: How does a parent orchestration use the output to construct an exception?
-            this.completeInternal(errorOutput, OrchestrationStatus.ORCHESTRATION_STATUS_FAILED);
+            this.completeInternal(null, failureDetails, OrchestrationStatus.ORCHESTRATION_STATUS_FAILED);
         }
 
-        private void completeInternal(Object output, OrchestrationStatus runtimeStatus) {
+        private void completeInternal(Object output, FailureDetails failureDetails, OrchestrationStatus runtimeStatus) {
             if (this.isComplete) {
                 throw new IllegalStateException("The orchestrator was already completed.");
             }
@@ -471,6 +455,10 @@ public class TaskOrchestrationExecutor {
             if (output != null) {
                 String resultAsJson = TaskOrchestrationExecutor.this.dataConverter.serialize(output);
                 builder.setResult(StringValue.of(resultAsJson));
+            }
+
+            if (failureDetails != null) {
+                builder.setFailureDetails(failureDetails.toProto());
             }
 
             if (!this.isReplaying) {

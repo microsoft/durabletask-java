@@ -10,7 +10,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.logging.Logger;
 
-// TODO: Move this into the SDK since it shouldn't have any dependencies on Functions anymore
 // TODO: JavaDoc
 public final class OrchestrationRunner {
     private static final Logger logger = Logger.getLogger(OrchestrationRunner.class.getPackage().getName());
@@ -18,6 +17,7 @@ public final class OrchestrationRunner {
     public static <R> String loadAndRun(
             String triggerStateProtoBase64String,
             OrchestratorFunction<R> orchestratorFunc) {
+        // Example string: CiBhOTMyYjdiYWM5MmI0MDM5YjRkMTYxMDIwNzlmYTM1YSIaCP///////////wESCwi254qRBhDk+rgocgAicgj///////////8BEgwIs+eKkQYQzMXjnQMaVwoLSGVsbG9DaXRpZXMSACJGCiBhOTMyYjdiYWM5MmI0MDM5YjRkMTYxMDIwNzlmYTM1YRIiCiA3ODEwOTA2N2Q4Y2Q0ODg1YWU4NjQ0OTNlMmRlMGQ3OA==
         byte[] decodedBytes = Base64.getDecoder().decode(triggerStateProtoBase64String);
         byte[] resultBytes = loadAndRun(decodedBytes, orchestratorFunc);
         return Base64.getEncoder().encodeToString(resultBytes);

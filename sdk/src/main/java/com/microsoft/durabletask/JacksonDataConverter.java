@@ -21,7 +21,9 @@ public class JacksonDataConverter implements DataConverter {
         try {
             return jsonObjectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
-            throw this.wrapConverterException("Failed to serialize output argument.", e);
+            throw this.wrapConverterException(
+                    String.format("Failed to serialize argument of type '%s'.", value.getClass().getName()),
+                    e);
         }
     }
 

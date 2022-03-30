@@ -31,7 +31,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * sends invocation instructions to the DurableTaskWorker).
  */
 @Tag("integration")
-public class IntegrationTests {
+public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
 
     // All tests that create a server should save it to this variable for proper shutdown
@@ -225,82 +225,6 @@ public class IntegrationTests {
     }
 
     @Test
-    void orchestratorException() throws IOException {
-        final String orchestratorName = "OrchestratorWithException";
-        final String errorMessage = "Kah-BOOOOOM!!!";
-
-        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                throw new RuntimeException(errorMessage);
-            })
-            .buildAndStart();
-
-        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
-        try (worker; client) {
-            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
-            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-            assertNotNull(instance);
-            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
-
-            ErrorDetails details = instance.readOutputAs(ErrorDetails.class);
-            assertNotNull(details);
-            assertTrue(details.getErrorDetails().contains(errorMessage));
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void activityException(boolean handleException) throws IOException {
-        final String orchestratorName = "OrchestratorWithActivityException";
-        final String activityName = "Throw";
-        final String errorMessage = "Kah-BOOOOOM!!!";
-
-        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                try {
-                    ctx.callActivity(activityName).get();
-                } catch (TaskFailedException ex) {
-                    if (handleException) {
-                        ctx.complete("handled");
-                    } else {
-                        throw ex;
-                    }
-                }
-            })
-            .addActivity(activityName, ctx -> {
-                throw new RuntimeException(errorMessage);
-            })
-            .buildAndStart();
-
-        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
-        try (worker; client) {
-            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
-            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-            assertNotNull(instance);
-
-            if (handleException) {
-                String result = instance.readOutputAs(String.class);
-                assertNotNull(result);
-                assertEquals("handled", result);
-            } else {
-                assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
-
-                ErrorDetails details = instance.readOutputAs(ErrorDetails.class);
-                assertNotNull(details);
-
-                String expectedMessage = String.format(
-                    "Activity task '%s' with ID 0 failed with an unhandled exception.",
-                    activityName,
-                    errorMessage);
-                assertEquals(expectedMessage, details.getErrorMessage());
-                assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorName());
-                assertNotNull(details.getErrorDetails());
-                // CONSIDER: Additional validation of getErrorDetails?
-            }
-        }
-    }
-
-    @Test
     void activityFanOut() throws IOException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";
@@ -417,52 +341,6 @@ public class IntegrationTests {
             } else {
                 assertEquals("Timeout of PT3S expired while waiting for an event named '" + eventName + "' (ID = 0).", output);
             }
-        }
-    }
-
-    private TestDurableTaskWorkerBuilder createWorkerBuilder() {
-        return new TestDurableTaskWorkerBuilder();
-    }
-
-    public class TestDurableTaskWorkerBuilder {
-        final DurableTaskGrpcWorker.Builder innerBuilder;
-
-        private TestDurableTaskWorkerBuilder() {
-            this.innerBuilder = DurableTaskGrpcWorker.newBuilder();
-        }
-
-        public DurableTaskGrpcWorker buildAndStart() {
-            DurableTaskGrpcWorker server = this.innerBuilder.build();
-            IntegrationTests.this.server = server;
-            server.start();
-            return server;
-        }
-
-        public TestDurableTaskWorkerBuilder addOrchestrator(
-                String name,
-                TaskOrchestration implementation) {
-            this.innerBuilder.addOrchestration(new TaskOrchestrationFactory() {
-                @Override
-                public String getName() { return name; }
-
-                @Override
-                public TaskOrchestration create() { return implementation; }
-            });
-            return this;
-        }
-
-        public <R> TestDurableTaskWorkerBuilder addActivity(
-            String name,
-            TaskActivity implementation)
-        {
-            this.innerBuilder.addActivity(new TaskActivityFactory() {
-                @Override
-                public String getName() { return name; }
-
-                @Override
-                public TaskActivity create() { return implementation; }
-            });
-            return this;
         }
     }
 }

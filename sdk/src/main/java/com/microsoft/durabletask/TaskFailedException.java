@@ -3,11 +3,15 @@
 package com.microsoft.durabletask;
 
 public class TaskFailedException extends Exception {
-    private final ErrorDetails details;
+    private final FailureDetails details;
     private final String taskName;
     private final int taskId;
 
-    TaskFailedException(String message, String taskName, int taskId, ErrorDetails details) {
+    TaskFailedException(String taskName, int taskId, FailureDetails details) {
+        this(getExceptionMessage(taskName, taskId, details), taskName, taskId, details);
+    }
+
+    protected TaskFailedException(String message, String taskName, int taskId, FailureDetails details) {
         super(message);
         this.taskName = taskName;
         this.taskId = taskId;
@@ -23,7 +27,7 @@ public class TaskFailedException extends Exception {
     }
 
     public String getExceptionName() {
-        return this.details.getErrorName();
+        return this.details.getErrorType();
     }
 
     public String getExceptionMessage() {
@@ -31,10 +35,17 @@ public class TaskFailedException extends Exception {
     }
 
     public String getExceptionDetails() {
-        return this.details.getErrorDetails();
+        return this.details.getStackTrace();
     }
 
-    ErrorDetails getErrorDetails() {
+    FailureDetails getErrorDetails() {
         return this.details;
+    }
+
+    private static String getExceptionMessage(String taskName, int taskId, FailureDetails details) {
+        return String.format("Task '%s' (#%d) failed with an unhandled exception: %s",
+                taskName,
+                taskId,
+                details.getErrorMessage());
     }
 }
