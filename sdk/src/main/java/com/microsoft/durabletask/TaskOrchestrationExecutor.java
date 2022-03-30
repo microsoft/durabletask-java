@@ -226,6 +226,43 @@ public class TaskOrchestrationExecutor {
             return task;
         }
 
+        @Override
+        public <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType){
+            Helpers.throwIfArgumentNull(name, "name");
+            Helpers.throwIfArgumentNull(returnType, "returnType");
+            int id = this.sequenceNumber++;
+
+            String serializedInput = this.dataConverter.serialize(input);
+            CreateSubOrchestrationAction.Builder createSubOrchestrationActionBuilder = CreateSubOrchestrationAction.newBuilder().setName(name);
+            if (serializedInput != null) {
+                createSubOrchestrationActionBuilder.setInput(StringValue.of(serializedInput));
+            }
+
+            if (instanceId == null) {
+                instanceId = UUID.randomUUID().toString();
+            }
+            createSubOrchestrationActionBuilder.setInstanceId(instanceId);
+
+            this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                    .setId(id)
+                    .setCreateSubOrchestration(createSubOrchestrationActionBuilder)
+                    .build());
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: calling sub-orchestration '%s' (#%d) with serialized input: %s",
+                        this.instanceId,
+                        name,
+                        id,
+                        serializedInput != null ? serializedInput : "(null)"));
+            }
+
+            CompletableTask<V> task = new CompletableTask<>();
+            TaskRecord<V> record = new TaskRecord<>(task, name, returnType);
+            this.openTasks.put(id, record);
+            return task;
+        }
+
         public <V> Task<V> waitForExternalEvent(String name, Duration timeout, Class<V> dataType) {
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(dataType, "dataType");
@@ -432,6 +469,69 @@ public class TaskOrchestrationExecutor {
             task.complete(null);
         }
 
+        private void handleSubOrchestrationCreated(HistoryEvent e) {
+            int taskId = e.getEventId();
+            SubOrchestrationInstanceCreatedEvent subOrchestrationInstanceCreated = e.getSubOrchestrationInstanceCreated();
+            OrchestratorAction taskAction = this.pendingActions.remove(taskId);
+            if (taskAction == null) {
+                String message = String.format(
+                        "Non-deterministic orchestrator detected: a history event scheduling an activity task with sequence ID %d and name '%s' was replayed but the current orchestrator implementation didn't actually schedule this task. Was a change made to the orchestrator code after this instance had already started running?",
+                        taskId,
+                        subOrchestrationInstanceCreated.getName());
+                throw new NonDeterministicOrchestratorException(message);
+            }
+        }
+
+        private void handleSubOrchestrationCompleted(HistoryEvent e) {
+            SubOrchestrationInstanceCompletedEvent subOrchestrationInstanceCompletedEvent = e.getSubOrchestrationInstanceCompleted();
+            int taskId = subOrchestrationInstanceCompletedEvent.getTaskScheduledId();
+            TaskRecord<?> record = this.openTasks.remove(taskId);
+            if (record == null) {
+                this.logger.warning("Discarding a potentially duplicate TaskCompleted event with ID = " + taskId);
+                return;
+            }
+            String rawResult = subOrchestrationInstanceCompletedEvent.getResult().getValue();
+
+            if (!this.isReplaying) {
+                // TODO: Structured logging
+                // TODO: Would it make more sense to put this log in the activity executor?
+                this.logger.fine(() -> String.format(
+                        "%s: Activity '%s' (#%d) completed with serialized output: %s",
+                        this.instanceId,
+                        record.getTaskName(),
+                        taskId,
+                        rawResult != null ? rawResult : "(null)"));
+
+            }
+
+            Object result = this.dataConverter.deserialize(rawResult, record.getDataType());
+            CompletableTask task = record.getTask();
+            task.complete(result);
+        }
+
+        private void handleSubOrchestrationFailed(HistoryEvent e){
+            SubOrchestrationInstanceFailedEvent subOrchestrationInstanceFailedEvent = e.getSubOrchestrationInstanceFailed();
+            int taskId = subOrchestrationInstanceFailedEvent.getTaskScheduledId();
+            TaskRecord<?> record = this.openTasks.remove(taskId);
+            if (record == null) {
+                // TODO: Log a warning about a potential duplicate task completion event
+                return;
+            }
+
+            FailureDetails details = new FailureDetails(subOrchestrationInstanceFailedEvent.getFailureDetails());
+
+            if (!this.isReplaying) {
+                // TODO: Log task failure, including the number of bytes in the result
+            }
+
+            CompletableTask<?> task = record.getTask();
+            TaskFailedException exception = new TaskFailedException(
+                    record.taskName,
+                    taskId,
+                    details);
+            task.completeExceptionally(exception);
+        }
+
         @Override
         public void complete(Object output) {
             this.completeInternal(output, null, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
@@ -529,12 +629,15 @@ public class TaskOrchestrationExecutor {
                 case TIMERFIRED:
                     this.handleTimerFired(e);
                     break;
-//                case SUBORCHESTRATIONINSTANCECREATED:
-//                    break;
-//                case SUBORCHESTRATIONINSTANCECOMPLETED:
-//                    break;
-//                case SUBORCHESTRATIONINSTANCEFAILED:
-//                    break;
+                case SUBORCHESTRATIONINSTANCECREATED:
+                    this.handleSubOrchestrationCreated(e);
+                    break;
+                case SUBORCHESTRATIONINSTANCECOMPLETED:
+                    this.handleSubOrchestrationCompleted(e);
+                    break;
+                case SUBORCHESTRATIONINSTANCEFAILED:
+                    this.handleSubOrchestrationFailed(e);
+                    break;
 //                case EVENTSENT:
 //                    break;
                 case EVENTRAISED:
