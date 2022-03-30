@@ -96,4 +96,54 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
             }
         }
     }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void subOrchestrationException(boolean handleException){
+        final String orchestratorName = "OrchestrationWithBustedSubOrchestrator";
+        final String subOrchestratorName = "BustedSubOrchestrator";
+        final String errorMessage = "Kah-BOOOOOM!!!";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    try {
+                        String result = ctx.callSubOrchestrator(subOrchestratorName, "", String.class).get();
+                        ctx.complete(result);
+                    } catch (TaskFailedException ex) {
+                        if (handleException) {
+                            ctx.complete("handled");
+                        } else {
+                            throw ex;
+                        }
+                    }
+                })
+                .addOrchestrator(subOrchestratorName, ctx -> {
+                    throw new RuntimeException(errorMessage);
+                })
+                .buildAndStart();
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try(worker; client){
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 1);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            if (handleException){
+                assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+                String result = instance.readOutputAs(String.class);
+                assertNotNull(result);
+                assertEquals("handled", result);
+            }else{
+                assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+                FailureDetails details = instance.getFailureDetails();
+                assertNotNull(details);
+                String expectedMessage = String.format(
+                        "Task '%s' (#0) failed with an unhandled exception: %s",
+                        subOrchestratorName,
+                        errorMessage);
+                assertEquals(expectedMessage, details.getErrorMessage());
+                assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
+                assertNotNull(details.getStackTrace());
+                // CONSIDER: Additional validation of getErrorDetails?
+            }
+        }
+    }
 }

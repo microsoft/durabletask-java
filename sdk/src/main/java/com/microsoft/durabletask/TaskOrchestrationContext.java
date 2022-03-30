@@ -35,6 +35,20 @@ public interface TaskOrchestrationContext {
         return this.callActivity(name, input, Void.class);
     }
 
+    <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType);
+
+    default Task<Void> callSubOrchestrator(String name){
+        return this.callSubOrchestrator(name, null);
+    }
+
+    default Task<Void> callSubOrchestrator(String name, Object input){
+        return this.callSubOrchestrator(name, input, null);
+    }
+
+    default <V>Task<V> callSubOrchestrator(String name, Object input, Class<V> returnType){
+        return this.callSubOrchestrator(name, input, null, returnType);
+    }
+
     <V> Task<V> waitForExternalEvent(String name, Duration timeout, Class<V> dataType) throws TaskCanceledException;
 
     default Task<Void> waitForExternalEvent(String name, Duration timeout) throws TaskCanceledException {
