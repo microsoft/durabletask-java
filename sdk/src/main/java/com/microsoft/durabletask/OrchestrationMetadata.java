@@ -19,6 +19,7 @@ public class OrchestrationMetadata {
     private final String serializedInput;
     private final String serializedOutput;
     private final String serializedCustomStatus;
+    private final FailureDetails failureDetails;
 
     OrchestrationMetadata(
             OrchestratorService.GetInstanceResponse fetchResponse,
@@ -36,6 +37,7 @@ public class OrchestrationMetadata {
         this.serializedInput = state.getInput().getValue();
         this.serializedOutput = state.getOutput().getValue();
         this.serializedCustomStatus = state.getCustomStatus().getValue();
+        this.failureDetails = new FailureDetails(state.getFailureDetails());
     }
 
     public String getName() {
@@ -64,6 +66,10 @@ public class OrchestrationMetadata {
 
     public String getSerializedOutput() {
         return this.serializedOutput;
+    }
+
+    public FailureDetails getFailureDetails() {
+        return this.failureDetails;
     }
 
     public boolean isRunning() {
@@ -115,7 +121,7 @@ public class OrchestrationMetadata {
         if (this.serializedInput != null) {
             sb.append(", Input: '").append(getTrimmedPayload(this.serializedInput)).append('\'');
         }
-        
+
         if (this.serializedOutput != null) {
             sb.append(", Output: '").append(getTrimmedPayload(this.serializedOutput)).append('\'');
         }

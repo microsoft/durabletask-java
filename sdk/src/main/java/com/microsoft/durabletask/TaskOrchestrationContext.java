@@ -23,7 +23,7 @@ public interface TaskOrchestrationContext {
 
     Task<Void> createTimer(Duration delay);
     void complete(Object output);
-    void fail(Object errorOutput);
+    void fail(FailureDetails failureDetails);
 
     <V> Task<V> callActivity(String name, Object input, Class<V> returnType);
 
