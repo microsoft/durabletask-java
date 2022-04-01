@@ -246,6 +246,60 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
+    void continueAsNew(){
+        final String orchestratorName = "continueAsNew";
+        final Duration delay = Duration.ofSeconds(0);
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
+            int input = ctx.getInput(int.class);
+            if (input < 10){
+                ctx.createTimer(delay).get();
+                ctx.continueAsNew(input + 1);
+            } else {
+                ctx.complete(input);
+            }
+        }).buildAndStart();
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try(worker; client){
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 1);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(10, instance.readOutputAs(int.class));
+        }
+    }
+
+    @Test
+    void continueAsNewWithExternalEvents(){
+        final String orchestratorName = "continueAsNewWithExternalEvents";
+        final String eventName = "MyEvent";
+        final int expectedEventCount = 10;
+        final Duration delay = Duration.ofSeconds(0);
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
+            int receivedEventCount = ctx.getInput(int.class);
+
+            if (receivedEventCount < expectedEventCount) {
+                ctx.waitForExternalEvent(eventName, int.class).get();
+                ctx.continueAsNew(receivedEventCount + 1, true);
+            } else {
+                ctx.complete(receivedEventCount);
+            }
+        }).buildAndStart();
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try(worker; client){
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+
+            for (int i = 0; i < expectedEventCount; i++) {
+                client.raiseEvent(instanceId, eventName, i);
+            }
+
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(expectedEventCount, instance.readOutputAs(int.class));
+        }
+    }
+
+    @Test
     void activityFanOut() throws IOException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";
