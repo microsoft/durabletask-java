@@ -225,6 +225,27 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
+    void subOrchestration(){
+        final String orchestratorName = "SubOrchestration";
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
+            int result = 5;
+            int input = ctx.getInput(int.class);
+            if (input < 3){
+                result += ctx.callSubOrchestrator(orchestratorName, input + 1, int.class).get();
+            }
+            ctx.complete(result);
+        }).buildAndStart();
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try(worker; client){
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 1);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(15, instance.readOutputAs(int.class));
+        }
+    }
+
+    @Test
     void activityFanOut() throws IOException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";
