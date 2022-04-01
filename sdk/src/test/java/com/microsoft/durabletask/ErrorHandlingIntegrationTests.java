@@ -142,7 +142,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                 assertEquals(expectedMessage, details.getErrorMessage());
                 assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
                 assertNotNull(details.getStackTrace());
-                // CONSIDER: Additional validation of getErrorDetails?
+                // CONSIDER: Additional validation of getStackTrace?
             }
         }
     }

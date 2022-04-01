@@ -35,6 +35,18 @@ public interface TaskOrchestrationContext {
         return this.callActivity(name, input, Void.class);
     }
 
+    default void continueAsNew(Object input){
+        this.continueAsNew(input, true);
+    }
+
+    void continueAsNew(Object input, boolean preserveUnprocessedEvents );
+
+    default void sendEvent(String instanceId, String eventName){
+        this.sendEvent(instanceId, eventName, null);
+    }
+
+    void sendEvent(String instanceId, String eventName, Object eventData);
+
     <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType);
 
     default Task<Void> callSubOrchestrator(String name){

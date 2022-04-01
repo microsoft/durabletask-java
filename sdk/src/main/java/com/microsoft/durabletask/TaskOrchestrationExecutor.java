@@ -23,6 +23,7 @@ public class TaskOrchestrationExecutor {
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
+    private boolean preserveUnprocessedEvents;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
@@ -51,6 +52,11 @@ public class TaskOrchestrationExecutor {
             logger.fine("The orchestrator has yielded and will await for new events.");
         }
 
+        if (completed && preserveUnprocessedEvents){
+            // Send all the buffered external events to ourself.
+            context.rescheduleBufferedExternalEvents();
+        }
+
         if (completed && context.pendingActions.isEmpty() && !context.waitingForEvents()) {
             // There are no further actions for the orchestrator to take so auto-complete the orchestration.
             context.complete(null);
@@ -66,7 +72,6 @@ public class TaskOrchestrationExecutor {
         private String instanceId;
         private Instant currentInstant;
         private boolean isComplete;
-
         private boolean isReplaying = true;
 
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
@@ -227,6 +232,55 @@ public class TaskOrchestrationExecutor {
         }
 
         @Override
+        public void continueAsNew(Object input, boolean preserveUnprocessedEvents) {
+            int id = this.sequenceNumber++;
+            TaskOrchestrationExecutor.this.preserveUnprocessedEvents = preserveUnprocessedEvents;
+            //TODO: add logic for newVersion
+            CompleteOrchestrationAction.Builder completeOrchestrationActionBuilder = CompleteOrchestrationAction.newBuilder()
+                    .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_CONTINUED_AS_NEW);
+            String serializedInput = this.dataConverter.serialize(input);
+            if (serializedInput != null){
+                completeOrchestrationActionBuilder.setResult(StringValue.of(serializedInput));
+            }
+            this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                    .setId(id)
+                    .setCompleteOrchestration(completeOrchestrationActionBuilder)
+                    .build());
+        }
+
+        private void rescheduleBufferedExternalEvents() {
+            for (EventRaisedEvent unprocessedEvent : unprocessedEvents) {
+                this.sendEvent(this.instanceId, unprocessedEvent.getName(), unprocessedEvent.getInput().getValue());
+            }
+        }
+
+        @Override
+        public void sendEvent(String instanceId, String eventName, Object eventData){
+            Helpers.throwIfArgumentNullOrWhiteSpace(instanceId, "instanceId");
+            int id = this.sequenceNumber++;
+            String serializedEventData = this.dataConverter.serialize(eventData);
+            OrchestrationInstance.Builder OrchestrationInstanceBuilder = OrchestrationInstance.newBuilder().setInstanceId(instanceId);
+            SendEventAction.Builder builder = SendEventAction.newBuilder().setInstance(OrchestrationInstanceBuilder).setName(eventName);
+            if (serializedEventData != null){
+                builder.setData(StringValue.of(serializedEventData));
+            }
+
+            this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                    .setId(id)
+                    .setSendEvent(builder)
+                    .build());
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: sending event '%s' (#%d) with serialized event data: %s",
+                        this.instanceId,
+                        eventName,
+                        id,
+                        serializedEventData != null ? serializedEventData : "(null)"));
+            }
+        }
+
+        @Override
         public <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType){
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(returnType, "returnType");
@@ -239,7 +293,7 @@ public class TaskOrchestrationExecutor {
             }
 
             //TODO:replace this with a deterministic GUID generation so that it's safe for replay,
-            // please find potentail bug here https://github.com/microsoft/durabletask-dotnet/issues/9
+            // please find potential bug here https://github.com/microsoft/durabletask-dotnet/issues/9
             if (instanceId == null) {
                 instanceId = UUID.randomUUID().toString();
             }
@@ -648,8 +702,6 @@ public class TaskOrchestrationExecutor {
 //                case GENERICEVENT:
 //                    break;
 //                case HISTORYSTATE:
-//                    break;
-//                case CONTINUEASNEW:
 //                    break;
 //                case EVENTTYPE_NOT_SET:
 //                    break;

@@ -9,7 +9,14 @@ final class Helpers {
 
     static void throwIfArgumentNull(Object argValue, String argName) {
         if (argValue == null) {
-            throw new IllegalArgumentException("Argument '" + argName + "' was null.");
+            throw new IllegalArgumentException("The argument '" + argName + "' was null.");
+        }
+    }
+
+    static void throwIfArgumentNullOrWhiteSpace(String argValue, String argName) {
+        throwIfArgumentNull(argValue, argName);
+        if (argValue.trim().length() == 0){
+            throw new IllegalArgumentException("The argument '" + argName + "' was empty or contained only whitespace.");
         }
     }
 
