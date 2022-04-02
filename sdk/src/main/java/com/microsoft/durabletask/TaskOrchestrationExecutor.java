@@ -7,6 +7,7 @@ import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 
+import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -194,11 +195,17 @@ public class TaskOrchestrationExecutor {
         }
 
         @Override
-        public <V> Task<V> callActivity(String name, Object input, Class<V> returnType) {
+        public <V> Task<V> callActivity(
+                String name,
+                @Nullable Object input,
+                @Nullable TaskOptions options,
+                Class<V> returnType) {
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(returnType, "returnType");
 
-            int id = this.sequenceNumber++;
+            if (input instanceof TaskOptions) {
+                throw new IllegalArgumentException("TaskOptions cannot be used as an input. Did you call the wrong method overload?");
+            }
 
             String serializedInput = this.dataConverter.serialize(input);
             Builder scheduleTaskBuilder = ScheduleTaskAction.newBuilder().setName(name);
@@ -206,31 +213,53 @@ public class TaskOrchestrationExecutor {
                 scheduleTaskBuilder.setInput(StringValue.of(serializedInput));
             }
 
-            this.pendingActions.put(id, OrchestratorAction.newBuilder()
-                    .setId(id)
-                    .setScheduleTask(scheduleTaskBuilder)
-                    .build());
+            TaskFactory<V> taskFactory = () -> {
+                int id = this.sequenceNumber++;
+                this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                        .setId(id)
+                        .setScheduleTask(scheduleTaskBuilder)
+                        .build());
 
-            if (!this.isReplaying) {
-                this.logger.fine(() -> String.format(
-                        "%s: calling activity '%s' (#%d) with serialized input: %s",
-                        this.instanceId,
-                        name,
-                        id,
-                        serializedInput != null ? serializedInput : "(null)"));
+                if (!this.isReplaying) {
+                    this.logger.fine(() -> String.format(
+                            "%s: calling activity '%s' (#%d) with serialized input: %s",
+                            this.instanceId,
+                            name,
+                            id,
+                            serializedInput != null ? serializedInput : "(null)"));
+                }
+
+                CompletableTask<V> task = new CompletableTask<>();
+                TaskRecord<V> record = new TaskRecord<>(task, name, returnType);
+                this.openTasks.put(id, record);
+                return task;
+            };
+
+            Task<V> task;
+            if (options != null && options.hasRetryPolicy()) {
+                // Return a retry task that generates the same task for each retry
+                task = new RetriableTask<V>(taskFactory, options.getRetryPolicy(), this);
+            } else {
+                // Return a single vanilla task
+                task = taskFactory.create();
             }
 
-            CompletableTask<V> task = new CompletableTask<>();
-            TaskRecord<V> record = new TaskRecord<>(task, name, returnType);
-            this.openTasks.put(id, record);
             return task;
         }
 
         @Override
-        public <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType){
+        public <V> Task<V> callSubOrchestrator(
+                String name,
+                @Nullable Object input,
+                @Nullable String instanceId,
+                @Nullable TaskOptions options,
+                Class<V> returnType){
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(returnType, "returnType");
-            int id = this.sequenceNumber++;
+
+            if (input instanceof TaskOptions) {
+                throw new IllegalArgumentException("TaskOptions cannot be used as an input. Did you call the wrong method overload?");
+            }
 
             String serializedInput = this.dataConverter.serialize(input);
             CreateSubOrchestrationAction.Builder createSubOrchestrationActionBuilder = CreateSubOrchestrationAction.newBuilder().setName(name);
@@ -238,31 +267,42 @@ public class TaskOrchestrationExecutor {
                 createSubOrchestrationActionBuilder.setInput(StringValue.of(serializedInput));
             }
 
-            //TODO:replace this with a deterministic GUID generation so that it's safe for replay,
+            // TODO:replace this with a deterministic GUID generation so that it's safe for replay,
             // please find potentail bug here https://github.com/microsoft/durabletask-dotnet/issues/9
             if (instanceId == null) {
                 instanceId = UUID.randomUUID().toString();
             }
             createSubOrchestrationActionBuilder.setInstanceId(instanceId);
 
-            this.pendingActions.put(id, OrchestratorAction.newBuilder()
-                    .setId(id)
-                    .setCreateSubOrchestration(createSubOrchestrationActionBuilder)
-                    .build());
+            TaskFactory<V> taskFactory = () -> {
+                int id = this.sequenceNumber++;
+                this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                        .setId(id)
+                        .setCreateSubOrchestration(createSubOrchestrationActionBuilder)
+                        .build());
 
-            if (!this.isReplaying) {
-                this.logger.fine(() -> String.format(
-                        "%s: calling sub-orchestration '%s' (#%d) with serialized input: %s",
-                        this.instanceId,
-                        name,
-                        id,
-                        serializedInput != null ? serializedInput : "(null)"));
+                if (!this.isReplaying) {
+                    this.logger.fine(() -> String.format(
+                            "%s: calling sub-orchestration '%s' (#%d) with serialized input: %s",
+                            this.instanceId,
+                            name,
+                            id,
+                            serializedInput != null ? serializedInput : "(null)"));
+                }
+
+                CompletableTask<V> task = new CompletableTask<>();
+                TaskRecord<V> record = new TaskRecord<>(task, name, returnType);
+                this.openTasks.put(id, record);
+                return task;
+            };
+
+            if (options != null && options.hasRetryPolicy()) {
+                // Return a retry task that generates the same task for each retry
+                return new RetriableTask<>(taskFactory, options.getRetryPolicy(), this);
+            } else {
+                // Return a single vanilla task
+                return taskFactory.create();
             }
-
-            CompletableTask<V> task = new CompletableTask<>();
-            TaskRecord<V> record = new TaskRecord<>(task, name, returnType);
-            this.openTasks.put(id, record);
-            return task;
         }
 
         public <V> Task<V> waitForExternalEvent(String name, Duration timeout, Class<V> dataType) {
@@ -744,6 +784,73 @@ public class TaskOrchestrationExecutor {
             }
         }
 
+        // Task implementation that implements a retry policy
+        private class RetriableTask<V> extends CompletableTask<V> {
+            private final RetryPolicy policy;
+            private final TaskOrchestrationContext context;
+            private final Instant firstAttempt;
+            private final TaskFactory<V> taskFactory;
+
+            private int attemptNumber;
+
+            public RetriableTask(TaskFactory<V> taskFactory, RetryPolicy policy, TaskOrchestrationContext context) {
+                super(new CompletableFuture<>());
+                this.taskFactory = taskFactory;
+                this.policy = policy;
+                this.context = context;
+                this.firstAttempt = context.getCurrentInstant();
+            }
+
+            @Override
+            public V get() throws TaskFailedException, OrchestratorBlockedEvent {
+                while (true) {
+                    Task<V> currentTask = this.taskFactory.create();
+                    this.attemptNumber++;
+                    try {
+                        return currentTask.get();
+                    } catch (TaskFailedException ex) {
+                        if (!this.shouldRetry()) {
+                            throw ex;
+                        }
+
+                        // Use a durable timer to create the delay between retries
+                        this.context.createTimer(this.getNextDelay()).get();
+                    }
+                }
+            }
+
+            private boolean shouldRetry() {
+                if (this.attemptNumber >= this.policy.getMaxNumberOfAttempts()) {
+                    // Max number of attempts exceeded
+                    return false;
+                }
+
+                // Duration.ZERO is interpreted as no maximum timeout
+                Duration retryTimeout = this.policy.getRetryTimeout();
+                if (retryTimeout.compareTo(Duration.ZERO) > 0) {
+                    Instant retryExpiration = this.firstAttempt.plus(retryTimeout);
+                    if (this.context.getCurrentInstant().compareTo(retryExpiration) >= 0) {
+                        // Max retry timeout exceeded
+                        return false;
+                    }
+                }
+
+                // Keep retrying
+                return true;
+            }
+
+            private Duration getNextDelay() {
+                // REVIEW: Do we need to worry about overflow here?
+                long nextDelayInMillis = this.policy.getFirstRetryInterval().toMillis() *
+                        (long)Math.pow(this.policy.getBackoffCoefficient(), this.attemptNumber);
+                if (nextDelayInMillis > this.policy.getMaxRetryInterval().toMillis()) {
+                    return this.policy.getMaxRetryInterval();
+                } else {
+                    return Duration.ofMillis(nextDelayInMillis);
+                }
+            }
+        }
+
         private class CompletableTask<V> extends Task<V> {
 
             public CompletableTask() {
@@ -755,7 +862,7 @@ public class TaskOrchestrationExecutor {
             }
 
             @Override
-            public final V get() throws TaskFailedException, OrchestratorBlockedEvent {
+            public V get() throws TaskFailedException, OrchestratorBlockedEvent {
                 do {
                     // If the future is done, return its value right away
                     if (this.future.isDone()) {
@@ -827,5 +934,10 @@ public class TaskOrchestrationExecutor {
                 return new CompletableTask<>(nextFuture);
             }
         }
+    }
+
+    @FunctionalInterface
+    private interface TaskFactory<V> {
+        Task<V> create();
     }
 }

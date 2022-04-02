@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 package com.microsoft.durabletask;
 
 import org.junit.jupiter.api.AfterEach;
@@ -11,7 +14,7 @@ public class IntegrationTestBase {
     private DurableTaskGrpcWorker server;
 
     @AfterEach
-    private void shutdown() throws InterruptedException {
+    private void shutdown() {
         if (this.server != null) {
             this.server.stop();
         }

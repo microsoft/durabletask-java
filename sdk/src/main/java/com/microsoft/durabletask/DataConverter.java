@@ -4,12 +4,16 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.Timestamp;
 
+import javax.annotation.Nullable;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 public interface DataConverter {
-    String serialize(Object value);
-    <T> T deserialize(String data, Class<T> target) throws DataConverterException;
+    @Nullable
+    String serialize(@Nullable Object value);
+
+    @Nullable
+    <T> T deserialize(@Nullable String data, Class<T> target) throws DataConverterException;
 
     default DataConverterException wrapConverterException(String message, Throwable cause) {
         return new DataConverterException(message, cause);

@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -25,29 +27,50 @@ public interface TaskOrchestrationContext {
     void complete(Object output);
     void fail(FailureDetails failureDetails);
 
-    <V> Task<V> callActivity(String name, Object input, Class<V> returnType);
+    <V> Task<V> callActivity(String name, Object input, TaskOptions options, Class<V> returnType);
 
     default Task<Void> callActivity(String name) {
         return this.callActivity(name, null);
     }
 
     default Task<Void> callActivity(String name, Object input) {
-        return this.callActivity(name, input, Void.class);
+        return this.callActivity(name, input, null, Void.class);
     }
 
-    <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType);
+    default <V> Task<V> callActivity(String name, Object input, Class<V> returnType) {
+        return this.callActivity(name, input, null, returnType);
+    }
+
+    default Task<Void> callActivity(String name, Object input, TaskOptions options) {
+        return this.callActivity(name, input, options, Void.class);
+    }
 
     default Task<Void> callSubOrchestrator(String name){
         return this.callSubOrchestrator(name, null);
     }
 
-    default Task<Void> callSubOrchestrator(String name, Object input){
+    default Task<Void> callSubOrchestrator(String name, Object input) {
         return this.callSubOrchestrator(name, input, null);
     }
 
-    default <V>Task<V> callSubOrchestrator(String name, Object input, Class<V> returnType){
+    default <V>Task<V> callSubOrchestrator(String name, Object input, Class<V> returnType) {
         return this.callSubOrchestrator(name, input, null, returnType);
     }
+
+    default <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType) {
+        return this.callSubOrchestrator(name, input, instanceId, null, returnType);
+    }
+
+    default Task<Void> callSubOrchestrator(String name, Object input, String instanceId, TaskOptions options) {
+        return this.callSubOrchestrator(name, input, instanceId, options, Void.class);
+    }
+
+    <V> Task<V> callSubOrchestrator(
+            String name,
+            @Nullable Object input,
+            @Nullable String instanceId,
+            @Nullable TaskOptions options,
+            Class<V> returnType);
 
     <V> Task<V> waitForExternalEvent(String name, Duration timeout, Class<V> dataType) throws TaskCanceledException;
 
