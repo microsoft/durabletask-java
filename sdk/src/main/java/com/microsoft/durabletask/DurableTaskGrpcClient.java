@@ -15,10 +15,12 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 // TODO: Create async flavors of the public APIs that call into the sidecar
 public class DurableTaskGrpcClient extends DurableTaskClient {
     private static final int DEFAULT_PORT = 4001;
+    private static final Logger logger = Logger.getLogger(DurableTaskGrpcClient.class.getPackage().getName());
 
     private final DataConverter dataConverter;
     private final ManagedChannel managedSidecarChannel;
@@ -165,6 +167,18 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
                 TimeUnit.MILLISECONDS);
         GetInstanceResponse response = grpcClient.waitForInstanceCompletion(request);
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
+    }
+
+    @Override
+    public void terminate(String instanceId, Object output) {
+        Helpers.throwIfArgumentNull(instanceId, "instanceId");
+        String serializeOutput = dataConverter.serialize(output);
+        this.logger.fine(() -> String.format(
+                "Terminating instance %s with reason: %s",
+                instanceId,
+                serializeOutput != null ? serializeOutput : "(null)"));
+        TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId).setOutput(StringValue.of(serializeOutput));
+        this.sidecarClient.terminateInstance(builder.build());
     }
 
     public static Builder newBuilder() {

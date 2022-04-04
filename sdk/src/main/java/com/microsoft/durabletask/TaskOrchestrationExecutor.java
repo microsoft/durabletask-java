@@ -618,6 +618,11 @@ public class TaskOrchestrationExecutor {
             task.completeExceptionally(exception);
         }
 
+        private void handleExecutionTerminated(HistoryEvent e) {
+            ExecutionTerminatedEvent executionTerminatedEvent = e.getExecutionTerminated();
+            this.completeInternal(executionTerminatedEvent.getInput().getValue(), null, OrchestrationStatus.ORCHESTRATION_STATUS_TERMINATED);
+        }
+
         @Override
         public void complete(Object output) {
             if (this.continuedAsNew) {
@@ -705,8 +710,9 @@ public class TaskOrchestrationExecutor {
 //                    break;
 //                case EXECUTIONFAILED:
 //                    break;
-//                case EXECUTIONTERMINATED:
-//                    break;
+                case EXECUTIONTERMINATED:
+                    this.handleExecutionTerminated(e);
+                    break;
                 case TASKSCHEDULED:
                     this.handleTaskScheduled(e);
                     break;

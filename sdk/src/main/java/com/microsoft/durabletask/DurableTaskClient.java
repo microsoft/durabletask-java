@@ -61,4 +61,10 @@ public abstract class DurableTaskClient implements AutoCloseable {
     }
 
     public abstract OrchestrationMetadata waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs);
+
+    public void terminate(String instanceId){
+        this.terminate(instanceId, null);
+    }
+
+    public abstract void terminate(String instanceId, Object output);
 }
