@@ -20,6 +20,12 @@ final class Helpers {
         }
     }
 
+    static void throwIfOrchestratorComplete(boolean isComplete) {
+        if (isComplete) {
+            throw new IllegalStateException("The orchestrator has already completed");
+        }
+    }
+
     static boolean isInfiniteTimeout(Duration timeout) {
         return timeout == null || timeout.isNegative() || timeout.equals(maxDuration);
     }

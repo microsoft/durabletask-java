@@ -254,8 +254,9 @@ public class IntegrationTests extends IntegrationTestBase {
             if (input < 10){
                 ctx.createTimer(delay).get();
                 ctx.continueAsNew(input + 1);
+            } else {
+                ctx.complete(input);
             }
-            ctx.complete(input);
         }).buildAndStart();
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
         try(worker; client){
@@ -271,29 +272,30 @@ public class IntegrationTests extends IntegrationTestBase {
     void continueAsNewWithExternalEvents(){
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
-        final int eventCount = 10;
+        final int expectedEventCount = 10;
         final Duration delay = Duration.ofSeconds(0);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
-            int input = ctx.getInput(int.class);
-            //make sure waitForExternalEvent is only executed once, or it will hang up waiting here from the second time.
-            if (input < 1){
+            int receivedEventCount = ctx.getInput(int.class);
+
+            if (receivedEventCount < expectedEventCount) {
                 ctx.waitForExternalEvent(eventName, int.class).get();
-                ctx.continueAsNew(input + 1);
+                ctx.continueAsNew(receivedEventCount + 1, true);
+            } else {
+                ctx.complete(receivedEventCount);
             }
-            ctx.complete(eventCount);
         }).buildAndStart();
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
         try(worker; client){
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
-            for (int i = 0; i < eventCount; i++) {
+            for (int i = 0; i < expectedEventCount; i++) {
                 client.raiseEvent(instanceId, eventName, i);
             }
 
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-            assertEquals(eventCount, instance.readOutputAs(int.class));
+            assertEquals(expectedEventCount, instance.readOutputAs(int.class));
         }
     }
 

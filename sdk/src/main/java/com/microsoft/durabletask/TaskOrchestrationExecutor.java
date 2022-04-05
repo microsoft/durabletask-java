@@ -23,7 +23,6 @@ public class TaskOrchestrationExecutor {
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
-    private boolean preserveUnprocessedEvents;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
@@ -52,12 +51,7 @@ public class TaskOrchestrationExecutor {
             logger.fine("The orchestrator has yielded and will await for new events.");
         }
 
-        if (completed && preserveUnprocessedEvents){
-            // Send all the buffered external events to ourself.
-            context.rescheduleBufferedExternalEvents();
-        }
-
-        if (completed && context.pendingActions.isEmpty() && !context.waitingForEvents()) {
+        if (context.continuedAsNew || (completed && context.pendingActions.isEmpty() && !context.waitingForEvents())) {
             // There are no further actions for the orchestrator to take so auto-complete the orchestration.
             context.complete(null);
         }
@@ -78,11 +72,14 @@ public class TaskOrchestrationExecutor {
         private final LinkedHashMap<Integer, OrchestratorAction> pendingActions = new LinkedHashMap<>();
         private final HashMap<Integer, TaskRecord<?>> openTasks = new HashMap<>();
         private final LinkedHashMap<String, Queue<TaskRecord<?>>> outstandingEvents = new LinkedHashMap<>();
-        private final LinkedList<EventRaisedEvent> unprocessedEvents = new LinkedList<>();
+        private final LinkedList<HistoryEvent> unprocessedEvents = new LinkedList<>();
         private final DataConverter dataConverter = TaskOrchestrationExecutor.this.dataConverter;
         private final Logger logger = TaskOrchestrationExecutor.this.logger;
         private final OrchestrationHistoryIterator historyEventPlayer;
         private int sequenceNumber;
+        private boolean continuedAsNew;
+        private Object continuedAsNewInput;
+        private boolean preserveUnprocessedEvents;
 
         public ContextImplTask(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
             this.historyEventPlayer = new OrchestrationHistoryIterator(pastEvents, newEvents);
@@ -200,6 +197,7 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public <V> Task<V> callActivity(String name, Object input, Class<V> returnType) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(returnType, "returnType");
 
@@ -233,30 +231,18 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public void continueAsNew(Object input, boolean preserveUnprocessedEvents) {
-            int id = this.sequenceNumber++;
-            TaskOrchestrationExecutor.this.preserveUnprocessedEvents = preserveUnprocessedEvents;
-            //TODO: add logic for newVersion
-            CompleteOrchestrationAction.Builder completeOrchestrationActionBuilder = CompleteOrchestrationAction.newBuilder()
-                    .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_CONTINUED_AS_NEW);
-            String serializedInput = this.dataConverter.serialize(input);
-            if (serializedInput != null){
-                completeOrchestrationActionBuilder.setResult(StringValue.of(serializedInput));
-            }
-            this.pendingActions.put(id, OrchestratorAction.newBuilder()
-                    .setId(id)
-                    .setCompleteOrchestration(completeOrchestrationActionBuilder)
-                    .build());
-        }
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
 
-        private void rescheduleBufferedExternalEvents() {
-            for (EventRaisedEvent unprocessedEvent : unprocessedEvents) {
-                this.sendEvent(this.instanceId, unprocessedEvent.getName(), unprocessedEvent.getInput().getValue());
-            }
+            this.continuedAsNew = true;
+            this.continuedAsNewInput = input;
+            this.preserveUnprocessedEvents = preserveUnprocessedEvents;
         }
 
         @Override
-        public void sendEvent(String instanceId, String eventName, Object eventData){
+        public void sendEvent(String instanceId, String eventName, Object eventData) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNullOrWhiteSpace(instanceId, "instanceId");
+
             int id = this.sequenceNumber++;
             String serializedEventData = this.dataConverter.serialize(eventData);
             OrchestrationInstance.Builder OrchestrationInstanceBuilder = OrchestrationInstance.newBuilder().setInstanceId(instanceId);
@@ -281,9 +267,11 @@ public class TaskOrchestrationExecutor {
         }
 
         @Override
-        public <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType){
+        public <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, Class<V> returnType) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(returnType, "returnType");
+
             int id = this.sequenceNumber++;
 
             String serializedInput = this.dataConverter.serialize(input);
@@ -320,6 +308,7 @@ public class TaskOrchestrationExecutor {
         }
 
         public <V> Task<V> waitForExternalEvent(String name, Duration timeout, Class<V> dataType) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(dataType, "dataType");
 
@@ -328,12 +317,13 @@ public class TaskOrchestrationExecutor {
             CompletableTask<V> eventTask = new ExternalEventTask<>(name, id, timeout);
             
             // Check for a previously received event with the same name
-            for (EventRaisedEvent existing : this.unprocessedEvents) {
+            for (HistoryEvent e : this.unprocessedEvents) {
+                EventRaisedEvent existing = e.getEventRaised();
                 if (name.equalsIgnoreCase(existing.getName())) {
                     String rawEventData = existing.getInput().getValue();
                     V data = this.dataConverter.deserialize(rawEventData, dataType);
                     eventTask.complete(data);
-                    this.unprocessedEvents.remove(existing);
+                    this.unprocessedEvents.remove(e);
                     return eventTask;
                 }
             }
@@ -448,7 +438,7 @@ public class TaskOrchestrationExecutor {
             Queue<TaskRecord<?>> outstandingEventQueue = this.outstandingEvents.get(eventName);
             if (outstandingEventQueue == null) {
                 // No code is waiting for this event. Buffer it in case user-code waits for it later.
-                this.unprocessedEvents.add(eventRaised);
+                this.unprocessedEvents.add(e);
                 return;
             }
 
@@ -466,6 +456,7 @@ public class TaskOrchestrationExecutor {
         }
 
         public Task<Void> createTimer(Duration duration) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(duration, "duration");
 
             int id = this.sequenceNumber++;
@@ -590,7 +581,11 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public void complete(Object output) {
-            this.completeInternal(output, null, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
+            if (this.continuedAsNew) {
+                this.completeInternal(this.continuedAsNewInput, null, OrchestrationStatus.ORCHESTRATION_STATUS_CONTINUED_AS_NEW);
+            } else {
+                this.completeInternal(output, null, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
+            }
         }
 
         @Override
@@ -600,9 +595,7 @@ public class TaskOrchestrationExecutor {
         }
 
         private void completeInternal(Object output, FailureDetails failureDetails, OrchestrationStatus runtimeStatus) {
-            if (this.isComplete) {
-                throw new IllegalStateException("The orchestrator was already completed.");
-            }
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
 
             int id = this.sequenceNumber++;
             CompleteOrchestrationAction.Builder builder = CompleteOrchestrationAction.newBuilder();
@@ -615,6 +608,12 @@ public class TaskOrchestrationExecutor {
 
             if (failureDetails != null) {
                 builder.setFailureDetails(failureDetails.toProto());
+            }
+
+            if (this.continuedAsNew && this.preserveUnprocessedEvents) {
+                for (HistoryEvent e : this.unprocessedEvents) {
+                    builder.addCarryoverEvents(e);
+                }
             }
 
             if (!this.isReplaying) {
@@ -630,8 +629,7 @@ public class TaskOrchestrationExecutor {
         }
         
         private boolean waitingForEvents() {
-            // TODO: Return true if we're waiting for any external events
-            return false;
+            return this.outstandingEvents.size() > 0;
         }
 
         private boolean processNextEvent() throws TaskFailedException, OrchestratorBlockedEvent {
