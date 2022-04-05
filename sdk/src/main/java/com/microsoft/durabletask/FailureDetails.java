@@ -5,6 +5,10 @@ package com.microsoft.durabletask;
 import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.protobuf.OrchestratorService.TaskFailureDetails;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.Objects;
+
 class FailureDetails {
     private final String errorType;
     private final String errorMessage;
@@ -12,11 +16,13 @@ class FailureDetails {
 
     public FailureDetails(
             String errorType,
-            String errorMessage,
-            String errorDetails) {
+            @Nullable String errorMessage,
+            @Nullable String errorDetails) {
         this.errorType = errorType;
-        this.errorMessage = errorMessage;
         this.stackTrace = errorDetails;
+
+        // Error message can be null for things like NullPointerException but the gRPC contract doesn't allow null
+        this.errorMessage = Objects.requireNonNullElse(errorMessage, "");
     }
 
     public FailureDetails(Exception exception) {
@@ -29,14 +35,17 @@ class FailureDetails {
         this.stackTrace = proto.getStackTrace().getValue();
     }
 
+    @Nonnull
     public String getErrorType() {
         return this.errorType;
     }
 
+    @Nonnull
     public String getErrorMessage() {
         return this.errorMessage;
     }
 
+    @Nullable
     public String getStackTrace() {
         return this.stackTrace;
     }
@@ -56,7 +65,7 @@ class FailureDetails {
         return TaskFailureDetails.newBuilder()
                 .setErrorType(this.getErrorType())
                 .setErrorMessage(this.getErrorMessage())
-                .setStackTrace(StringValue.of(this.getStackTrace()))
+                .setStackTrace(StringValue.of(Objects.requireNonNullElse(this.getStackTrace(), "")))
                 .build();
     }
 }
