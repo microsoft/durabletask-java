@@ -10,6 +10,7 @@ import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc.*;
 
 import io.grpc.*;
 
+import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -170,11 +171,11 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
-    public void terminate(String instanceId, Object output) {
+    public void terminate(String instanceId, @Nullable Object output) {
         Helpers.throwIfArgumentNull(instanceId, "instanceId");
-        String serializeOutput = dataConverter.serialize(output);
+        String serializeOutput = this.dataConverter.serialize(output);
         this.logger.fine(() -> String.format(
-                "Terminating instance %s with reason: %s",
+                "Terminating instance %s and setting output to: %s",
                 instanceId,
                 serializeOutput != null ? serializeOutput : "(null)"));
         TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId).setOutput(StringValue.of(serializeOutput));

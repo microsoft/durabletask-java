@@ -312,15 +312,27 @@ public class IntegrationTests extends IntegrationTestBase {
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             String expectOutput = "I'll be back.";
-            String expectOutputWithQuote = new StringBuilder("\"\\\"").append(expectOutput).append("\\\"\"").toString();
-            client.terminate(instanceId, expectOutput);
+            Output testOutput = new IntegrationTests().new Output();
+            testOutput.setQuote(expectOutput);
+            client.terminate(instanceId, testOutput);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-
             assertNotNull(instance);
             System.out.println(instance.getSerializedOutput());
             assertEquals(instanceId, instance.getInstanceId());
             assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
-            assertEquals(expectOutputWithQuote, instance.getSerializedOutput());
+            assertEquals(expectOutput, instance.readOutputAs(Output.class).getQuote());
+        }
+    }
+
+    class Output{
+        String quote;
+
+        public String getQuote() {
+            return quote;
+        }
+
+        public void setQuote(String quote) {
+            this.quote = quote;
         }
     }
 
