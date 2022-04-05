@@ -288,20 +288,19 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public <V> Task<V> callSubOrchestrator(
-                    String name,
-                    @Nullable Object input,
-                    @Nullable String instanceId,
-                    @Nullable TaskOptions options,
-                    Class<V> returnType){
-                Helpers.throwIfArgumentNull(name, "name");
-                Helpers.throwIfArgumentNull(returnType, "returnType");
-
-                if (input instanceof TaskOptions) {
-                    throw new IllegalArgumentException("TaskOptions cannot be used as an input. Did you call the wrong method overload?");
-                }            Helpers.throwIfOrchestratorComplete(this.isComplete);
+                String name,
+                @Nullable Object input,
+                @Nullable String instanceId,
+                @Nullable TaskOptions options,
+                Class<V> returnType) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(name, "name");
             Helpers.throwIfArgumentNull(returnType, "returnType");
 
+            if (input instanceof TaskOptions) {
+                throw new IllegalArgumentException("TaskOptions cannot be used as an input. Did you call the wrong method overload?");
+            }
+            
             String serializedInput = this.dataConverter.serialize(input);
             CreateSubOrchestrationAction.Builder createSubOrchestrationActionBuilder = CreateSubOrchestrationAction.newBuilder().setName(name);
             if (serializedInput != null) {
