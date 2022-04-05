@@ -9,9 +9,15 @@ archivesBaseName = 'durabletask-azurefunctions'
 
 def protocVersion = '3.12.0'
 
+repositories {
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+}
+
 dependencies {
     api project(':sdk')
-    implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '1.4.2'
+    implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '2.0.1-20220407.215042-1'
     implementation "com.google.protobuf:protobuf-java:${protocVersion}"
 }
 

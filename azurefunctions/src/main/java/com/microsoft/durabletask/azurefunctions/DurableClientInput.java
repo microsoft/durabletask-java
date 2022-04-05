@@ -7,6 +7,7 @@
 package com.microsoft.durabletask.azurefunctions;
 
 import com.microsoft.azure.functions.annotation.CustomBinding;
+import com.microsoft.azure.functions.annotation.HasImplicitOutput;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -39,6 +40,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.PARAMETER)
 @CustomBinding(direction = "in", name = "", type = "durableClient")
+@HasImplicitOutput
 public @interface DurableClientInput {
     /**
      * The variable name used in function.json.
