@@ -24,6 +24,7 @@ public class TaskOrchestrationExecutor {
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
+    private ContextImplTask wrapperContext;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
@@ -36,6 +37,7 @@ public class TaskOrchestrationExecutor {
 
     public Collection<OrchestratorAction> execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
         ContextImplTask context = new ContextImplTask(pastEvents, newEvents);
+        this.wrapperContext = context;
 
         boolean completed = false;
         try {
@@ -60,6 +62,11 @@ public class TaskOrchestrationExecutor {
         return context.pendingActions.values();
     }
 
+    public @Nullable String getCustomStatus()
+    {
+        return this.wrapperContext.getCustomStatus();
+    }
+
     private class ContextImplTask implements TaskOrchestrationContext {
 
         private String orchestratorName;
@@ -81,6 +88,8 @@ public class TaskOrchestrationExecutor {
         private boolean continuedAsNew;
         private Object continuedAsNewInput;
         private boolean preserveUnprocessedEvents;
+
+        private Object customStatus;
 
         public ContextImplTask(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
             this.historyEventPlayer = new OrchestrationHistoryIterator(pastEvents, newEvents);
@@ -130,6 +139,16 @@ public class TaskOrchestrationExecutor {
         private void setCurrentInstant(Instant instant) {
             // This will be set multiple times as the orchestration progresses
             this.currentInstant = instant;
+        }
+
+        private @Nullable String getCustomStatus()
+        {
+            return this.dataConverter.serialize(this.customStatus);
+        }
+
+        @Override
+        public void setCustomStatus(@Nullable Object customStatus) {
+            this.customStatus = customStatus;
         }
 
         @Override

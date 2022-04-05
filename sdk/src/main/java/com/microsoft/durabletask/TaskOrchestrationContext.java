@@ -102,4 +102,6 @@ public interface TaskOrchestrationContext {
             throw new RuntimeException("An unexpected exception was throw while waiting for an external event.", e);
         }
     }
+
+    void setCustomStatus(@Nullable Object input);
 }
