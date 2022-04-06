@@ -626,9 +626,9 @@ public class TaskOrchestrationExecutor {
         @Override
         public void complete(Object output) {
             if (this.continuedAsNew) {
-                this.completeInternal(this.continuedAsNewInput, null, OrchestrationStatus.ORCHESTRATION_STATUS_CONTINUED_AS_NEW);
+                this.completeInternal(this.continuedAsNewInput, OrchestrationStatus.ORCHESTRATION_STATUS_CONTINUED_AS_NEW);
             } else {
-                this.completeInternal(output, null, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
+                this.completeInternal(output, OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED);
             }
         }
 
@@ -638,16 +638,23 @@ public class TaskOrchestrationExecutor {
             this.completeInternal(null, failureDetails, OrchestrationStatus.ORCHESTRATION_STATUS_FAILED);
         }
 
-        private void completeInternal(Object output, FailureDetails failureDetails, OrchestrationStatus runtimeStatus) {
+        private void completeInternal(Object output, OrchestrationStatus runtimeStatus) {
+            String resultAsJson = TaskOrchestrationExecutor.this.dataConverter.serialize(output);
+            this.completeInternal(resultAsJson, null, runtimeStatus);
+        }
+
+        private void completeInternal(
+                @Nullable String rawOutput,
+                @Nullable FailureDetails failureDetails,
+                OrchestrationStatus runtimeStatus) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
 
             int id = this.sequenceNumber++;
             CompleteOrchestrationAction.Builder builder = CompleteOrchestrationAction.newBuilder();
             builder.setOrchestrationStatus(runtimeStatus);
 
-            if (output != null) {
-                String resultAsJson = TaskOrchestrationExecutor.this.dataConverter.serialize(output);
-                builder.setResult(StringValue.of(resultAsJson));
+            if (rawOutput != null) {
+                builder.setResult(StringValue.of(rawOutput));
             }
 
             if (failureDetails != null) {

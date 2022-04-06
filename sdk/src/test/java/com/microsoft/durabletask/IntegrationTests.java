@@ -312,27 +312,13 @@ public class IntegrationTests extends IntegrationTestBase {
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             String expectOutput = "I'll be back.";
-            Output testOutput = new IntegrationTests().new Output();
-            testOutput.setQuote(expectOutput);
-            client.terminate(instanceId, testOutput);
+            client.terminate(instanceId, expectOutput);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(instance);
             System.out.println(instance.getSerializedOutput());
             assertEquals(instanceId, instance.getInstanceId());
             assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
-            assertEquals(expectOutput, instance.readOutputAs(Output.class).getQuote());
-        }
-    }
-
-    class Output{
-        String quote;
-
-        public String getQuote() {
-            return quote;
-        }
-
-        public void setQuote(String quote) {
-            this.quote = quote;
+            assertEquals(expectOutput, instance.readOutputAs(String.class));
         }
     }
 
