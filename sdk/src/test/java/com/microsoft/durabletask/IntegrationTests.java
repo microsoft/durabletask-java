@@ -10,9 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -439,6 +437,38 @@ public class IntegrationTests extends IntegrationTestBase {
             } else {
                 assertEquals("Timeout of PT3S expired while waiting for an event named '" + eventName + "' (ID = 0).", output);
             }
+        }
+    }
+
+    @Test
+    void setCustomStatus() {
+        final String orchestratorName = "SetCustomStatus";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    ctx.setCustomStatus("Started!");
+                    Object customStatus = ctx.waitForExternalEvent("StatusEvent", Duration.ofSeconds(3), Object.class).get();
+                    ctx.setCustomStatus(customStatus);
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+
+            OrchestrationMetadata metadata = client.waitForInstanceStart(instanceId, defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals("Started!", metadata.readCustomStatusAs(String.class));
+
+            Map<String, Integer> payload = new HashMap<String ,Integer>(){{
+                put("Hello",45);
+            }};
+            client.raiseEvent(metadata.getInstanceId(), "StatusEvent", payload);
+
+            metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(payload, metadata.readCustomStatusAs(payload.getClass()));
         }
     }
 }
