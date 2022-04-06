@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import javax.annotation.Nullable;
 import java.time.Duration;
 
 // TODO: JavaDocs
@@ -61,4 +62,10 @@ public abstract class DurableTaskClient implements AutoCloseable {
     }
 
     public abstract OrchestrationMetadata waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs);
+
+    public void terminate(String instanceId){
+        this.terminate(instanceId, null);
+    }
+
+    public abstract void terminate(String instanceId, @Nullable Object output);
 }

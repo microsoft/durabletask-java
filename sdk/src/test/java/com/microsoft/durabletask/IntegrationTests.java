@@ -269,7 +269,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void continueAsNewWithExternalEvents(){
+    void continueAsNewWithExternalEvents() {
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
         final int expectedEventCount = 10;
@@ -285,7 +285,7 @@ public class IntegrationTests extends IntegrationTestBase {
             }
         }).buildAndStart();
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
-        try(worker; client){
+        try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
             for (int i = 0; i < expectedEventCount; i++) {
@@ -296,6 +296,29 @@ public class IntegrationTests extends IntegrationTestBase {
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
             assertEquals(expectedEventCount, instance.readOutputAs(int.class));
+        }
+    }
+
+    @Test
+    void termination() {
+        final String orchestratorName = "Termination";
+        final Duration delay = Duration.ofSeconds(3);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).get())
+                .buildAndStart();
+
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            String expectOutput = "I'll be back.";
+            client.terminate(instanceId, expectOutput);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            System.out.println(instance.getSerializedOutput());
+            assertEquals(instanceId, instance.getInstanceId());
+            assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
+            assertEquals(expectOutput, instance.readOutputAs(String.class));
         }
     }
 
