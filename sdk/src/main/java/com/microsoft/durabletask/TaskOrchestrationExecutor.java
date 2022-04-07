@@ -938,10 +938,21 @@ public class TaskOrchestrationExecutor {
 
             private Duration getNextDelay() {
                 if (this.policy != null) {
-                    // REVIEW: Do we need to worry about overflow here?
-                    long nextDelayInMillis = this.policy.getFirstRetryInterval().toMillis() *
-                            (long) Math.pow(this.policy.getBackoffCoefficient(), this.attemptNumber);
                     long maxDelayInMillis = this.policy.getMaxRetryInterval().toMillis();
+
+                    long nextDelayInMillis;
+                    try {
+                        nextDelayInMillis = Math.multiplyExact(
+                                this.policy.getFirstRetryInterval().toMillis(),
+                                (long)Helpers.powExact(this.policy.getBackoffCoefficient(), this.attemptNumber));
+                    } catch (ArithmeticException overflowException) {
+                        if (maxDelayInMillis > 0) {
+                            return this.policy.getMaxRetryInterval();
+                        } else {
+                            // If no maximum is specified, just throw
+                            throw new ArithmeticException("The retry policy calculation resulted in an arithmetic overflow and no max retry interval was configured.");
+                        }
+                    }
 
                     // NOTE: A max delay of zero or less is interpreted to mean no max delay
                     if (nextDelayInMillis > maxDelayInMillis && maxDelayInMillis > 0) {

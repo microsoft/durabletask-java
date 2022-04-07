@@ -59,17 +59,10 @@ class FailureDetails {
     }
 
     public boolean isCausedBy(Class<? extends Exception> exceptionClass) {
-        // First, try comparing the class names
-        String expectedClassName = exceptionClass.getName();
         String actualClassName = this.getErrorType();
-        if (expectedClassName.equalsIgnoreCase(actualClassName)) {
-            return true;
-        }
-
         try {
-            // Next, try using reflection to load the failure's class type and see if it's
-            // a sub-type of the specified exception. For example, this should always succeed
-            // if exceptionClass is System.Exception.
+            // Try using reflection to load the failure's class type and see if it's a sub-type of the specified
+            // exception. For example, this should always succeed if exceptionClass is System.Exception.
             Class<?> actualExceptionClass = Class.forName(actualClassName);
             return exceptionClass.isAssignableFrom(actualExceptionClass);
         } catch (ClassNotFoundException ex) {
