@@ -9,6 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -100,57 +101,35 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         }
     }
 
-
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
     public void retryActivityFailures(int maxNumberOfAttempts) {
-        final String orchestratorName = "OrchestratorWithActivityException";
-        final String activityName = "Throw";
+        // There is one task for each activity call and one task between each retry
+        int expectedTaskCount = (maxNumberOfAttempts * 2) - 1;
+        this.retryOnFailuresCoreTest(maxNumberOfAttempts, expectedTaskCount, ctx -> {
+            RetryPolicy retryPolicy = getCommonRetryPolicy(maxNumberOfAttempts);
+            ctx.callActivity(
+                    "BustedActivity",
+                    null,
+                    TaskOptions.fromRetryPolicy(retryPolicy)).get();
+        });
+    }
 
-        TaskOptions options = TaskOptions.fromRetryPolicy(RetryPolicy.newBuilder(
-                maxNumberOfAttempts,
-                Duration.ofMillis(1)).build());
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 10})
+    public void retryActivityFailuresWithCustomLogic(int maxNumberOfAttempts) {
+        // This gets incremented every time the retry handler is invoked
+        AtomicInteger retryHandlerCalls = new AtomicInteger();
 
-        AtomicInteger actualAttemptCount = new AtomicInteger();
-        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> {
-                    ctx.callActivity(activityName,null, options).get();
-                })
-                .addActivity(activityName, ctx -> {
-                    actualAttemptCount.getAndIncrement();
-                    throw new RuntimeException("Error #" + actualAttemptCount.get());
-                })
-                .buildAndStart();
+        // Run the test and get back the details of the last failure
+        this.retryOnFailuresCoreTest(maxNumberOfAttempts, maxNumberOfAttempts, ctx -> {
+            RetryHandler retryHandler = getCommonRetryHandler(retryHandlerCalls, maxNumberOfAttempts);
+            TaskOptions options = TaskOptions.fromRetryHandler(retryHandler);
+            ctx.callActivity("BustedActivity", null, options).get();
+        });
 
-        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
-        try (worker; client) {
-            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
-            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-            assertNotNull(instance);
-            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
-
-            // Make sure the exception details are still what we expect
-            FailureDetails details = instance.getFailureDetails();
-            assertNotNull(details);
-
-            // Make sure the surfaced exception is the last one. This is reflected in both the task ID and the
-            // error message. In the case of the task ID, it's going to be (N-1)*2 because there is a timer task
-            // injected before each retry. This is useful to validate because changing this could break replays for
-            // existing orchestrations that adopt an updated retry policy implementation (this has happened before).
-            String expectedExceptionMessage = "Error #" + maxNumberOfAttempts;
-            int expectedTaskId = (maxNumberOfAttempts - 1) * 2;
-            String expectedMessage = String.format(
-                    "Task '%s' (#%d) failed with an unhandled exception: %s",
-                    activityName,
-                    expectedTaskId,
-                    expectedExceptionMessage);
-            assertEquals(expectedMessage, details.getErrorMessage());
-            assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
-            assertNotNull(details.getStackTrace());
-
-            // Confirm the number of attempts
-            assertEquals(maxNumberOfAttempts, actualAttemptCount.get());
-        }
+        // Assert that the retry handle got invoked the expected number of times
+        assertEquals(maxNumberOfAttempts, retryHandlerCalls.get());
     }
 
     @ParameterizedTest
@@ -206,20 +185,91 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
     public void retrySubOrchestratorFailures(int maxNumberOfAttempts) {
-        final String orchestratorName = "OrchestratorWithBustedSubOrchestrator";
-        final String subOrchestratorName = "BustedSubOrchestrator";
+        // There is one task for each sub-orchestrator call and one task between each retry
+        int expectedTaskCount = (maxNumberOfAttempts * 2) - 1;
+        this.retryOnFailuresCoreTest(maxNumberOfAttempts, expectedTaskCount, ctx -> {
+                RetryPolicy retryPolicy = getCommonRetryPolicy(maxNumberOfAttempts);
+                ctx.callSubOrchestrator(
+                        "BustedSubOrchestrator",
+                        null,
+                        null,
+                        TaskOptions.fromRetryPolicy(retryPolicy)).get();
+            });
+    }
 
-        TaskOptions options = TaskOptions.fromRetryPolicy(RetryPolicy.newBuilder(
-                maxNumberOfAttempts,
-                Duration.ofMillis(1)).build());
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 10})
+    public void retrySubOrchestrationFailuresWithCustomLogic(int maxNumberOfAttempts) {
+        // This gets incremented every time the retry handler is invoked
+        AtomicInteger retryHandlerCalls = new AtomicInteger();
+
+        // Run the test and get back the details of the last failure
+        this.retryOnFailuresCoreTest(maxNumberOfAttempts, maxNumberOfAttempts, ctx -> {
+            RetryHandler retryHandler = getCommonRetryHandler(retryHandlerCalls, maxNumberOfAttempts);
+            TaskOptions options = TaskOptions.fromRetryHandler(retryHandler);
+            ctx.callSubOrchestrator("BustedSubOrchestrator", null, null, options).get();
+        });
+
+        // Assert that the retry handle got invoked the expected number of times
+        assertEquals(maxNumberOfAttempts, retryHandlerCalls.get());
+    }
+
+    private static RetryPolicy getCommonRetryPolicy(int maxNumberOfAttempts) {
+        // Include a small delay between each retry to exercise the implicit timer path
+        return RetryPolicy.newBuilder(maxNumberOfAttempts, Duration.ofMillis(1)).build();
+    }
+
+    private static RetryHandler getCommonRetryHandler(AtomicInteger handlerInvocationCounter, int maxNumberOfAttempts) {
+        return ctx -> {
+            // Retry handlers get executed on the orchestrator thread and go through replay
+            if (!ctx.getOrchestrationContext().getIsReplaying()) {
+                handlerInvocationCounter.getAndIncrement();
+            }
+
+            // The isCausedBy() method is designed to handle exception inheritance
+            if (!ctx.getLastFailure().isCausedBy(Exception.class)) {
+                return false;
+            }
+
+            // This is the actual exception type we care about
+            if (!ctx.getLastFailure().isCausedBy(RuntimeException.class)) {
+                return false;
+            }
+
+            // Quit after N attempts
+            return ctx.getLastAttemptNumber() < maxNumberOfAttempts;
+        };
+    }
+
+    /**
+     * Shared logic for execution an orchestration with an activity that constantly fails.
+     * @param maxNumberOfAttempts The expected maximum number of activity execution attempts
+     * @param expectedTaskCount The expected number of tasks to be scheduled by the main orchestration.
+     * @param mainOrchestration The main orchestration implementation, which is expected to call either the
+     *                          "BustedActivity" activity or the "BustedSubOrchestrator" sub-orchestration.
+     * @return Returns the details of the <i>last</i> activity or sub-orchestration failure.
+     */
+    private FailureDetails retryOnFailuresCoreTest(
+            int maxNumberOfAttempts,
+            int expectedTaskCount,
+            TaskOrchestration mainOrchestration) {
+        final String orchestratorName = "MainOrchestrator";
 
         AtomicInteger actualAttemptCount = new AtomicInteger();
+
+        // The caller of this test provides the top-level orchestration implementation. This method provides both a
+        // failing sub-orchestration and a failing activity implementation for it to use. The expectation is that the
+        // main orchestration tries to invoke just one of them and is configured with retry configuration.
+        AtomicBoolean isActivityPath = new AtomicBoolean(false);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> {
-                    ctx.callSubOrchestrator(subOrchestratorName, null, null, options).get();
-                })
-                .addOrchestrator(subOrchestratorName, ctx -> {
+                .addOrchestrator(orchestratorName, mainOrchestration)
+                .addOrchestrator("BustedSubOrchestrator", ctx -> {
                     actualAttemptCount.getAndIncrement();
+                    throw new RuntimeException("Error #" + actualAttemptCount.get());
+                })
+                .addActivity("BustedActivity", ctx -> {
+                    actualAttemptCount.getAndIncrement();
+                    isActivityPath.set(true);
                     throw new RuntimeException("Error #" + actualAttemptCount.get());
                 })
                 .buildAndStart();
@@ -235,23 +285,26 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
             FailureDetails details = instance.getFailureDetails();
             assertNotNull(details);
 
+            // Confirm the number of attempts
+            assertEquals(maxNumberOfAttempts, actualAttemptCount.get());
+
             // Make sure the surfaced exception is the last one. This is reflected in both the task ID and the
-            // error message. In the case of the task ID, it's going to be (N-1)*2 because there is a timer task
-            // injected before each retry. This is useful to validate because changing this could break replays for
-            // existing orchestrations that adopt an updated retry policy implementation (this has happened before).
+            // error message. Note that the final task ID depends on how many tasks get executed as part of the main
+            // orchestration's definition. This includes any implicit timers created by a retry policy. Validating
+            // the final task ID is useful to ensure that changes to retry policy implementations don't break backwards
+            // compatibility due to an unexpected history change (this has happened before).
             String expectedExceptionMessage = "Error #" + maxNumberOfAttempts;
-            int expectedTaskId = (maxNumberOfAttempts - 1) * 2;
+            int expectedTaskId = expectedTaskCount - 1; // Task IDs are zero-indexed
+            String taskName = isActivityPath.get() ? "BustedActivity" : "BustedSubOrchestrator";
             String expectedMessage = String.format(
                     "Task '%s' (#%d) failed with an unhandled exception: %s",
-                    subOrchestratorName,
+                    taskName,
                     expectedTaskId,
                     expectedExceptionMessage);
             assertEquals(expectedMessage, details.getErrorMessage());
             assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
             assertNotNull(details.getStackTrace());
-
-            // Confirm the number of attempts
-            assertEquals(maxNumberOfAttempts, actualAttemptCount.get());
+            return details;
         }
     }
 }

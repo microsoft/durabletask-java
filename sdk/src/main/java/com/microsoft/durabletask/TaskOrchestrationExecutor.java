@@ -238,16 +238,7 @@ public class TaskOrchestrationExecutor {
                 return task;
             };
 
-            Task<V> task;
-            if (options != null && options.hasRetryPolicy()) {
-                // Return a retry task that generates the same task for each retry
-                task = new RetriableTask<V>(taskFactory, options.getRetryPolicy(), this);
-            } else {
-                // Return a single vanilla task
-                task = taskFactory.create();
-            }
-
-            return task;
+            return this.createAppropriateTask(taskFactory, options);
         }
 
         public void continueAsNew(Object input, boolean preserveUnprocessedEvents) {
@@ -337,11 +328,17 @@ public class TaskOrchestrationExecutor {
                 return task;
             };
 
+            return this.createAppropriateTask(taskFactory, options);
+        }
+
+        private <V> Task<V> createAppropriateTask(TaskFactory<V> taskFactory, TaskOptions options) {
+            // Retry policies and retry handlers will cause us to return a RetriableTask<V>
             if (options != null && options.hasRetryPolicy()) {
-                // Return a retry task that generates the same task for each retry
-                return new RetriableTask<>(taskFactory, options.getRetryPolicy(), this);
+                return new RetriableTask<V>(this, taskFactory, options.getRetryPolicy());
+            } if (options != null && options.hasRetryHandler()) {
+                return new RetriableTask<V>(this, taskFactory, options.getRetryHandler());
             } else {
-                // Return a single vanilla task
+                // Return a single vanilla task without any wrapper
                 return taskFactory.create();
             }
         }
@@ -849,39 +846,90 @@ public class TaskOrchestrationExecutor {
         // Task implementation that implements a retry policy
         private class RetriableTask<V> extends CompletableTask<V> {
             private final RetryPolicy policy;
+            private final RetryHandler handler;
             private final TaskOrchestrationContext context;
             private final Instant firstAttempt;
             private final TaskFactory<V> taskFactory;
 
             private int attemptNumber;
+            private FailureDetails lastFailure;
+            private Duration totalRetryTime;
 
-            public RetriableTask(TaskFactory<V> taskFactory, RetryPolicy policy, TaskOrchestrationContext context) {
+            public RetriableTask(TaskOrchestrationContext context, TaskFactory<V> taskFactory, RetryPolicy policy) {
+                this(context, taskFactory, policy, null);
+            }
+
+            public RetriableTask(TaskOrchestrationContext context, TaskFactory<V> taskFactory, RetryHandler handler) {
+                this(context, taskFactory, null, handler);
+            }
+
+            private RetriableTask(
+                    TaskOrchestrationContext context,
+                    TaskFactory<V> taskFactory,
+                    @Nullable RetryPolicy retryPolicy,
+                    @Nullable RetryHandler retryHandler) {
                 super(new CompletableFuture<>());
-                this.taskFactory = taskFactory;
-                this.policy = policy;
                 this.context = context;
+                this.taskFactory = taskFactory;
+                this.policy = retryPolicy;
+                this.handler = retryHandler;
                 this.firstAttempt = context.getCurrentInstant();
+                this.totalRetryTime = Duration.ZERO;
             }
 
             @Override
             public V get() throws TaskFailedException, OrchestratorBlockedEvent {
+                Instant startTime = this.context.getCurrentInstant();
                 while (true) {
                     Task<V> currentTask = this.taskFactory.create();
+
                     this.attemptNumber++;
+
                     try {
                         return currentTask.get();
                     } catch (TaskFailedException ex) {
+                        this.lastFailure = ex.getErrorDetails();
                         if (!this.shouldRetry()) {
                             throw ex;
                         }
 
-                        // Use a durable timer to create the delay between retries
-                        this.context.createTimer(this.getNextDelay()).get();
+                        // Overflow/runaway retry protection
+                        if (this.attemptNumber == Integer.MAX_VALUE) {
+                            throw ex;
+                        }
                     }
+
+                    Duration delay = this.getNextDelay();
+                    if (!delay.isZero() && !delay.isNegative()) {
+                        // Use a durable timer to create the delay between retries
+                        this.context.createTimer(delay).get();
+                    }
+
+                    this.totalRetryTime  = Duration.between(startTime, this.context.getCurrentInstant());
                 }
             }
 
             private boolean shouldRetry() {
+                if (this.lastFailure.getIsNonRetriable()) {
+                     return false;
+                }
+
+                if (this.policy != null) {
+                    return this.shouldRetryBasedOnPolicy();
+                } else if (this.handler != null) {
+                    RetryContext retryContext = new RetryContext(
+                            this.context,
+                            this.attemptNumber,
+                            this.lastFailure,
+                            this.totalRetryTime);
+                    return this.handler.handle(retryContext);
+                } else {
+                    // We should never get here, but if we do, returning false is the natural behavior.
+                    return false;
+                }
+            }
+
+            private boolean shouldRetryBasedOnPolicy() {
                 if (this.attemptNumber >= this.policy.getMaxNumberOfAttempts()) {
                     // Max number of attempts exceeded
                     return false;
@@ -902,14 +950,34 @@ public class TaskOrchestrationExecutor {
             }
 
             private Duration getNextDelay() {
-                // REVIEW: Do we need to worry about overflow here?
-                long nextDelayInMillis = this.policy.getFirstRetryInterval().toMillis() *
-                        (long)Math.pow(this.policy.getBackoffCoefficient(), this.attemptNumber);
-                if (nextDelayInMillis > this.policy.getMaxRetryInterval().toMillis()) {
-                    return this.policy.getMaxRetryInterval();
-                } else {
-                    return Duration.ofMillis(nextDelayInMillis);
+                if (this.policy != null) {
+                    long maxDelayInMillis = this.policy.getMaxRetryInterval().toMillis();
+
+                    long nextDelayInMillis;
+                    try {
+                        nextDelayInMillis = Math.multiplyExact(
+                                this.policy.getFirstRetryInterval().toMillis(),
+                                (long)Helpers.powExact(this.policy.getBackoffCoefficient(), this.attemptNumber));
+                    } catch (ArithmeticException overflowException) {
+                        if (maxDelayInMillis > 0) {
+                            return this.policy.getMaxRetryInterval();
+                        } else {
+                            // If no maximum is specified, just throw
+                            throw new ArithmeticException("The retry policy calculation resulted in an arithmetic overflow and no max retry interval was configured.");
+                        }
+                    }
+
+                    // NOTE: A max delay of zero or less is interpreted to mean no max delay
+                    if (nextDelayInMillis > maxDelayInMillis && maxDelayInMillis > 0) {
+                        return this.policy.getMaxRetryInterval();
+                    } else {
+                        return Duration.ofMillis(nextDelayInMillis);
+                    }
                 }
+
+                // If there's no declarative retry policy defined, then the custom code retry handler
+                // is responsible for implementing any delays between retry attempts.
+                return Duration.ZERO;
             }
         }
 

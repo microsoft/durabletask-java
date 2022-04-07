@@ -6,6 +6,6 @@ package com.microsoft.durabletask;
 public class TaskCanceledException extends TaskFailedException {
     // Only intended to be created within this package
     TaskCanceledException(String message, String taskName, int taskId) {
-        super(message, taskName, taskId, new FailureDetails(TaskCanceledException.class.getName(), message, ""));
+        super(message, taskName, taskId, new FailureDetails(TaskCanceledException.class.getName(), message, "", true));
     }
 }
