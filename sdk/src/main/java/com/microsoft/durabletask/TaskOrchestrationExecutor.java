@@ -21,10 +21,10 @@ import java.util.logging.Logger;
 
 public class TaskOrchestrationExecutor {
 
+    private static final String EMPTY_STRING = "";
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
-    private ContextImplTask wrapperContext;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
@@ -35,9 +35,8 @@ public class TaskOrchestrationExecutor {
         this.logger = logger;
     }
 
-    public Collection<OrchestratorAction> execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
+    public TaskOrchestratorResult execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
         ContextImplTask context = new ContextImplTask(pastEvents, newEvents);
-        this.wrapperContext = context;
 
         boolean completed = false;
         try {
@@ -59,12 +58,7 @@ public class TaskOrchestrationExecutor {
             context.complete(null);
         }
 
-        return context.pendingActions.values();
-    }
-
-    public @Nullable String getCustomStatus()
-    {
-        return this.wrapperContext.getCustomStatus();
+        return new TaskOrchestratorResult(context.pendingActions.values(), context.getCustomStatus());
     }
 
     private class ContextImplTask implements TaskOrchestrationContext {
@@ -141,14 +135,19 @@ public class TaskOrchestrationExecutor {
             this.currentInstant = instant;
         }
 
-        private @Nullable String getCustomStatus()
+        private String getCustomStatus()
         {
-            return this.dataConverter.serialize(this.customStatus);
+            return this.customStatus != null ? this.dataConverter.serialize(this.customStatus) : EMPTY_STRING;
         }
 
         @Override
-        public void setCustomStatus(@Nullable Object customStatus) {
+        public void setCustomStatus(Object customStatus) {
             this.customStatus = customStatus;
+        }
+
+        @Override
+        public void clearCustomStatus() {
+            setCustomStatus(EMPTY_STRING);
         }
 
         @Override

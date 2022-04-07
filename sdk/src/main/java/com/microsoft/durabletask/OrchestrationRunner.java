@@ -7,7 +7,6 @@ import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.protobuf.OrchestratorService;
 
 import java.util.Base64;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.logging.Logger;
 
@@ -84,18 +83,15 @@ public final class OrchestrationRunner {
                 logger);
 
         // TODO: Error handling
-        Collection<OrchestratorService.OrchestratorAction> actions = taskOrchestrationExecutor.execute(
+        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
                 orchestratorRequest.getPastEventsList(),
                 orchestratorRequest.getNewEventsList());
 
-        // TODO: Need to get custom status from executor
-        OrchestratorService.OrchestratorResponse.Builder responseBuilder = OrchestratorService.OrchestratorResponse.newBuilder();
-        responseBuilder.setInstanceId(orchestratorRequest.getInstanceId());
-        responseBuilder.addAllActions(actions);
-        if(taskOrchestrationExecutor.getCustomStatus() != null) {
-            responseBuilder.setCustomStatus(StringValue.of(taskOrchestrationExecutor.getCustomStatus()));
-        }
-        OrchestratorService.OrchestratorResponse response = responseBuilder.build();
+        OrchestratorService.OrchestratorResponse response = OrchestratorService.OrchestratorResponse.newBuilder()
+                .setInstanceId(orchestratorRequest.getInstanceId())
+                .addAllActions(taskOrchestratorResult.getActions())
+                .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
+                .build();
         return response.toByteArray();
     }
 }

@@ -108,17 +108,15 @@ public class DurableTaskGrpcWorker implements AutoCloseable {
 
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
-                        Collection<OrchestratorAction> actions = taskOrchestrationExecutor.execute(
+                        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
                                 orchestratorRequest.getPastEventsList(),
                                 orchestratorRequest.getNewEventsList());
 
-                        OrchestratorService.OrchestratorResponse.Builder responseBuilder = OrchestratorService.OrchestratorResponse.newBuilder();
-                        responseBuilder.setInstanceId(orchestratorRequest.getInstanceId());
-                        responseBuilder.addAllActions(actions);
-                        if(taskOrchestrationExecutor.getCustomStatus() != null) {
-                            responseBuilder.setCustomStatus(StringValue.of(taskOrchestrationExecutor.getCustomStatus()));
-                        }
-                        OrchestratorService.OrchestratorResponse response = responseBuilder.build();
+                        OrchestratorResponse response = OrchestratorResponse.newBuilder()
+                                .setInstanceId(orchestratorRequest.getInstanceId())
+                                .addAllActions(taskOrchestratorResult.getActions())
+                                .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
+                                .build();
 
                         this.sidecarClient.completeOrchestratorTask(response);
                     } else if (requestType == RequestCase.ACTIVITYREQUEST) {

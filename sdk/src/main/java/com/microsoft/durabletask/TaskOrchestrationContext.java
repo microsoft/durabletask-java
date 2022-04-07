@@ -103,5 +103,7 @@ public interface TaskOrchestrationContext {
         }
     }
 
-    void setCustomStatus(@Nullable Object input);
+    void setCustomStatus(Object customStatus);
+
+    void clearCustomStatus();
 }

@@ -2,11 +2,6 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -19,6 +14,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * These integration tests are designed to exercise the core, high-level features of
@@ -447,7 +444,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     ctx.setCustomStatus("Started!");
-                    Object customStatus = ctx.waitForExternalEvent("StatusEvent", Duration.ofSeconds(3), Object.class).get();
+                    Object customStatus = ctx.waitForExternalEvent("StatusEvent", Object.class).get();
                     ctx.setCustomStatus(customStatus);
                 })
                 .buildAndStart();
@@ -468,7 +465,36 @@ public class IntegrationTests extends IntegrationTestBase {
             metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
-            assertEquals(payload, metadata.readCustomStatusAs(payload.getClass()));
+            assertEquals(payload, metadata.readCustomStatusAs(HashMap.class));
+        }
+    }
+
+    @Test
+    void clearCustomStatus() {
+        final String orchestratorName = "ClearCustomStatus";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    ctx.setCustomStatus("Started!");
+                    ctx.waitForExternalEvent("StatusEvent").get();
+                    ctx.clearCustomStatus();
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+
+            OrchestrationMetadata metadata = client.waitForInstanceStart(instanceId, defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals("Started!", metadata.readCustomStatusAs(String.class));
+
+            client.raiseEvent(metadata.getInstanceId(), "StatusEvent");
+
+            metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals("", metadata.readCustomStatusAs(String.class));
         }
     }
 }
