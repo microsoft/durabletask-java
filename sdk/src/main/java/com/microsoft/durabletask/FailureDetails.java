@@ -13,26 +13,30 @@ class FailureDetails {
     private final String errorType;
     private final String errorMessage;
     private final String stackTrace;
+    private final boolean isNonRetriable;
 
-    public FailureDetails(
+    FailureDetails(
             String errorType,
             @Nullable String errorMessage,
-            @Nullable String errorDetails) {
+            @Nullable String errorDetails,
+            boolean isNonRetriable) {
         this.errorType = errorType;
         this.stackTrace = errorDetails;
 
         // Error message can be null for things like NullPointerException but the gRPC contract doesn't allow null
         this.errorMessage = Objects.requireNonNullElse(errorMessage, "");
+        this.isNonRetriable = isNonRetriable;
     }
 
     public FailureDetails(Exception exception) {
-        this(exception.getClass().getName(), exception.getMessage(), getFullStackTrace(exception));
+        this(exception.getClass().getName(), exception.getMessage(), getFullStackTrace(exception), false);
     }
 
     public FailureDetails(TaskFailureDetails proto) {
-        this.errorType = proto.getErrorType();
-        this.errorMessage = proto.getErrorMessage();
-        this.stackTrace = proto.getStackTrace().getValue();
+        this(proto.getErrorType(),
+             proto.getErrorMessage(),
+             proto.getStackTrace().getValue(),
+             proto.getIsNonRetriable());
     }
 
     @Nonnull
@@ -48,6 +52,30 @@ class FailureDetails {
     @Nullable
     public String getStackTrace() {
         return this.stackTrace;
+    }
+
+    public boolean getIsNonRetriable() {
+        return this.isNonRetriable;
+    }
+
+    public boolean isCausedBy(Class<? extends Exception> exceptionClass) {
+        // First, try comparing the class names
+        String expectedClassName = exceptionClass.getName();
+        String actualClassName = this.getErrorType();
+        if (expectedClassName.equalsIgnoreCase(actualClassName)) {
+            return true;
+        }
+
+        try {
+            // Next, try using reflection to load the failure's class type and see if it's
+            // a sub-type of the specified exception. For example, this should always succeed
+            // if exceptionClass is System.Exception.
+            Class<?> actualExceptionClass = Class.forName(actualClassName);
+            return exceptionClass.isAssignableFrom(actualExceptionClass);
+        } catch (ClassNotFoundException ex) {
+            // Can't load the class and thus can't tell if it's related
+            return false;
+        }
     }
 
     static String getFullStackTrace(Throwable e) {

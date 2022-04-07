@@ -56,6 +56,7 @@ public class RetryPolicy {
         private Builder(int maxNumberOfAttempts, Duration firstRetryInterval) {
             this.setMaxNumberOfAttempts(maxNumberOfAttempts);
             this.setFirstRetryInterval(firstRetryInterval);
+            this.setBackoffCoefficient(1.0);
         }
 
         public RetryPolicy build() {
