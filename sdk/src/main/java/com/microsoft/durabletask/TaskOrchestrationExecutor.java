@@ -147,7 +147,7 @@ public class TaskOrchestrationExecutor {
 
         @Override
         public void clearCustomStatus() {
-            setCustomStatus(EMPTY_STRING);
+            this.setCustomStatus(EMPTY_STRING);
         }
 
         @Override

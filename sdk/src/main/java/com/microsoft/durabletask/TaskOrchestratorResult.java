@@ -1,33 +1,26 @@
 package com.microsoft.durabletask;
 
+import com.google.common.collect.ImmutableList;
 import com.microsoft.durabletask.protobuf.OrchestratorService;
 
 import java.util.Collection;
 
-public class TaskOrchestratorResult {
+public final class TaskOrchestratorResult {
 
-    private Collection<OrchestratorService.OrchestratorAction> actions;
+    private final ImmutableList<OrchestratorService.OrchestratorAction> actions;
 
-    private String customStatus;
+    private final String customStatus;
 
     public TaskOrchestratorResult(Collection<OrchestratorService.OrchestratorAction> actions, String customStatus) {
-        this.actions = actions;
+        this.actions = ImmutableList.<OrchestratorService.OrchestratorAction>builder().addAll(actions).build();
         this.customStatus = customStatus;
     }
 
     public Collection<OrchestratorService.OrchestratorAction> getActions() {
-        return actions;
-    }
-
-    public void setActions(Collection<OrchestratorService.OrchestratorAction> actions) {
-        this.actions = actions;
+        return this.actions;
     }
 
     public String getCustomStatus() {
-        return customStatus;
-    }
-
-    public void setCustomStatus(String customStatus) {
-        this.customStatus = customStatus;
+        return this.customStatus;
     }
 }
