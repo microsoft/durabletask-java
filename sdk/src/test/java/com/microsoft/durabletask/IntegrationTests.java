@@ -465,7 +465,8 @@ public class IntegrationTests extends IntegrationTestBase {
             metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
-            assertTrue(metadata.hasCustomStatus(payload, HashMap.class));
+            assertTrue(metadata.hasCustomStatus());
+            assertEquals(payload, metadata.readCustomStatusAs(HashMap.class));
         }
     }
 
@@ -494,7 +495,7 @@ public class IntegrationTests extends IntegrationTestBase {
             metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
-            assertTrue(metadata.hasCustomStatus("", String.class));
+            assertFalse(metadata.hasCustomStatus());
         }
     }
 }

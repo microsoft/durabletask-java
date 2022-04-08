@@ -95,8 +95,8 @@ public class OrchestrationMetadata {
         return this.readPayloadAs(type, this.serializedCustomStatus);
     }
 
-    public <T> boolean hasCustomStatus(Object object, Class<T> type){
-        return object.equals(this.readCustomStatusAs(type));
+    public boolean hasCustomStatus() {
+        return this.serializedCustomStatus != null && !this.serializedCustomStatus.isEmpty();
     }
 
     private <T> T readPayloadAs(Class<T> type, String payload) {
