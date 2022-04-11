@@ -21,6 +21,7 @@ import java.util.logging.Logger;
 
 public class TaskOrchestrationExecutor {
 
+    private static final String EMPTY_STRING = "";
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
@@ -34,7 +35,7 @@ public class TaskOrchestrationExecutor {
         this.logger = logger;
     }
 
-    public Collection<OrchestratorAction> execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
+    public TaskOrchestratorResult execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
         ContextImplTask context = new ContextImplTask(pastEvents, newEvents);
 
         boolean completed = false;
@@ -57,7 +58,7 @@ public class TaskOrchestrationExecutor {
             context.complete(null);
         }
 
-        return context.pendingActions.values();
+        return new TaskOrchestratorResult(context.pendingActions.values(), context.getCustomStatus());
     }
 
     private class ContextImplTask implements TaskOrchestrationContext {
@@ -81,6 +82,8 @@ public class TaskOrchestrationExecutor {
         private boolean continuedAsNew;
         private Object continuedAsNewInput;
         private boolean preserveUnprocessedEvents;
+
+        private Object customStatus;
 
         public ContextImplTask(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
             this.historyEventPlayer = new OrchestrationHistoryIterator(pastEvents, newEvents);
@@ -130,6 +133,21 @@ public class TaskOrchestrationExecutor {
         private void setCurrentInstant(Instant instant) {
             // This will be set multiple times as the orchestration progresses
             this.currentInstant = instant;
+        }
+
+        private String getCustomStatus()
+        {
+            return this.customStatus != null ? this.dataConverter.serialize(this.customStatus) : EMPTY_STRING;
+        }
+
+        @Override
+        public void setCustomStatus(Object customStatus) {
+            this.customStatus = customStatus;
+        }
+
+        @Override
+        public void clearCustomStatus() {
+            this.setCustomStatus(null);
         }
 
         @Override

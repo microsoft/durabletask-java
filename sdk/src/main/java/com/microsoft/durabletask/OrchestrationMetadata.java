@@ -95,6 +95,10 @@ public class OrchestrationMetadata {
         return this.readPayloadAs(type, this.serializedCustomStatus);
     }
 
+    public boolean hasCustomStatus() {
+        return this.serializedCustomStatus != null && !this.serializedCustomStatus.isEmpty();
+    }
+
     private <T> T readPayloadAs(Class<T> type, String payload) {
         if (!this.requestedInputsAndOutputs) {
             throw new IllegalStateException("This method can only be used when instance metadata is fetched with the option to include input and output data.");

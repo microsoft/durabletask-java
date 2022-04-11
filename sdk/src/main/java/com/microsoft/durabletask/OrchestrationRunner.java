@@ -3,10 +3,10 @@
 package com.microsoft.durabletask;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.protobuf.OrchestratorService;
 
 import java.util.Base64;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.logging.Logger;
 
@@ -83,16 +83,15 @@ public final class OrchestrationRunner {
                 logger);
 
         // TODO: Error handling
-        Collection<OrchestratorService.OrchestratorAction> actions = taskOrchestrationExecutor.execute(
+        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
                 orchestratorRequest.getPastEventsList(),
                 orchestratorRequest.getNewEventsList());
 
-        // TODO: Need to get custom status from executor
         OrchestratorService.OrchestratorResponse response = OrchestratorService.OrchestratorResponse.newBuilder()
                 .setInstanceId(orchestratorRequest.getInstanceId())
-                .addAllActions(actions)
+                .addAllActions(taskOrchestratorResult.getActions())
+                .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
                 .build();
-
         return response.toByteArray();
     }
 }

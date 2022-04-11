@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 
+import com.microsoft.durabletask.protobuf.OrchestratorService;
 import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.protobuf.OrchestratorService.WorkItem.RequestCase;
@@ -107,14 +108,14 @@ public class DurableTaskGrpcWorker implements AutoCloseable {
 
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
-                        Collection<OrchestratorAction> actions = taskOrchestrationExecutor.execute(
+                        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
                                 orchestratorRequest.getPastEventsList(),
                                 orchestratorRequest.getNewEventsList());
 
-                        // TODO: Need to get custom status from executor
                         OrchestratorResponse response = OrchestratorResponse.newBuilder()
                                 .setInstanceId(orchestratorRequest.getInstanceId())
-                                .addAllActions(actions)
+                                .addAllActions(taskOrchestratorResult.getActions())
+                                .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
                                 .build();
 
                         this.sidecarClient.completeOrchestratorTask(response);
