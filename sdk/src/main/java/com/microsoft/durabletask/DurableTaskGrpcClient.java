@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-import com.google.protobuf.Option;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;

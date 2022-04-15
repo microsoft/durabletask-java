@@ -220,16 +220,16 @@ public class IntegrationTests extends IntegrationTestBase {
         final String plusOneActivityName = "PlusOne";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> {
-                    int value = ctx.getInput(int.class);
-                    for (int i = 0; i < 10; i++) {
-                        value = ctx.callActivity(plusOneActivityName, i, int.class).get();
-                    }
+            .addOrchestrator(orchestratorName, ctx -> {
+                int value = ctx.getInput(int.class);
+                for (int i = 0; i < 10; i++) {
+                    value = ctx.callActivity(plusOneActivityName, i, int.class).get();
+                }
 
-                    ctx.complete(value);
-                })
-                .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
-                .buildAndStart();
+                ctx.complete(value);
+            })
+            .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
+            .buildAndStart();
 
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
         try (worker; client) {
