@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.google.protobuf.Option;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
@@ -13,8 +14,7 @@ import io.grpc.*;
 import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -180,6 +180,36 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
                 serializeOutput != null ? serializeOutput : "(null)"));
         TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId).setOutput(StringValue.of(serializeOutput));
         this.sidecarClient.terminateInstance(builder.build());
+    }
+
+    @Override
+    public OrchestrationStatusQueryResult queryInstances(OrchestrationStatusQuery query) {
+        InstanceQuery.Builder instanceQueryBuilder = InstanceQuery.newBuilder();
+        Optional.ofNullable(query.getCreatedTimeFrom()).ifPresent(createdTimeFrom -> instanceQueryBuilder.setCreatedTimeFrom(DataConverter.getTimestampFromInstant(createdTimeFrom)));
+        Optional.ofNullable(query.getCreatedTimeTo()).ifPresent(createdTimeTo -> instanceQueryBuilder.setCreatedTimeTo(DataConverter.getTimestampFromInstant(createdTimeTo)));
+        Optional.ofNullable(query.getContinuationToken()).ifPresent(token -> instanceQueryBuilder.setContinuationToken(StringValue.of(token)));
+        Optional.ofNullable(query.getInstanceIdPrefix()).ifPresent(prefix -> instanceQueryBuilder.setInstanceIdPrefix(StringValue.of(prefix)));
+        instanceQueryBuilder.setFetchInputsAndOutputs(query.isFetchInputsAndOutputs());
+        instanceQueryBuilder.setMaxInstanceCount(query.getMaxInstanceCount());
+        if (query.getRuntimeStatusList() != null && !query.getRuntimeStatusList().isEmpty()){
+            query.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> instanceQueryBuilder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
+        }
+        if (query.getTaskHubNames() != null && !query.getTaskHubNames().isEmpty()){
+            query.getTaskHubNames().forEach(taskHubname -> Optional.ofNullable(taskHubname).ifPresent(name -> instanceQueryBuilder.addTaskHubNames(StringValue.of(name))));
+        }
+        QueryInstancesResponse queryInstancesResponse = this.sidecarClient.queryInstances(QueryInstancesRequest.newBuilder().setQuery(instanceQueryBuilder).build());
+        return toQueryResult(queryInstancesResponse, query.isFetchInputsAndOutputs());
+    }
+
+    private OrchestrationStatusQueryResult toQueryResult(QueryInstancesResponse queryInstancesResponse, boolean fetchInputsAndOutputs){
+        OrchestrationStatusQueryResult orchestrationStatusQueryResult = new OrchestrationStatusQueryResult();
+        List<OrchestrationMetadata> metadataList = new ArrayList<>();
+        queryInstancesResponse.getOrchestrationStateList().forEach(state -> {
+            metadataList.add(new OrchestrationMetadata(state, this.dataConverter, fetchInputsAndOutputs));
+        });
+        orchestrationStatusQueryResult.setOrchestrationState(metadataList);
+        orchestrationStatusQueryResult.setContinuationToken(queryInstancesResponse.getContinuationToken().getValue());
+        return orchestrationStatusQueryResult;
     }
 
     public static Builder newBuilder() {

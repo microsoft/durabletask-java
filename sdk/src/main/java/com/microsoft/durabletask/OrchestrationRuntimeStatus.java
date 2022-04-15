@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import com.microsoft.durabletask.protobuf.OrchestratorService.*;
+import static com.microsoft.durabletask.protobuf.OrchestratorService.OrchestrationStatus.*;
 
 public enum OrchestrationRuntimeStatus {
     RUNNING,
@@ -29,6 +30,27 @@ public enum OrchestrationRuntimeStatus {
                 return TERMINATED;
             case ORCHESTRATION_STATUS_PENDING:
                 return PENDING;
+            default:
+                throw new IllegalArgumentException(String.format("Unknown status value: %s", status));
+        }
+    }
+
+    public static OrchestrationStatus toProtobuf(OrchestrationRuntimeStatus status){
+        switch (status) {
+            case RUNNING:
+                return ORCHESTRATION_STATUS_RUNNING;
+            case COMPLETED:
+                return ORCHESTRATION_STATUS_COMPLETED;
+            case CONTINUED_AS_NEW:
+                return ORCHESTRATION_STATUS_CONTINUED_AS_NEW;
+            case FAILED:
+                return ORCHESTRATION_STATUS_FAILED;
+            case CANCELED:
+                return ORCHESTRATION_STATUS_CANCELED;
+            case TERMINATED:
+                return ORCHESTRATION_STATUS_TERMINATED;
+            case PENDING:
+                return ORCHESTRATION_STATUS_PENDING;
             default:
                 throw new IllegalArgumentException(String.format("Unknown status value: %s", status));
         }

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -28,6 +29,27 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("integration")
 public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
+    static final Map<String, TaskOrchestration> orchestrationMap = new HashMap<>();
+    static final Map<String, TaskActivity> activityMap = new HashMap<>();
+
+    static final String plusOne = "plusOne";
+    static final String waitForEvent = "waitForEvent";
+
+    static{
+        activityMap.put(plusOne, ctx -> ctx.getInput(int.class) + 1);
+        orchestrationMap.put(plusOne, ctx -> {
+            int value = ctx.getInput(int.class);
+            for (int i = 0; i < 10; i++) {
+                value = ctx.callActivity(plusOne, value, int.class).get();
+            }
+            ctx.complete(value);
+        });
+        orchestrationMap.put(waitForEvent, ctx ->{
+            String name = ctx.getInput(String.class);
+            String output = ctx.waitForExternalEvent(name, String.class).get();
+            ctx.complete(output);
+        });
+    }
 
     // All tests that create a server should save it to this variable for proper shutdown
     private DurableTaskGrpcWorker server;
@@ -198,16 +220,16 @@ public class IntegrationTests extends IntegrationTestBase {
         final String plusOneActivityName = "PlusOne";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                int value = ctx.getInput(int.class);
-                for (int i = 0; i < 10; i++) {
-                    value = ctx.callActivity(plusOneActivityName, i, int.class).get();
-                }
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    for (int i = 0; i < 10; i++) {
+                        value = ctx.callActivity(plusOneActivityName, i, int.class).get();
+                    }
 
-                ctx.complete(value);
-            })
-            .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
-            .buildAndStart();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
+                .buildAndStart();
 
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
         try (worker; client) {
@@ -310,7 +332,6 @@ public class IntegrationTests extends IntegrationTestBase {
             client.terminate(instanceId, expectOutput);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(instance);
-            System.out.println(instance.getSerializedOutput());
             assertEquals(instanceId, instance.getInstanceId());
             assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
             assertEquals(expectOutput, instance.readOutputAs(String.class));
@@ -496,6 +517,47 @@ public class IntegrationTests extends IntegrationTestBase {
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
             assertFalse(metadata.hasCustomStatus());
+        }
+    }
+
+    @Test
+    void multiInstanceQuery() {
+        final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        Instant startTime = Instant.now();
+        String prefix = startTime.toString();
+
+        this.createWorkerBuilder()
+                .addOrchestrator(plusOne, orchestrationMap.get(plusOne))
+                .addActivity(plusOne, activityMap.get(plusOne))
+                .addOrchestrator(waitForEvent, orchestrationMap.get(waitForEvent)).buildAndStart();
+
+        List<CompletableFuture<OrchestrationMetadata>> sequenceFutures = new ArrayList<>();
+        for (int i = 0; i < 1; i++){
+            final int j = i;
+            CompletableFuture<OrchestrationMetadata> sequence = CompletableFuture.supplyAsync(() -> this.runOrchestrationAsync(plusOne, 0, new StringBuilder(prefix).append("sequence").append(j).toString(), client));
+            sequenceFutures.add(sequence);
+        }
+        sequenceFutures.forEach(future -> assertNotNull(future.join()));
+        OrchestrationStatusQuery query = new OrchestrationStatusQuery();
+        OrchestrationStatusQueryResult result = null;
+        result = client.queryInstances(query);
+        assertEquals(1, result.getOrchestrationState().size());
+    }
+
+
+    private OrchestrationMetadata runOrchestrationAsync(String orchestrationName, Object input, String instanceId, DurableTaskClient client) {
+        try (client) {
+            instanceId = client.scheduleNewOrchestrationInstance(orchestrationName, input, instanceId);
+            OrchestrationMetadata status = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            return status;
+        }
+    }
+
+    private OrchestrationMetadata startOrchestrationAsync(String orchestrationName, Object input, String instanceId, DurableTaskClient client) {
+        try (client) {
+            instanceId = client.scheduleNewOrchestrationInstance(orchestrationName, input, instanceId);
+            OrchestrationMetadata status = client.waitForInstanceStart(instanceId, defaultTimeout);
+            return status;
         }
     }
 }

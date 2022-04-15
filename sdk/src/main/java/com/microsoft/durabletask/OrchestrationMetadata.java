@@ -40,6 +40,24 @@ public class OrchestrationMetadata {
         this.failureDetails = new FailureDetails(state.getFailureDetails());
     }
 
+    OrchestrationMetadata(
+            OrchestrationState state,
+            DataConverter dataConverter,
+            boolean requestedInputsAndOutputs) {
+        this.dataConverter = dataConverter;
+        this.requestedInputsAndOutputs = requestedInputsAndOutputs;
+
+        this.name = state.getName();
+        this.instanceId = state.getInstanceId();
+        this.runtimeStatus = OrchestrationRuntimeStatus.fromProtobuf(state.getOrchestrationStatus());
+        this.createdAt = DataConverter.getInstantFromTimestamp(state.getCreatedTimestamp());
+        this.lastUpdatedAt = DataConverter.getInstantFromTimestamp(state.getLastUpdatedTimestamp());
+        this.serializedInput = state.getInput().getValue();
+        this.serializedOutput = state.getOutput().getValue();
+        this.serializedCustomStatus = state.getCustomStatus().getValue();
+        this.failureDetails = new FailureDetails(state.getFailureDetails());
+    }
+
     public String getName() {
         return this.name;
     }
