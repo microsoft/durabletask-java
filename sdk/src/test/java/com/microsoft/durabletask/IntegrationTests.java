@@ -651,12 +651,12 @@ public class IntegrationTests extends IntegrationTestBase {
             query.setFetchInputsAndOutputs(true);
             query.setCreatedTimeFrom(sequencesFinishedTime);
             result = client.queryInstances(query);
-            result.getOrchestrationState().forEach(state -> assertNotNull(state.getSerializedInput()));
+            result.getOrchestrationState().forEach(state -> assertNotNull(state.readInputAs(String.class)));
 
             query.setFetchInputsAndOutputs(false);
             query.setCreatedTimeFrom(sequencesFinishedTime);
             result = client.queryInstances(query);
-            result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readOutputAs(Object.class)));
+            result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readInputAs(Object.class)));
         }
     }
 
