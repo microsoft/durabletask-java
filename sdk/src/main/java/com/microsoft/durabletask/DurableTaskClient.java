@@ -70,4 +70,8 @@ public abstract class DurableTaskClient implements AutoCloseable {
     public abstract void terminate(String instanceId, @Nullable Object output);
 
     public abstract OrchestrationStatusQueryResult queryInstances(OrchestrationStatusQuery query);
+
+    public abstract void createTaskHub(boolean recreateIfExists);
+
+    public abstract void deleteTaskHub();
 }

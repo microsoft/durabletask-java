@@ -200,6 +200,16 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
         return toQueryResult(queryInstancesResponse, query.isFetchInputsAndOutputs());
     }
 
+    @Override
+    public void createTaskHub(boolean recreateIfExists) {
+        this.sidecarClient.createTaskHub(CreateTaskHubRequest.newBuilder().setRecreateIfExists(recreateIfExists).build());
+    }
+
+    @Override
+    public void deleteTaskHub() {
+        this.sidecarClient.deleteTaskHub(DeleteTaskHubRequest.newBuilder().build());
+    }
+
     private OrchestrationStatusQueryResult toQueryResult(QueryInstancesResponse queryInstancesResponse, boolean fetchInputsAndOutputs){
         OrchestrationStatusQueryResult orchestrationStatusQueryResult = new OrchestrationStatusQueryResult();
         List<OrchestrationMetadata> metadataList = new ArrayList<>();

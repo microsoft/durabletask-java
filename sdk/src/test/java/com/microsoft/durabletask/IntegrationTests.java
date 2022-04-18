@@ -530,6 +530,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(waitForEvent, orchestrationMap.get(waitForEvent)).buildAndStart();
 
         try(worker; client){
+            client.createTaskHub(true);
             Instant startTime = Instant.now();
             String prefix = startTime.toString();
             List<CompletableFuture<OrchestrationMetadata>> sequenceFutures = new ArrayList<>();
