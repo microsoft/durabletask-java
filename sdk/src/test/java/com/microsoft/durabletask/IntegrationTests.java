@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class IntegrationTests extends IntegrationTestBase {
-    static final Duration defaultTimeout = Duration.ofSeconds(100000);
+    static final Duration defaultTimeout = Duration.ofSeconds(100);
     static final Map<String, TaskOrchestration> orchestrationMap = new HashMap<>();
     static final Map<String, TaskActivity> activityMap = new HashMap<>();
 
@@ -524,12 +524,12 @@ public class IntegrationTests extends IntegrationTestBase {
     @Test
     void multiInstanceQuery() {
         final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
-        this.createWorkerBuilder()
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(plusOne, orchestrationMap.get(plusOne))
                 .addActivity(plusOne, activityMap.get(plusOne))
                 .addOrchestrator(waitForEvent, orchestrationMap.get(waitForEvent)).buildAndStart();
 
-        try(client){
+        try(worker; client){
             Instant startTime = Instant.now();
             String prefix = startTime.toString();
             List<CompletableFuture<OrchestrationMetadata>> sequenceFutures = new ArrayList<>();
@@ -656,7 +656,7 @@ public class IntegrationTests extends IntegrationTestBase {
             query.setFetchInputsAndOutputs(false);
             query.setCreatedTimeFrom(sequencesFinishedTime);
             result = client.queryInstances(query);
-            result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readInputAs(Object.class)));
+            result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readInputAs(String.class)));
         }
     }
 
