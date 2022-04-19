@@ -25,10 +25,16 @@ public class OrchestrationMetadata {
             OrchestratorService.GetInstanceResponse fetchResponse,
             DataConverter dataConverter,
             boolean requestedInputsAndOutputs) {
+        this(fetchResponse.getOrchestrationState(), dataConverter, requestedInputsAndOutputs);
+    }
+
+    OrchestrationMetadata(
+            OrchestrationState state,
+            DataConverter dataConverter,
+            boolean requestedInputsAndOutputs) {
         this.dataConverter = dataConverter;
         this.requestedInputsAndOutputs = requestedInputsAndOutputs;
 
-        OrchestrationState state = fetchResponse.getOrchestrationState();
         this.name = state.getName();
         this.instanceId = state.getInstanceId();
         this.runtimeStatus = OrchestrationRuntimeStatus.fromProtobuf(state.getOrchestrationStatus());
