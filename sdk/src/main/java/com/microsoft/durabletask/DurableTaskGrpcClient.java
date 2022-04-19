@@ -200,6 +200,14 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
         return toQueryResult(queryInstancesResponse, query.isFetchInputsAndOutputs());
     }
 
+    private OrchestrationStatusQueryResult toQueryResult(QueryInstancesResponse queryInstancesResponse, boolean fetchInputsAndOutputs){
+        List<OrchestrationMetadata> metadataList = new ArrayList<>();
+        queryInstancesResponse.getOrchestrationStateList().forEach(state -> {
+            metadataList.add(new OrchestrationMetadata(state, this.dataConverter, fetchInputsAndOutputs));
+        });
+        return new OrchestrationStatusQueryResult(metadataList, queryInstancesResponse.getContinuationToken().getValue());
+    }
+
     @Override
     public void createTaskHub(boolean recreateIfExists) {
         this.sidecarClient.createTaskHub(CreateTaskHubRequest.newBuilder().setRecreateIfExists(recreateIfExists).build());
@@ -208,17 +216,6 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
     @Override
     public void deleteTaskHub() {
         this.sidecarClient.deleteTaskHub(DeleteTaskHubRequest.newBuilder().build());
-    }
-
-    private OrchestrationStatusQueryResult toQueryResult(QueryInstancesResponse queryInstancesResponse, boolean fetchInputsAndOutputs){
-        OrchestrationStatusQueryResult orchestrationStatusQueryResult = new OrchestrationStatusQueryResult();
-        List<OrchestrationMetadata> metadataList = new ArrayList<>();
-        queryInstancesResponse.getOrchestrationStateList().forEach(state -> {
-            metadataList.add(new OrchestrationMetadata(state, this.dataConverter, fetchInputsAndOutputs));
-        });
-        orchestrationStatusQueryResult.setOrchestrationState(metadataList);
-        orchestrationStatusQueryResult.setContinuationToken(queryInstancesResponse.getContinuationToken().getValue());
-        return orchestrationStatusQueryResult;
     }
 
     public static Builder newBuilder() {

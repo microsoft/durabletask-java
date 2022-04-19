@@ -30,28 +30,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("integration")
 public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
-    static final Map<String, TaskOrchestration> orchestrationMap = new HashMap<>();
-    static final Map<String, TaskActivity> activityMap = new HashMap<>();
-
-    static final String plusOne = "plusOne";
-    static final String waitForEvent = "waitForEvent";
-
-    static{
-        activityMap.put(plusOne, ctx -> ctx.getInput(int.class) + 1);
-        orchestrationMap.put(plusOne, ctx -> {
-            int value = ctx.getInput(int.class);
-            for (int i = 0; i < 10; i++) {
-                value = ctx.callActivity(plusOne, value, int.class).get();
-            }
-            ctx.complete(value);
-        });
-        orchestrationMap.put(waitForEvent, ctx ->{
-            String name = ctx.getInput(String.class);
-            String output = ctx.waitForExternalEvent(name, String.class).get();
-            ctx.complete(output);
-        });
-    }
-
     // All tests that create a server should save it to this variable for proper shutdown
     private DurableTaskGrpcWorker server;
 
@@ -523,66 +501,79 @@ public class IntegrationTests extends IntegrationTestBase {
 
     @Test
     void multiInstanceQuery() {
+        final String plusOne = "plusOne";
+        final String waitForEvent = "waitForEvent";
         final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(plusOne, orchestrationMap.get(plusOne))
-                .addActivity(plusOne, activityMap.get(plusOne))
-                .addOrchestrator(waitForEvent, orchestrationMap.get(waitForEvent)).buildAndStart();
+                .addOrchestrator(plusOne, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    for (int i = 0; i < 10; i++) {
+                        value = ctx.callActivity(plusOne, value, int.class).get();
+                    }
+                    ctx.complete(value);
+                })
+                .addActivity(plusOne, ctx -> ctx.getInput(int.class) + 1)
+                .addOrchestrator(waitForEvent, ctx ->{
+                    String name = ctx.getInput(String.class);
+                    String output = ctx.waitForExternalEvent(name, String.class).get();
+                    ctx.complete(output);
+                }).buildAndStart();
 
         try(worker; client){
             client.createTaskHub(true);
             Instant startTime = Instant.now();
             String prefix = startTime.toString();
-            List<CompletableFuture<OrchestrationMetadata>> sequenceFutures = new ArrayList<>();
-            List<CompletableFuture<OrchestrationMetadata>> waiterFutures = new ArrayList<>();
-            for (int i = 0; i < 5; i++){
-                final int j = i;
-                CompletableFuture<OrchestrationMetadata> sequence = CompletableFuture.supplyAsync(() -> this.runOrchestrationAsync(plusOne, 0, new StringBuilder(prefix).append(".sequence.").append(j).toString(), client));
-                sequenceFutures.add(sequence);
-            }
-            sequenceFutures.forEach(future -> assertNotNull(future.join()));
+
+            IntStream.range(0, 5).mapToObj(i -> {
+                String instanceId = String.format("%s.sequence.%d", prefix, i);
+                client.scheduleNewOrchestrationInstance(plusOne, 0, instanceId);
+                return instanceId;
+            }).collect(Collectors.toUnmodifiableList()).forEach(id -> {
+                client.waitForInstanceCompletion(id, defaultTimeout, true);
+            });
 
             Instant sequencesFinishedTime = Instant.now();
 
-            for (int i = 0; i < 5; i++){
-                final int j = i;
-                CompletableFuture<OrchestrationMetadata> waitEvent = CompletableFuture.supplyAsync(() -> this.startOrchestrationAsync(waitForEvent, String.valueOf(j), new StringBuilder(prefix).append(".waiter.").append(j).toString(), client));
-                waiterFutures.add(waitEvent);
-            }
-            waiterFutures.forEach(future -> assertNotNull(future.join()));
+            IntStream.range(0, 5).mapToObj(i -> {
+                String instanceId = String.format("%s.waiter.%d", prefix, i);
+                client.scheduleNewOrchestrationInstance(waitForEvent, String.valueOf(i), instanceId);
+                return instanceId;
+            }).collect(Collectors.toUnmodifiableList()).forEach(id -> {
+                client.waitForInstanceStart(id, defaultTimeout);
+            });
 
             // Create one query object and reuse it for multiple queries
-            OrchestrationStatusQuery query = new OrchestrationStatusQuery();
+            OrchestrationStatusQuery.Builder query = OrchestrationStatusQuery.newBuild();
             OrchestrationStatusQueryResult result = null;
 
             // Return all instances
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeTo filter
             query.setCreatedTimeTo(startTime);
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertTrue(result.getOrchestrationState().isEmpty());
 
             query.setCreatedTimeTo(sequencesFinishedTime);
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(5, result.getOrchestrationState().size());
 
             query.setCreatedTimeTo(Instant.now());
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeFrom filter
             query.setCreatedTimeFrom(Instant.now());
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertTrue(result.getOrchestrationState().isEmpty());
 
             query.setCreatedTimeFrom(sequencesFinishedTime);
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(5, result.getOrchestrationState().size());
 
             query.setCreatedTimeFrom(startTime);
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test RuntimeStatus filter
@@ -593,53 +584,53 @@ public class IntegrationTests extends IntegrationTestBase {
             ).collect(Collectors.toCollection(HashSet::new));
 
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertTrue(result.getOrchestrationState().isEmpty());
 
             statusFilters.add(OrchestrationRuntimeStatus.RUNNING);
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(5, result.getOrchestrationState().size());
 
             statusFilters.add(OrchestrationRuntimeStatus.COMPLETED);
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(10, result.getOrchestrationState().size());
 
             statusFilters.remove(OrchestrationRuntimeStatus.RUNNING);
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(5, result.getOrchestrationState().size());
 
             statusFilters.clear();
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test InstanceIdPrefix
             query.setInstanceIdPrefix("Foo");
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertTrue(result.getOrchestrationState().isEmpty());
 
             query.setInstanceIdPrefix(prefix);
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test PageSize and ContinuationToken
             HashSet<String> instanceIds = new HashSet<>();
             query.setMaxInstanceCount(0);
-            while(query.getMaxInstanceCount() < 10){
-                query.setMaxInstanceCount(query.getMaxInstanceCount()+1);
-                result = client.queryInstances(query);
+            while(query.build().getMaxInstanceCount() < 10){
+                query.setMaxInstanceCount(query.build().getMaxInstanceCount()+1);
+                result = client.queryInstances(query.build());
                 int total = result.getOrchestrationState().size();
-                assertEquals(query.getMaxInstanceCount(), total);
+                assertEquals(query.build().getMaxInstanceCount(), total);
                 result.getOrchestrationState().forEach(state -> assertTrue(instanceIds.add(state.getInstanceId())));
                 while (total < 10){
                     query.setContinuationToken(result.getContinuationToken());
-                    result = client.queryInstances(query);
+                    result = client.queryInstances(query.build());
                     int count = result.getOrchestrationState().size();
                     assertNotEquals(0, count);
-                    assertTrue(count <= query.getMaxInstanceCount());
+                    assertTrue(count <= query.build().getMaxInstanceCount());
                     total += count;
                     assertTrue(total <= 10);
                     result.getOrchestrationState().forEach(state -> assertTrue(instanceIds.add(state.getInstanceId())));
@@ -651,26 +642,13 @@ public class IntegrationTests extends IntegrationTestBase {
             // Test ShowInput
             query.setFetchInputsAndOutputs(true);
             query.setCreatedTimeFrom(sequencesFinishedTime);
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             result.getOrchestrationState().forEach(state -> assertNotNull(state.readInputAs(String.class)));
 
             query.setFetchInputsAndOutputs(false);
             query.setCreatedTimeFrom(sequencesFinishedTime);
-            result = client.queryInstances(query);
+            result = client.queryInstances(query.build());
             result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readInputAs(String.class)));
         }
-    }
-
-
-    private OrchestrationMetadata runOrchestrationAsync(String orchestrationName, Object input, String instanceId, DurableTaskClient client) {
-        instanceId = client.scheduleNewOrchestrationInstance(orchestrationName, input, instanceId);
-        OrchestrationMetadata status = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-        return status;
-    }
-
-    private OrchestrationMetadata startOrchestrationAsync(String orchestrationName, Object input, String instanceId, DurableTaskClient client) {
-        instanceId = client.scheduleNewOrchestrationInstance(orchestrationName, input, instanceId);
-        OrchestrationMetadata status = client.waitForInstanceStart(instanceId, defaultTimeout);
-        return status;
     }
 }

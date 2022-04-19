@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
@@ -14,13 +16,20 @@ public class OrchestrationStatusQuery {
     private String instanceIdPrefix;
     private boolean fetchInputsAndOutputs;
 
+    private OrchestrationStatusQuery(Builder builder){
+        this.runtimeStatusList = builder.runtimeStatusList;
+        this.createdTimeFrom = builder.createdTimeFrom;
+        this.createdTimeTo = builder.createdTimeTo;
+        this.taskHubNames = builder.taskHubNames;
+        this.maxInstanceCount = builder.maxInstanceCount;
+        this.continuationToken = builder.continuationToken;
+        this.instanceIdPrefix = builder.instanceIdPrefix;
+        this.fetchInputsAndOutputs = builder.fetchInputsAndOutputs;
+    }
+
     @Nullable
     public List<OrchestrationRuntimeStatus> getRuntimeStatusList() {
         return runtimeStatusList;
-    }
-
-    public void setRuntimeStatusList(List<OrchestrationRuntimeStatus> runtimeStatusList) {
-        this.runtimeStatusList = runtimeStatusList;
     }
 
     @Nullable
@@ -28,25 +37,13 @@ public class OrchestrationStatusQuery {
         return createdTimeFrom;
     }
 
-    public void setCreatedTimeFrom(Instant createdTimeFrom) {
-        this.createdTimeFrom = createdTimeFrom;
-    }
-
     @Nullable
     public Instant getCreatedTimeTo() {
         return createdTimeTo;
     }
 
-    public void setCreatedTimeTo(Instant createdTimeTo) {
-        this.createdTimeTo = createdTimeTo;
-    }
-
     public int getMaxInstanceCount() {
         return maxInstanceCount;
-    }
-
-    public void setMaxInstanceCount(int maxInstanceCount) {
-        this.maxInstanceCount = maxInstanceCount;
     }
 
     @Nullable
@@ -54,17 +51,9 @@ public class OrchestrationStatusQuery {
         return taskHubNames;
     }
 
-    public void setTaskHubNames(List<String> taskHubNames) {
-        this.taskHubNames = taskHubNames;
-    }
-
     @Nullable
     public String getContinuationToken() {
         return continuationToken;
-    }
-
-    public void setContinuationToken(String continuationToken) {
-        this.continuationToken = continuationToken;
     }
 
     @Nullable
@@ -72,15 +61,68 @@ public class OrchestrationStatusQuery {
         return instanceIdPrefix;
     }
 
-    public void setInstanceIdPrefix(String instanceIdPrefix) {
-        this.instanceIdPrefix = instanceIdPrefix;
-    }
-
     public boolean isFetchInputsAndOutputs() {
         return fetchInputsAndOutputs;
     }
 
-    public void setFetchInputsAndOutputs(boolean fetchInputsAndOutputs) {
-        this.fetchInputsAndOutputs = fetchInputsAndOutputs;
+    public static Builder newBuild(){
+        return new Builder();
+    }
+
+    public static class Builder {
+        private List<OrchestrationRuntimeStatus> runtimeStatusList;
+        private Instant createdTimeFrom;
+        private Instant createdTimeTo;
+        private List<String> taskHubNames;
+        private int maxInstanceCount = 100;
+        private String continuationToken;
+        private String instanceIdPrefix;
+        private boolean fetchInputsAndOutputs;
+
+        private Builder(){}
+
+        public OrchestrationStatusQuery build(){
+            return new OrchestrationStatusQuery(this);
+        }
+
+        public Builder setRuntimeStatusList(@Nullable List<OrchestrationRuntimeStatus> runtimeStatusList) {
+            this.runtimeStatusList = runtimeStatusList;
+            return this;
+        }
+
+        public Builder setCreatedTimeFrom(@Nullable Instant createdTimeFrom) {
+            this.createdTimeFrom = createdTimeFrom;
+            return this;
+        }
+
+        public Builder setCreatedTimeTo(@Nullable Instant createdTimeTo) {
+            this.createdTimeTo = createdTimeTo;
+            return this;
+        }
+
+        public Builder setMaxInstanceCount(int maxInstanceCount) {
+            this.maxInstanceCount = maxInstanceCount;
+            return this;
+        }
+
+        public Builder setTaskHubNames(@Nullable List<String> taskHubNames) {
+            this.taskHubNames = taskHubNames;
+            return this;
+        }
+
+        public Builder setContinuationToken(@Nullable String continuationToken) {
+            this.continuationToken = continuationToken;
+            return this;
+        }
+
+        public Builder setInstanceIdPrefix(@Nullable String instanceIdPrefix) {
+            this.instanceIdPrefix = instanceIdPrefix;
+            return this;
+        }
+
+        public Builder setFetchInputsAndOutputs(boolean fetchInputsAndOutputs) {
+            this.fetchInputsAndOutputs = fetchInputsAndOutputs;
+            return this;
+        }
     }
 }

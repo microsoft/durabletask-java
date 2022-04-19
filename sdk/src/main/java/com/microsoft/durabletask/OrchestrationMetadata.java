@@ -25,19 +25,7 @@ public class OrchestrationMetadata {
             OrchestratorService.GetInstanceResponse fetchResponse,
             DataConverter dataConverter,
             boolean requestedInputsAndOutputs) {
-        this.dataConverter = dataConverter;
-        this.requestedInputsAndOutputs = requestedInputsAndOutputs;
-
-        OrchestrationState state = fetchResponse.getOrchestrationState();
-        this.name = state.getName();
-        this.instanceId = state.getInstanceId();
-        this.runtimeStatus = OrchestrationRuntimeStatus.fromProtobuf(state.getOrchestrationStatus());
-        this.createdAt = DataConverter.getInstantFromTimestamp(state.getCreatedTimestamp());
-        this.lastUpdatedAt = DataConverter.getInstantFromTimestamp(state.getLastUpdatedTimestamp());
-        this.serializedInput = state.getInput().getValue();
-        this.serializedOutput = state.getOutput().getValue();
-        this.serializedCustomStatus = state.getCustomStatus().getValue();
-        this.failureDetails = new FailureDetails(state.getFailureDetails());
+        this(fetchResponse.getOrchestrationState(), dataConverter, requestedInputsAndOutputs);
     }
 
     OrchestrationMetadata(
