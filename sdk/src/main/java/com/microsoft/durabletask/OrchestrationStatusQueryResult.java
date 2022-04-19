@@ -6,18 +6,18 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 public class OrchestrationStatusQueryResult {
-    private List<OrchestrationMetadata> OrchestrationState;
-    private String continuationToken;
+    private final List<OrchestrationMetadata> orchestrationStates;
+    private final String continuationToken;
 
-    public OrchestrationStatusQueryResult(List<OrchestrationMetadata> orchestrationState, @Nullable String continuationToken) {
-        OrchestrationState = orchestrationState;
+    public OrchestrationStatusQueryResult(List<OrchestrationMetadata> orchestrationStates, @Nullable String continuationToken) {
+        this.orchestrationStates = orchestrationStates;
         this.continuationToken = continuationToken;
     }
 
     public List<OrchestrationMetadata> getOrchestrationState() {
-        return OrchestrationState;
+        return this.orchestrationStates;
     }
     public String getContinuationToken() {
-        return continuationToken;
+        return this.continuationToken;
     }
 }

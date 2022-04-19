@@ -7,14 +7,14 @@ import java.time.Instant;
 import java.util.List;
 
 public class OrchestrationStatusQuery {
-    private List<OrchestrationRuntimeStatus> runtimeStatusList;
-    private Instant createdTimeFrom;
-    private Instant createdTimeTo;
-    private List<String> taskHubNames;
-    private int maxInstanceCount = 100;
-    private String continuationToken;
-    private String instanceIdPrefix;
-    private boolean fetchInputsAndOutputs;
+    private final List<OrchestrationRuntimeStatus> runtimeStatusList;
+    private final Instant createdTimeFrom;
+    private final Instant createdTimeTo;
+    private final List<String> taskHubNames;
+    private final int maxInstanceCount;
+    private final String continuationToken;
+    private final String instanceIdPrefix;
+    private final boolean fetchInputsAndOutputs;
 
     private OrchestrationStatusQuery(Builder builder){
         this.runtimeStatusList = builder.runtimeStatusList;

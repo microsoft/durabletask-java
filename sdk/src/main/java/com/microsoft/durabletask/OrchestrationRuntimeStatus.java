@@ -14,7 +14,7 @@ public enum OrchestrationRuntimeStatus {
     TERMINATED,
     PENDING;
 
-    public static OrchestrationRuntimeStatus fromProtobuf(OrchestrationStatus status) {
+    static OrchestrationRuntimeStatus fromProtobuf(OrchestrationStatus status) {
         switch (status) {
             case ORCHESTRATION_STATUS_RUNNING:
                 return RUNNING;
@@ -35,7 +35,7 @@ public enum OrchestrationRuntimeStatus {
         }
     }
 
-    public static OrchestrationStatus toProtobuf(OrchestrationRuntimeStatus status){
+    static OrchestrationStatus toProtobuf(OrchestrationRuntimeStatus status){
         switch (status) {
             case RUNNING:
                 return ORCHESTRATION_STATUS_RUNNING;
