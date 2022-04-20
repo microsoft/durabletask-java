@@ -650,4 +650,119 @@ public class IntegrationTests extends IntegrationTestBase {
             result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readInputAs(String.class)));
         }
     }
+
+    @Test
+    void purgeInstanceId() {
+        final String orchestratorName = "PurgeInstance";
+        final String plusOneActivityName = "PlusOne";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOneActivityName, value, int.class).get();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
+                .buildAndStart();
+
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            client.createTaskHub(true);
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(1, metadata.readOutputAs(int.class));
+
+            PurgeResult result = client.purgeInstances(instanceId);
+            assertEquals(1, result.getDeletedInstanceCount());
+        }
+    }
+
+    @Test
+    void purgeInstanceFilter() {
+        final String orchestratorName = "PurgeInstance";
+        final String plusOne = "PlusOne";
+        final String plusTwo = "PlusTwo";
+        final String terminate = "Termination";
+
+        final Duration delay = Duration.ofSeconds(1);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOne, value, int.class).get();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOne, ctx -> ctx.getInput(int.class) + 1)
+                .addOrchestrator(plusOne, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOne, value, int.class).get();
+                    ctx.complete(value);
+                })
+                .addOrchestrator(plusTwo, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusTwo, value, int.class).get();
+                    ctx.complete(value);
+                })
+                .addActivity(plusTwo, ctx -> ctx.getInput(int.class) + 2)
+                .addOrchestrator(terminate, ctx -> ctx.createTimer(delay).get())
+                .buildAndStart();
+
+        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        try (worker; client) {
+            client.createTaskHub(true);
+            Instant startTime = Instant.now();
+
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(1, metadata.readOutputAs(int.class));
+
+            // Test CreatedTimeFrom
+            PurgeInstanceCriteria.Builder criteria = PurgeInstanceCriteria.newBuild();
+            criteria.setCreatedTimeFrom(startTime);
+
+            PurgeResult result = client.purgeInstances(criteria.build());
+            assertEquals(1, result.getDeletedInstanceCount());
+
+            // Test CreatedTimeTo
+            criteria.setCreatedTimeTo(Instant.now());
+
+            result = client.purgeInstances(criteria.build());
+            assertEquals(0, result.getDeletedInstanceCount());
+
+            // Test CreatedTimeFrom, CreatedTimeTo, and RuntimeStatus
+            instanceId = client.scheduleNewOrchestrationInstance(plusOne, 0);
+            metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(1, metadata.readOutputAs(int.class));
+
+            instanceId = client.scheduleNewOrchestrationInstance(plusTwo, 10);
+            metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(12, metadata.readOutputAs(int.class));
+
+            instanceId = client.scheduleNewOrchestrationInstance(terminate);
+            client.terminate(instanceId, terminate);
+            metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.TERMINATED, metadata.getRuntimeStatus());
+            assertEquals(terminate, metadata.readOutputAs(String.class));
+
+            HashSet<OrchestrationRuntimeStatus> runtimeStatusFilters = Stream.of(
+                    OrchestrationRuntimeStatus.TERMINATED,
+                    OrchestrationRuntimeStatus.COMPLETED
+            ).collect(Collectors.toCollection(HashSet::new));
+
+            criteria.setCreatedTimeTo(Instant.now());
+            criteria.setRuntimeStatusList(new ArrayList<>(runtimeStatusFilters));
+            result = client.purgeInstances(criteria.build());
+
+            assertEquals(3, result.getDeletedInstanceCount());
+        }
+    }
 }
