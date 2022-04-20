@@ -676,6 +676,9 @@ public class IntegrationTests extends IntegrationTestBase {
 
             PurgeResult result = client.purgeInstances(instanceId);
             assertEquals(1, result.getDeletedInstanceCount());
+
+            metadata = client.getInstanceMetadata(instanceId, true);
+            assertFalse(metadata.instanceExists());
         }
     }
 
@@ -726,29 +729,33 @@ public class IntegrationTests extends IntegrationTestBase {
 
             PurgeResult result = client.purgeInstances(criteria.build());
             assertEquals(1, result.getDeletedInstanceCount());
+            metadata = client.getInstanceMetadata(instanceId, true);
+            assertFalse(metadata.instanceExists());
 
             // Test CreatedTimeTo
             criteria.setCreatedTimeTo(Instant.now());
 
             result = client.purgeInstances(criteria.build());
             assertEquals(0, result.getDeletedInstanceCount());
+            metadata = client.getInstanceMetadata(instanceId, true);
+            assertFalse(metadata.instanceExists());
 
             // Test CreatedTimeFrom, CreatedTimeTo, and RuntimeStatus
-            instanceId = client.scheduleNewOrchestrationInstance(plusOne, 0);
-            metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
+            String instanceId1 = client.scheduleNewOrchestrationInstance(plusOne, 0);
+            metadata = client.waitForInstanceCompletion(instanceId1,  defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
             assertEquals(1, metadata.readOutputAs(int.class));
 
-            instanceId = client.scheduleNewOrchestrationInstance(plusTwo, 10);
-            metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
+            String instanceId2 = client.scheduleNewOrchestrationInstance(plusTwo, 10);
+            metadata = client.waitForInstanceCompletion(instanceId2,  defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
             assertEquals(12, metadata.readOutputAs(int.class));
 
-            instanceId = client.scheduleNewOrchestrationInstance(terminate);
-            client.terminate(instanceId, terminate);
-            metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            String instanceId3 = client.scheduleNewOrchestrationInstance(terminate);
+            client.terminate(instanceId3, terminate);
+            metadata = client.waitForInstanceCompletion(instanceId3, defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.TERMINATED, metadata.getRuntimeStatus());
             assertEquals(terminate, metadata.readOutputAs(String.class));
@@ -763,6 +770,12 @@ public class IntegrationTests extends IntegrationTestBase {
             result = client.purgeInstances(criteria.build());
 
             assertEquals(3, result.getDeletedInstanceCount());
+            metadata = client.getInstanceMetadata(instanceId1, true);
+            assertFalse(metadata.instanceExists());
+            metadata = client.getInstanceMetadata(instanceId2, true);
+            assertFalse(metadata.instanceExists());
+            metadata = client.getInstanceMetadata(instanceId3, true);
+            assertFalse(metadata.instanceExists());
         }
     }
 }

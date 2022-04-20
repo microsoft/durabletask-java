@@ -7,6 +7,8 @@ import com.microsoft.durabletask.protobuf.OrchestratorService.OrchestrationState
 
 import java.time.Instant;
 
+import static com.microsoft.durabletask.Helpers.isNullOrEmpty;
+
 public class OrchestrationMetadata {
     private final DataConverter dataConverter;
     private final boolean requestedInputsAndOutputs;
@@ -148,5 +150,13 @@ public class OrchestrationMetadata {
         }
 
         return payload;
+    }
+
+    public boolean instanceExists() {
+        return !(isNullOrEmpty(this.name)
+                && isNullOrEmpty(this.instanceId)
+                && isNullOrEmpty(this.serializedInput)
+                && isNullOrEmpty(this.serializedOutput)
+        );
     }
 }
