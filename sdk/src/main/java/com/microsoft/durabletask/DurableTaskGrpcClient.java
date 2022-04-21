@@ -218,6 +218,33 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
         this.sidecarClient.deleteTaskHub(DeleteTaskHubRequest.newBuilder().build());
     }
 
+    @Override
+    public PurgeResult purgeInstances(String instanceId) {
+        PurgeInstancesRequest request = PurgeInstancesRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .build();
+
+        PurgeInstancesResponse response = this.sidecarClient.purgeInstances(request);
+        return toPurgeResult(response);
+    }
+
+    @Override
+    public PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) {
+        PurgeInstanceFilter.Builder builder = PurgeInstanceFilter.newBuilder();
+        builder.setCreatedTimeFrom(DataConverter.getTimestampFromInstant(purgeInstanceCriteria.getCreatedTimeFrom()));
+        Optional.ofNullable(purgeInstanceCriteria.getCreatedTimeTo()).ifPresent(createdTimeTo -> builder.setCreatedTimeTo(DataConverter.getTimestampFromInstant(createdTimeTo)));
+        if (purgeInstanceCriteria.getRuntimeStatusList() != null && !purgeInstanceCriteria.getRuntimeStatusList().isEmpty()){
+            purgeInstanceCriteria.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> builder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
+        }
+
+        PurgeInstancesResponse response = this.sidecarClient.purgeInstances(PurgeInstancesRequest.newBuilder().setPurgeInstanceFilter(builder).build());
+        return toPurgeResult(response);
+    }
+
+    private PurgeResult toPurgeResult(PurgeInstancesResponse response){
+        return new PurgeResult(response.getDeletedInstanceCount());
+    }
+
     public static Builder newBuilder() {
         return new Builder();
     }

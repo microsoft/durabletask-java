@@ -56,6 +56,10 @@ final class Helpers {
         return result;
     }
 
+    static boolean isNullOrEmpty(String s) {
+        return s == null || s.isEmpty();
+    }
+
     // Cannot be instantiated
     private Helpers() {
     }

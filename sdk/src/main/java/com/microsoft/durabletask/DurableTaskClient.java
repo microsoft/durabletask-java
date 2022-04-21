@@ -74,4 +74,8 @@ public abstract class DurableTaskClient implements AutoCloseable {
     public abstract void createTaskHub(boolean recreateIfExists);
 
     public abstract void deleteTaskHub();
+
+    public abstract PurgeResult purgeInstances(String instanceId);
+
+    public abstract PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria);
 }
