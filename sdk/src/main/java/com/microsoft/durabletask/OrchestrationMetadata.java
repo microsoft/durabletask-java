@@ -153,10 +153,6 @@ public class OrchestrationMetadata {
     }
 
     public boolean instanceExists() {
-        return !(isNullOrEmpty(this.name)
-                && isNullOrEmpty(this.instanceId)
-                && isNullOrEmpty(this.serializedInput)
-                && isNullOrEmpty(this.serializedOutput)
-        );
+        return !(isNullOrEmpty(this.name) && isNullOrEmpty(this.instanceId));
     }
 }
