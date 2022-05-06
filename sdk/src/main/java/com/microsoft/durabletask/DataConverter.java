@@ -48,8 +48,7 @@ public interface DataConverter {
         return new DataConverterException(message, cause);
     }
 
-    // REVIEW: Should this be a checked exception? Probably, but if so, we should change the programming model so
-    //         that most developers don't need to catch it for things like handling  task inputs.
+    // Data conversion errors are expected to be unrecoverable in most cases, hence an unchecked runtime exception
     class DataConverterException extends RuntimeException {
         public DataConverterException(String message, Throwable cause) {
             super(message, cause);
@@ -61,7 +60,7 @@ public interface DataConverter {
             return null;
         }
 
-        // We don't include nanoseconds because of round-trip issues
+        // We don't include nanoseconds because of serialization round-trip issues
         return Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos()).truncatedTo(ChronoUnit.MILLIS);
     }
 
