@@ -28,7 +28,7 @@ if ($NoSetup -eq $false) {
 	docker run --name 'azurite' -p 10000:10000 -p 10001:10001 -p 10002:10002 -d "mcr.microsoft.com/azure-storage/azurite:${AzuriteVersion}"
 
 	# Finally, start up the smoke test container, which will connect to the Azurite container
-	docker run --name $ContainerName -p 8080:7071 -it --add-host=host.docker.internal:host-gateway -d `
+	docker run --name $ContainerName -p 8080:80 -it --add-host=host.docker.internal:host-gateway -d `
 		--env 'AzureWebJobsStorage=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://host.docker.internal' `
 		--env 'WEBSITE_HOSTNAME=localhost:8080' `
 		$ImageName

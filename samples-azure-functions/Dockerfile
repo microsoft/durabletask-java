@@ -1,8 +1,5 @@
-FROM mcr.microsoft.com/azure-functions/java:4-java11-core-tools
+FROM mcr.microsoft.com/azure-functions/java:4-java11
 
-COPY samples-azure-functions/build/azure-functions/azure-functions-sample/ /home/src/azure-functions-sample/
-WORKDIR /home/src/azure-functions-sample
-EXPOSE 7071
-RUN func -version
-
-CMD func start
+COPY samples-azure-functions/build/azure-functions/azure-functions-sample/ /home/site/wwwroot
+ENV AzureWebJobsScriptRoot=/home/site/wwwroot \
+    AzureFunctionsJobHost__Logging__Console__IsEnabled=true
