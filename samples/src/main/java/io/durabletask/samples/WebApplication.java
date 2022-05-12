@@ -2,8 +2,6 @@
 // Licensed under the MIT License.
 package io.durabletask.samples;
 
-import java.io.IOException;
-
 import com.microsoft.durabletask.*;
 
 import org.springframework.boot.SpringApplication;
@@ -34,9 +32,9 @@ public class WebApplication {
                     // the input is JSON and can be deserialized into the specified type
                     String input = ctx.getInput(String.class);
 
-                    String x = ctx.callActivity("Task1", input, String.class).get();
-                    String y = ctx.callActivity("Task2", x, String.class).get();
-                    String z = ctx.callActivity("Task3", y, String.class).get();
+                    String x = ctx.callActivity("Task1", input, String.class).await();
+                    String y = ctx.callActivity("Task2", x, String.class).await();
+                    String z = ctx.callActivity("Task3", y, String.class).await();
 
                     ctx.complete(z);
                 };

@@ -67,7 +67,7 @@ public class IntegrationTests extends IntegrationTestBase {
         final String orchestratorName = "SingleTimer";
         final Duration delay = Duration.ofSeconds(3);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).get())
+            .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
             .buildAndStart();
 
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
@@ -92,9 +92,9 @@ public class IntegrationTests extends IntegrationTestBase {
             .addOrchestrator(orchestratorName, ctx -> {
                 ArrayList<Boolean> list = new ArrayList<Boolean>();
                 list.add(ctx.getIsReplaying());
-                ctx.createTimer(Duration.ofSeconds(0)).get();
+                ctx.createTimer(Duration.ofSeconds(0)).await();
                 list.add(ctx.getIsReplaying());
-                ctx.createTimer(Duration.ofSeconds(0)).get();
+                ctx.createTimer(Duration.ofSeconds(0)).await();
                 list.add(ctx.getIsReplaying());
                 ctx.complete(list);
             })
@@ -129,7 +129,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 String activityInput = ctx.getInput(String.class);
-                String output = ctx.callActivity(activityName, activityInput, String.class).get();
+                String output = ctx.callActivity(activityName, activityInput, String.class).await();
                 ctx.complete(output);
             })
             .addActivity(activityName, ctx -> {
@@ -161,14 +161,14 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 Instant currentInstant1 = ctx.getCurrentInstant();
-                Instant originalInstant1 = ctx.callActivity(echoActivityName, currentInstant1, Instant.class).get();
+                Instant originalInstant1 = ctx.callActivity(echoActivityName, currentInstant1, Instant.class).await();
                 if (!currentInstant1.equals(originalInstant1)) {
                     ctx.complete(false);
                     return;
                 }
 
                 Instant currentInstant2 = ctx.getCurrentInstant();
-                Instant originalInstant2 = ctx.callActivity(echoActivityName, currentInstant2, Instant.class).get();
+                Instant originalInstant2 = ctx.callActivity(echoActivityName, currentInstant2, Instant.class).await();
                 if (!currentInstant2.equals(originalInstant2)) {
                     ctx.complete(false);
                     return;
@@ -201,7 +201,7 @@ public class IntegrationTests extends IntegrationTestBase {
             .addOrchestrator(orchestratorName, ctx -> {
                 int value = ctx.getInput(int.class);
                 for (int i = 0; i < 10; i++) {
-                    value = ctx.callActivity(plusOneActivityName, i, int.class).get();
+                    value = ctx.callActivity(plusOneActivityName, i, int.class).await();
                 }
 
                 ctx.complete(value);
@@ -226,7 +226,7 @@ public class IntegrationTests extends IntegrationTestBase {
             int result = 5;
             int input = ctx.getInput(int.class);
             if (input < 3){
-                result += ctx.callSubOrchestrator(orchestratorName, input + 1, int.class).get();
+                result += ctx.callSubOrchestrator(orchestratorName, input + 1, int.class).await();
             }
             ctx.complete(result);
         }).buildAndStart();
@@ -247,7 +247,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
             int input = ctx.getInput(int.class);
             if (input < 10){
-                ctx.createTimer(delay).get();
+                ctx.createTimer(delay).await();
                 ctx.continueAsNew(input + 1);
             } else {
                 ctx.complete(input);
@@ -273,7 +273,7 @@ public class IntegrationTests extends IntegrationTestBase {
             int receivedEventCount = ctx.getInput(int.class);
 
             if (receivedEventCount < expectedEventCount) {
-                ctx.waitForExternalEvent(eventName, int.class).get();
+                ctx.waitForExternalEvent(eventName, int.class).await();
                 ctx.continueAsNew(receivedEventCount + 1, true);
             } else {
                 ctx.complete(receivedEventCount);
@@ -300,7 +300,7 @@ public class IntegrationTests extends IntegrationTestBase {
         final Duration delay = Duration.ofSeconds(3);
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).get())
+                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
                 .buildAndStart();
 
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
@@ -330,7 +330,7 @@ public class IntegrationTests extends IntegrationTestBase {
                         .collect(Collectors.toList());
 
                 // Wait for all tasks to complete, then sort and reverse the results
-                List<String> results = ctx.allOf(parallelTasks).get();
+                List<String> results = ctx.allOf(parallelTasks).await();
                 Collections.sort(results);
                 Collections.reverse(results);
                 ctx.complete(results);
@@ -369,7 +369,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 int i;
                 for (i = 0; i < eventCount; i++) {
                     // block until the event is received
-                    int payload = ctx.waitForExternalEvent(eventName, int.class).get();
+                    int payload = ctx.waitForExternalEvent(eventName, int.class).await();
                     if (payload != i) {
                         ctx.complete(-1);
                         return;
@@ -406,7 +406,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 try {
-                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).get();
+                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).await();
                     ctx.complete("received");
                 } catch (TaskCanceledException e) {
                     ctx.complete(e.getMessage());
@@ -443,7 +443,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     ctx.setCustomStatus("Started!");
-                    Object customStatus = ctx.waitForExternalEvent("StatusEvent", Object.class).get();
+                    Object customStatus = ctx.waitForExternalEvent("StatusEvent", Object.class).await();
                     ctx.setCustomStatus(customStatus);
                 })
                 .buildAndStart();
@@ -476,7 +476,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     ctx.setCustomStatus("Started!");
-                    ctx.waitForExternalEvent("StatusEvent").get();
+                    ctx.waitForExternalEvent("StatusEvent").await();
                     ctx.clearCustomStatus();
                 })
                 .buildAndStart();
@@ -507,14 +507,14 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(plusOne, ctx -> {
                     int value = ctx.getInput(int.class);
                     for (int i = 0; i < 10; i++) {
-                        value = ctx.callActivity(plusOne, value, int.class).get();
+                        value = ctx.callActivity(plusOne, value, int.class).await();
                     }
                     ctx.complete(value);
                 })
                 .addActivity(plusOne, ctx -> ctx.getInput(int.class) + 1)
                 .addOrchestrator(waitForEvent, ctx ->{
                     String name = ctx.getInput(String.class);
-                    String output = ctx.waitForExternalEvent(name, String.class).get();
+                    String output = ctx.waitForExternalEvent(name, String.class).await();
                     ctx.complete(output);
                 }).buildAndStart();
 
@@ -659,7 +659,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     int value = ctx.getInput(int.class);
-                    value = ctx.callActivity(plusOneActivityName, value, int.class).get();
+                    value = ctx.callActivity(plusOneActivityName, value, int.class).await();
                     ctx.complete(value);
                 })
                 .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
@@ -694,22 +694,22 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     int value = ctx.getInput(int.class);
-                    value = ctx.callActivity(plusOne, value, int.class).get();
+                    value = ctx.callActivity(plusOne, value, int.class).await();
                     ctx.complete(value);
                 })
                 .addActivity(plusOne, ctx -> ctx.getInput(int.class) + 1)
                 .addOrchestrator(plusOne, ctx -> {
                     int value = ctx.getInput(int.class);
-                    value = ctx.callActivity(plusOne, value, int.class).get();
+                    value = ctx.callActivity(plusOne, value, int.class).await();
                     ctx.complete(value);
                 })
                 .addOrchestrator(plusTwo, ctx -> {
                     int value = ctx.getInput(int.class);
-                    value = ctx.callActivity(plusTwo, value, int.class).get();
+                    value = ctx.callActivity(plusTwo, value, int.class).await();
                     ctx.complete(value);
                 })
                 .addActivity(plusTwo, ctx -> ctx.getInput(int.class) + 2)
-                .addOrchestrator(terminate, ctx -> ctx.createTimer(delay).get())
+                .addOrchestrator(terminate, ctx -> ctx.createTimer(delay).await())
                 .buildAndStart();
 
         DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();

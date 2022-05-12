@@ -896,7 +896,7 @@ public class TaskOrchestrationExecutor {
             }
 
             @Override
-            public V get() throws TaskFailedException, OrchestratorBlockedEvent {
+            public V await() throws TaskFailedException, OrchestratorBlockedEvent {
                 Instant startTime = this.context.getCurrentInstant();
                 while (true) {
                     Task<V> currentTask = this.taskFactory.create();
@@ -904,7 +904,7 @@ public class TaskOrchestrationExecutor {
                     this.attemptNumber++;
 
                     try {
-                        return currentTask.get();
+                        return currentTask.await();
                     } catch (TaskFailedException ex) {
                         this.lastFailure = ex.getErrorDetails();
                         if (!this.shouldRetry()) {
@@ -920,7 +920,7 @@ public class TaskOrchestrationExecutor {
                     Duration delay = this.getNextDelay();
                     if (!delay.isZero() && !delay.isNegative()) {
                         // Use a durable timer to create the delay between retries
-                        this.context.createTimer(delay).get();
+                        this.context.createTimer(delay).await();
                     }
 
                     this.totalRetryTime  = Duration.between(startTime, this.context.getCurrentInstant());
@@ -1010,7 +1010,7 @@ public class TaskOrchestrationExecutor {
             }
 
             @Override
-            public V get() throws TaskFailedException, OrchestratorBlockedEvent {
+            public V await() throws TaskFailedException, OrchestratorBlockedEvent {
                 do {
                     // If the future is done, return its value right away
                     if (this.future.isDone()) {

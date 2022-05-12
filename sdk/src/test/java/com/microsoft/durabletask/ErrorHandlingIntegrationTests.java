@@ -59,7 +59,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     try {
-                        ctx.callActivity(activityName).get();
+                        ctx.callActivity(activityName).await();
                     } catch (TaskFailedException ex) {
                         if (handleException) {
                             ctx.complete("handled");
@@ -111,7 +111,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
             ctx.callActivity(
                     "BustedActivity",
                     null,
-                    TaskOptions.fromRetryPolicy(retryPolicy)).get();
+                    TaskOptions.fromRetryPolicy(retryPolicy)).await();
         });
     }
 
@@ -125,7 +125,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         this.retryOnFailuresCoreTest(maxNumberOfAttempts, maxNumberOfAttempts, ctx -> {
             RetryHandler retryHandler = getCommonRetryHandler(retryHandlerCalls, maxNumberOfAttempts);
             TaskOptions options = TaskOptions.fromRetryHandler(retryHandler);
-            ctx.callActivity("BustedActivity", null, options).get();
+            ctx.callActivity("BustedActivity", null, options).await();
         });
 
         // Assert that the retry handle got invoked the expected number of times
@@ -142,7 +142,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     try {
-                        String result = ctx.callSubOrchestrator(subOrchestratorName, "", String.class).get();
+                        String result = ctx.callSubOrchestrator(subOrchestratorName, "", String.class).await();
                         ctx.complete(result);
                     } catch (TaskFailedException ex) {
                         if (handleException) {
@@ -193,7 +193,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                         "BustedSubOrchestrator",
                         null,
                         null,
-                        TaskOptions.fromRetryPolicy(retryPolicy)).get();
+                        TaskOptions.fromRetryPolicy(retryPolicy)).await();
             });
     }
 
@@ -207,7 +207,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         this.retryOnFailuresCoreTest(maxNumberOfAttempts, maxNumberOfAttempts, ctx -> {
             RetryHandler retryHandler = getCommonRetryHandler(retryHandlerCalls, maxNumberOfAttempts);
             TaskOptions options = TaskOptions.fromRetryHandler(retryHandler);
-            ctx.callSubOrchestrator("BustedSubOrchestrator", null, null, options).get();
+            ctx.callSubOrchestrator("BustedSubOrchestrator", null, null, options).await();
         });
 
         // Assert that the retry handle got invoked the expected number of times
