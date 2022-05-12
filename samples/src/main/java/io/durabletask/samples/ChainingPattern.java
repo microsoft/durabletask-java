@@ -60,9 +60,9 @@ final class ChainingPattern {
                     // the input is JSON and can be deserialized into the specified type
                     String input = ctx.getInput(String.class);
 
-                    String x = ctx.callActivity("Reverse", input, String.class).get();
-                    String y = ctx.callActivity("Capitalize", x, String.class).get();
-                    String z = ctx.callActivity("ReplaceWhitespace", y, String.class).get();
+                    String x = ctx.callActivity("Reverse", input, String.class).await();
+                    String y = ctx.callActivity("Capitalize", x, String.class).await();
+                    String z = ctx.callActivity("ReplaceWhitespace", y, String.class).await();
 
                     // Save the output of the orchestration
                     ctx.complete(z);
@@ -73,12 +73,12 @@ final class ChainingPattern {
                     //         .setRetryInterval(Duration.ofSeconds(30));
 
                     // // Remove the inventory
-                    // var itemDetails = ctx.callActivity("UpdateInventory", order.ShoppingCart, retryPolicy).get();
-                    // var paymentSummary = ctx.callActivity("ProcessPayment", order.PaymentDetails, retryPolicy).get();
-                    // ctx.callActivity("ShipInventory", itemDetails, retryPolicy).get();
+                    // var itemDetails = ctx.callActivity("UpdateInventory", order.ShoppingCart, retryPolicy).await();
+                    // var paymentSummary = ctx.callActivity("ProcessPayment", order.PaymentDetails, retryPolicy).await();
+                    // ctx.callActivity("ShipInventory", itemDetails, retryPolicy).await();
 
                     // var orderSummary = getOrderSummary(itemDetails, paymentSummary);
-                    // ctx.callActivity("SendConfirmationEmail", itemDetails, retryPolicy).get();
+                    // ctx.callActivity("SendConfirmationEmail", itemDetails, retryPolicy).await();
                 };
             }
         });

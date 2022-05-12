@@ -21,7 +21,7 @@ public abstract class Task<V> {
         return this.future.isCancelled();
     }
 
-    public abstract V get() throws TaskFailedException, OrchestratorBlockedEvent;
+    public abstract V await() throws TaskFailedException, OrchestratorBlockedEvent;
     public abstract Task<Void> thenRun(Runnable fn);
     public abstract Task<Void> thenAccept(Consumer<? super V> fn);
     public abstract <R> Task<R> thenApply(Function<? super V, ? extends R> fn);
