@@ -17,6 +17,11 @@ public interface TaskOrchestrationContext {
     boolean getIsReplaying();
     <V> Task<V> completedTask(V value);
     <V> Task<List<V>> allOf(List<Task<V>> tasks);
+
+    default <V> Task<List<V>> allOf(Task<V>... tasks) {
+        return this.allOf(Arrays.asList(tasks));
+    }
+
     Task<Task<?>> anyOf(List<Task<?>> tasks);
 
     default Task<Task<?>> anyOf(Task<?>... tasks) {
