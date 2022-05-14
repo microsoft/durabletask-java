@@ -40,10 +40,10 @@ public class AzureFunctions {
             @DurableOrchestrationTrigger(name = "orchestratorRequestProtoBytes") String orchestratorRequestProtoBytes) {
         return OrchestrationRunner.loadAndRun(orchestratorRequestProtoBytes, ctx -> {
             String result = "";
-            result += ctx.callActivity("Capitalize", "Tokyo", String.class).get() + ", ";
-            result += ctx.callActivity("Capitalize", "London", String.class).get() + ", ";
-            result += ctx.callActivity("Capitalize", "Seattle", String.class).get() + ", ";
-            result += ctx.callActivity("Capitalize", "Austin", String.class).get();
+            result += ctx.callActivity("Capitalize", "Tokyo", String.class).await() + ", ";
+            result += ctx.callActivity("Capitalize", "London", String.class).await() + ", ";
+            result += ctx.callActivity("Capitalize", "Seattle", String.class).await() + ", ";
+            result += ctx.callActivity("Capitalize", "Austin", String.class).await();
             return result;
         });
     }
