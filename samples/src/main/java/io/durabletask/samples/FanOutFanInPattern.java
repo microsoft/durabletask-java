@@ -6,6 +6,7 @@ import com.microsoft.durabletask.*;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.stream.Collectors;
@@ -23,7 +24,7 @@ class FanOutFanInPattern {
         final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
 
         // The input is an arbitrary list of strings.
-        List<String> listOfStrings = List.of(
+        List<String> listOfStrings =  Arrays.asList(
                 "Hello, world!",
                 "The quick brown fox jumps over the lazy dog.",
                 "If a tree falls in the forest and there is no one there to hear it, does it make a sound?",

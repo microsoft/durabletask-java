@@ -24,7 +24,7 @@ class FailureDetails {
         this.stackTrace = errorDetails;
 
         // Error message can be null for things like NullPointerException but the gRPC contract doesn't allow null
-        this.errorMessage = Objects.requireNonNullElse(errorMessage, "");
+        this.errorMessage = errorMessage != null ? errorMessage : "";
         this.isNonRetriable = isNonRetriable;
     }
 
@@ -86,7 +86,7 @@ class FailureDetails {
         return TaskFailureDetails.newBuilder()
                 .setErrorType(this.getErrorType())
                 .setErrorMessage(this.getErrorMessage())
-                .setStackTrace(StringValue.of(Objects.requireNonNullElse(this.getStackTrace(), "")))
+                .setStackTrace(StringValue.of(this.getStackTrace() != null ? this.getStackTrace() : ""))
                 .build();
     }
 }
