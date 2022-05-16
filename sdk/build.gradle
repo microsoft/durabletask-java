@@ -41,7 +41,7 @@ compileTestJava {
     sourceCompatibility = 11
     targetCompatibility = 11
     options.fork = true
-    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac.exe"
+    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
 }
 
 protobuf {
