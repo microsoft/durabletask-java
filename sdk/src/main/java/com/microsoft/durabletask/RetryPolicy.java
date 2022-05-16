@@ -18,8 +18,8 @@ public class RetryPolicy {
         this.maxNumberOfAttempts = builder.maxNumberOfAttempts;
         this.firstRetryInterval = builder.firstRetryInterval;
         this.backoffCoefficient = builder.backoffCoefficient;
-        this.maxRetryInterval = Objects.requireNonNullElse(builder.maxRetryInterval, Duration.ZERO);
-        this.retryTimeout = Objects.requireNonNullElse(builder.retryTimeout, Duration.ZERO);
+        this.maxRetryInterval = builder.maxRetryInterval != null ? builder.maxRetryInterval : Duration.ZERO;
+        this.retryTimeout = builder.retryTimeout != null ? builder.retryTimeout : Duration.ZERO;
     }
 
     public static Builder newBuilder(int maxNumberOfAttempts, Duration firstRetryInterval) {

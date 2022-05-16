@@ -27,6 +27,15 @@ jobs:
       with:
         java-version: '11'
         distribution: 'microsoft'
+    - name: set JDK_11 environment variable test compiling and running
+      env:
+        ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+      run: echo ::set-env name=JDK_11::$(echo $JAVA_HOME)
+    - name: Set up JDK 8
+      uses: actions/setup-java@v2
+      with:
+        java-version: '8'
+        distribution: 'temurin'
     - name: Build with Gradle
       uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
       with:

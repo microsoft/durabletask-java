@@ -64,7 +64,7 @@ public final class OrchestrationRunner {
         }
 
         // Register the passed orchestration as the default ("*") orchestration
-        var orchestrationFactories = new HashMap<String, TaskOrchestrationFactory>();
+        HashMap orchestrationFactories = new HashMap<String, TaskOrchestrationFactory>();
         orchestrationFactories.put("*", new TaskOrchestrationFactory() {
             @Override
             public String getName() {
@@ -77,7 +77,7 @@ public final class OrchestrationRunner {
             }
         });
 
-        var taskOrchestrationExecutor = new TaskOrchestrationExecutor(
+        TaskOrchestrationExecutor taskOrchestrationExecutor = new TaskOrchestrationExecutor(
                 orchestrationFactories,
                 new JacksonDataConverter(),
                 logger);

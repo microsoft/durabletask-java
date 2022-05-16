@@ -54,7 +54,7 @@ public class DurableTaskGrpcWorker implements AutoCloseable {
         }
 
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
-        this.dataConverter = Objects.requireNonNullElse(builder.dataConverter, new JacksonDataConverter());
+        this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
     }
 
     public void start() {
@@ -86,11 +86,11 @@ public class DurableTaskGrpcWorker implements AutoCloseable {
     public void runAndBlock() throws InterruptedException {
         logger.log(Level.INFO, "Durable Task worker is connecting to sidecar at {0}.", this.getSidecarAddress());
 
-        var taskOrchestrationExecutor = new TaskOrchestrationExecutor(
+        TaskOrchestrationExecutor taskOrchestrationExecutor = new TaskOrchestrationExecutor(
                 this.orchestrationFactories,
                 this.dataConverter,
                 logger);
-        var taskActivityExecutor = new TaskActivityExecutor(
+        TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,
                 this.dataConverter,
                 logger);

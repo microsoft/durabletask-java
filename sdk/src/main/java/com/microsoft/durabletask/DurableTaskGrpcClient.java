@@ -27,7 +27,7 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
     private DurableTaskGrpcClient(Builder builder) {
-        this.dataConverter = Objects.requireNonNullElseGet(builder.dataConverter, JacksonDataConverter::new);
+        this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
