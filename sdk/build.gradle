@@ -13,7 +13,7 @@ archivesBaseName = 'durabletask-sdk'
 def grpcVersion = '1.38.0'
 def protocVersion = '3.12.0'
 def jacksonVersion = '2.12.3'
-def PATH_TO_TEST_JAVA_RUNTIME = '/opt/hostedtoolcache/Java_Microsoft_jdk/11.0.13/x64/'
+def PATH_TO_TEST_JAVA_RUNTIME = "$System.env.JDK_11"
 
 dependencies {
 
