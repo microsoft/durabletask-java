@@ -216,7 +216,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     private static RetryPolicy getCommonRetryPolicy(int maxNumberOfAttempts) {
         // Include a small delay between each retry to exercise the implicit timer path
-        return new RetryPolicy().setMaxNumberOfAttempts(maxNumberOfAttempts).setFirstRetryInterval(Duration.ofMillis(1));
+        return new RetryPolicy(maxNumberOfAttempts, Duration.ofMillis(1));
     }
 
     private static RetryHandler getCommonRetryHandler(AtomicInteger handlerInvocationCounter, int maxNumberOfAttempts) {

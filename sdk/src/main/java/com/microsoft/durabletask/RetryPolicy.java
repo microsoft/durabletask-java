@@ -14,7 +14,9 @@ public class RetryPolicy {
     private Duration maxRetryInterval = Duration.ZERO;
     private Duration retryTimeout = Duration.ZERO;
 
-    public RetryPolicy() {
+    public RetryPolicy(int maxNumberOfAttempts, Duration firstRetryInterval) {
+        this.setMaxNumberOfAttempts(maxNumberOfAttempts);
+        this.setFirstRetryInterval(firstRetryInterval);
     }
 
     public RetryPolicy setMaxNumberOfAttempts(int maxNumberOfAttempts) {
