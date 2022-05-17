@@ -1,6 +1,6 @@
 package com.microsoft.durabletask;
 
-import com.microsoft.durabletask.protobuf.OrchestratorService;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 
 import java.util.Collection;
 import java.util.Collections;

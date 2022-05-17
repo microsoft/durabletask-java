@@ -4,7 +4,7 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.StringValue;
-import com.microsoft.durabletask.protobuf.OrchestratorService;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 
 import java.util.Base64;
 import java.util.HashMap;

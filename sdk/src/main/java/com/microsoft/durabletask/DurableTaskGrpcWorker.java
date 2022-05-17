@@ -4,11 +4,11 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 
-import com.microsoft.durabletask.protobuf.OrchestratorService;
-import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc;
-import com.microsoft.durabletask.protobuf.OrchestratorService.*;
-import com.microsoft.durabletask.protobuf.OrchestratorService.WorkItem.RequestCase;
-import com.microsoft.durabletask.protobuf.TaskHubSidecarServiceGrpc.*;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkItem.RequestCase;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
 
 import io.grpc.*;
 

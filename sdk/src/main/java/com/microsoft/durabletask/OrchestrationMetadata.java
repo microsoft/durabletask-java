@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-import com.microsoft.durabletask.protobuf.OrchestratorService;
-import com.microsoft.durabletask.protobuf.OrchestratorService.OrchestrationState;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationState;
 
 import java.time.Instant;
 
