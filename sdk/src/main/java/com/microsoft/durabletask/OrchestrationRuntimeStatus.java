@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-import com.microsoft.durabletask.protobuf.OrchestratorService.*;
-import static com.microsoft.durabletask.protobuf.OrchestratorService.OrchestrationStatus.*;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
+import static com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationStatus.*;
 
 public enum OrchestrationRuntimeStatus {
     RUNNING,

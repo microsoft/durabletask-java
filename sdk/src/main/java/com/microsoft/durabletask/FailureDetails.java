@@ -3,7 +3,7 @@
 package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
-import com.microsoft.durabletask.protobuf.OrchestratorService.TaskFailureDetails;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.TaskFailureDetails;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
