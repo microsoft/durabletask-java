@@ -542,37 +542,37 @@ public class IntegrationTests extends IntegrationTestBase {
             });
 
             // Create one query object and reuse it for multiple queries
-            OrchestrationStatusQuery.Builder query = OrchestrationStatusQuery.newBuild();
+            OrchestrationStatusQuery query = new OrchestrationStatusQuery();
             OrchestrationStatusQueryResult result = null;
 
             // Return all instances
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeTo filter
             query.setCreatedTimeTo(startTime);
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
 
             query.setCreatedTimeTo(sequencesFinishedTime);
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(5, result.getOrchestrationState().size());
 
             query.setCreatedTimeTo(Instant.now());
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeFrom filter
             query.setCreatedTimeFrom(Instant.now());
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
 
             query.setCreatedTimeFrom(sequencesFinishedTime);
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(5, result.getOrchestrationState().size());
 
             query.setCreatedTimeFrom(startTime);
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test RuntimeStatus filter
@@ -583,53 +583,53 @@ public class IntegrationTests extends IntegrationTestBase {
             ).collect(Collectors.toCollection(HashSet::new));
 
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
 
             statusFilters.add(OrchestrationRuntimeStatus.RUNNING);
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(5, result.getOrchestrationState().size());
 
             statusFilters.add(OrchestrationRuntimeStatus.COMPLETED);
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             statusFilters.remove(OrchestrationRuntimeStatus.RUNNING);
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(5, result.getOrchestrationState().size());
 
             statusFilters.clear();
             query.setRuntimeStatusList(new ArrayList<>(statusFilters));
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test InstanceIdPrefix
             query.setInstanceIdPrefix("Foo");
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
 
             query.setInstanceIdPrefix(prefix);
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test PageSize and ContinuationToken
             HashSet<String> instanceIds = new HashSet<>();
             query.setMaxInstanceCount(0);
-            while(query.build().getMaxInstanceCount() < 10){
-                query.setMaxInstanceCount(query.build().getMaxInstanceCount()+1);
-                result = client.queryInstances(query.build());
+            while(query.getMaxInstanceCount() < 10){
+                query.setMaxInstanceCount(query.getMaxInstanceCount()+1);
+                result = client.queryInstances(query);
                 int total = result.getOrchestrationState().size();
-                assertEquals(query.build().getMaxInstanceCount(), total);
+                assertEquals(query.getMaxInstanceCount(), total);
                 result.getOrchestrationState().forEach(state -> assertTrue(instanceIds.add(state.getInstanceId())));
                 while (total < 10){
                     query.setContinuationToken(result.getContinuationToken());
-                    result = client.queryInstances(query.build());
+                    result = client.queryInstances(query);
                     int count = result.getOrchestrationState().size();
                     assertNotEquals(0, count);
-                    assertTrue(count <= query.build().getMaxInstanceCount());
+                    assertTrue(count <= query.getMaxInstanceCount());
                     total += count;
                     assertTrue(total <= 10);
                     result.getOrchestrationState().forEach(state -> assertTrue(instanceIds.add(state.getInstanceId())));
@@ -641,12 +641,12 @@ public class IntegrationTests extends IntegrationTestBase {
             // Test ShowInput
             query.setFetchInputsAndOutputs(true);
             query.setCreatedTimeFrom(sequencesFinishedTime);
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             result.getOrchestrationState().forEach(state -> assertNotNull(state.readInputAs(String.class)));
 
             query.setFetchInputsAndOutputs(false);
             query.setCreatedTimeFrom(sequencesFinishedTime);
-            result = client.queryInstances(query.build());
+            result = client.queryInstances(query);
             result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readInputAs(String.class)));
         }
     }
@@ -724,10 +724,10 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(1, metadata.readOutputAs(int.class));
 
             // Test CreatedTimeFrom
-            PurgeInstanceCriteria.Builder criteria = PurgeInstanceCriteria.newBuild();
+            PurgeInstanceCriteria criteria = new PurgeInstanceCriteria();
             criteria.setCreatedTimeFrom(startTime);
 
-            PurgeResult result = client.purgeInstances(criteria.build());
+            PurgeResult result = client.purgeInstances(criteria);
             assertEquals(1, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
             assertFalse(metadata.instanceExists());
@@ -735,7 +735,7 @@ public class IntegrationTests extends IntegrationTestBase {
             // Test CreatedTimeTo
             criteria.setCreatedTimeTo(Instant.now());
 
-            result = client.purgeInstances(criteria.build());
+            result = client.purgeInstances(criteria);
             assertEquals(0, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
             assertFalse(metadata.instanceExists());
@@ -767,7 +767,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
             criteria.setCreatedTimeTo(Instant.now());
             criteria.setRuntimeStatusList(new ArrayList<>(runtimeStatusFilters));
-            result = client.purgeInstances(criteria.build());
+            result = client.purgeInstances(criteria);
 
             assertEquals(3, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId1, true);

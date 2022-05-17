@@ -26,7 +26,7 @@ public class OrchestrationController {
     public NewOrderResponse placeOrder(@RequestParam(value = "item") String item) {
         String instanceId = this.client.scheduleNewOrchestrationInstance(
             "ProcessOrderOrchestration",
-            NewOrchestrationInstanceOptions.newBuilder().setInput(item).build());
+            new NewOrchestrationInstanceOptions().setInput(item));
         return new NewOrderResponse(instanceId);
     }
 
