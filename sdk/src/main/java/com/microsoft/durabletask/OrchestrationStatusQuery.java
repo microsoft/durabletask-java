@@ -11,7 +11,7 @@ public class OrchestrationStatusQuery {
     private Instant createdTimeFrom;
     private Instant createdTimeTo;
     private List<String> taskHubNames;
-    private int maxInstanceCount;
+    private int maxInstanceCount = 100;
     private String continuationToken;
     private String instanceIdPrefix;
     private boolean fetchInputsAndOutputs;
