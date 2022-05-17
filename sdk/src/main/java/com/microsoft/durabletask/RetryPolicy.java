@@ -10,9 +10,9 @@ public class RetryPolicy {
 
     private int maxNumberOfAttempts;
     private Duration firstRetryInterval;
-    private double backoffCoefficient;
-    private Duration maxRetryInterval;
-    private Duration retryTimeout;
+    private double backoffCoefficient = 1.0;
+    private Duration maxRetryInterval = Duration.ZERO;
+    private Duration retryTimeout = Duration.ZERO;
 
     public RetryPolicy() {
     }
