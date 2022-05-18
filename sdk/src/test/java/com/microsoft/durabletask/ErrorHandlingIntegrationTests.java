@@ -111,7 +111,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
             ctx.callActivity(
                     "BustedActivity",
                     null,
-                    TaskOptions.fromRetryPolicy(retryPolicy)).await();
+                    new TaskOptions(retryPolicy)).await();
         });
     }
 
@@ -124,7 +124,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         // Run the test and get back the details of the last failure
         this.retryOnFailuresCoreTest(maxNumberOfAttempts, maxNumberOfAttempts, ctx -> {
             RetryHandler retryHandler = getCommonRetryHandler(retryHandlerCalls, maxNumberOfAttempts);
-            TaskOptions options = TaskOptions.fromRetryHandler(retryHandler);
+            TaskOptions options = new TaskOptions(retryHandler);
             ctx.callActivity("BustedActivity", null, options).await();
         });
 
@@ -193,7 +193,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                         "BustedSubOrchestrator",
                         null,
                         null,
-                        TaskOptions.fromRetryPolicy(retryPolicy)).await();
+                        new TaskOptions(retryPolicy)).await();
             });
     }
 
@@ -206,7 +206,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         // Run the test and get back the details of the last failure
         this.retryOnFailuresCoreTest(maxNumberOfAttempts, maxNumberOfAttempts, ctx -> {
             RetryHandler retryHandler = getCommonRetryHandler(retryHandlerCalls, maxNumberOfAttempts);
-            TaskOptions options = TaskOptions.fromRetryHandler(retryHandler);
+            TaskOptions options = new TaskOptions(retryHandler);
             ctx.callSubOrchestrator("BustedSubOrchestrator", null, null, options).await();
         });
 
@@ -216,7 +216,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     private static RetryPolicy getCommonRetryPolicy(int maxNumberOfAttempts) {
         // Include a small delay between each retry to exercise the implicit timer path
-        return RetryPolicy.newBuilder(maxNumberOfAttempts, Duration.ofMillis(1)).build();
+        return new RetryPolicy(maxNumberOfAttempts, Duration.ofMillis(1));
     }
 
     private static RetryHandler getCommonRetryHandler(AtomicInteger handlerInvocationCounter, int maxNumberOfAttempts) {

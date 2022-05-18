@@ -19,7 +19,7 @@ final class ChainingPattern {
         final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
         String instanceId = client.scheduleNewOrchestrationInstance(
                 "ActivityChaining",
-                NewOrchestrationInstanceOptions.newBuilder().setInput("Hello, world!").build());
+                new NewOrchestrationInstanceOptions().setInput("Hello, world!"));
         System.out.printf("Started new orchestration instance: %s%n", instanceId);
 
         // Block until the orchestration completes. Then print the final status, which includes the output.

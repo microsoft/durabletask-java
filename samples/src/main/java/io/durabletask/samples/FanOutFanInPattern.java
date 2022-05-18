@@ -34,7 +34,7 @@ class FanOutFanInPattern {
         // Schedule an orchestration which will reliably count the number of words in all the given sentences.
         String instanceId = client.scheduleNewOrchestrationInstance(
                 "FanOutFanIn_WordCount",
-                NewOrchestrationInstanceOptions.newBuilder().setInput(listOfStrings).build());
+                new NewOrchestrationInstanceOptions().setInput(listOfStrings));
         System.out.printf("Started new orchestration instance: %s%n", instanceId);
 
         // Block until the orchestration completes. Then print the final status, which includes the output.

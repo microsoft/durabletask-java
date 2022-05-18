@@ -59,10 +59,9 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @return the <code>instanceId</code> parameter value
      */
     public String scheduleNewOrchestrationInstance(String orchestratorName, Object input, String instanceId) {
-        NewOrchestrationInstanceOptions options = NewOrchestrationInstanceOptions.newBuilder()
+        NewOrchestrationInstanceOptions options = new NewOrchestrationInstanceOptions()
                 .setInput(input)
-                .setInstanceId(instanceId)
-                .build();
+                .setInstanceId(instanceId);
         return this.scheduleNewOrchestrationInstance(orchestratorName, options);
     }
 

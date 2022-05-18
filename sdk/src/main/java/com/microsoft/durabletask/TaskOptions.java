@@ -6,17 +6,17 @@ public class TaskOptions {
     private final RetryPolicy retryPolicy;
     private final RetryHandler retryHandler;
 
-    private TaskOptions(Builder builder) {
-        this.retryPolicy = builder.retryPolicy;
-        this.retryHandler = builder.retryHandler;
+    private TaskOptions(RetryPolicy retryPolicy, RetryHandler retryHandler) {
+        this.retryPolicy = retryPolicy;
+        this.retryHandler = retryHandler;
     }
 
-    public static TaskOptions fromRetryPolicy(RetryPolicy policy) {
-        return newBuilder().setRetryStrategy(policy).build();
+    public TaskOptions(RetryPolicy retryPolicy) {
+        this(retryPolicy, null);
     }
 
-    public static TaskOptions fromRetryHandler(RetryHandler handler) {
-        return newBuilder().setRetryStrategy(handler).build();
+    public TaskOptions(RetryHandler retryHandler) {
+        this(null, retryHandler);
     }
 
     boolean hasRetryPolicy() {
@@ -33,33 +33,5 @@ public class TaskOptions {
 
     public RetryHandler getRetryHandler() {
         return this.retryHandler;
-    }
-
-    public static Builder newBuilder() {
-        return new Builder();
-    }
-
-    public static class Builder {
-        private RetryPolicy retryPolicy;
-        private RetryHandler retryHandler;
-
-        private Builder() {
-        }
-
-        public TaskOptions build() {
-            return new TaskOptions(this);
-        }
-
-        public Builder setRetryStrategy(RetryPolicy retryPolicy) {
-            this.retryPolicy = retryPolicy;
-            this.retryHandler = null;
-            return this;
-        }
-
-        public Builder setRetryStrategy(RetryHandler retryHandler) {
-            this.retryHandler = retryHandler;
-            this.retryPolicy = null;
-            return this;
-        }
     }
 }

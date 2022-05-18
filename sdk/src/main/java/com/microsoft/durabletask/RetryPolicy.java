@@ -8,22 +8,58 @@ import java.util.Objects;
 
 public class RetryPolicy {
 
-    private final int maxNumberOfAttempts;
-    private final Duration firstRetryInterval;
-    private final double backoffCoefficient;
-    private final Duration maxRetryInterval;
-    private final Duration retryTimeout;
+    private int maxNumberOfAttempts;
+    private Duration firstRetryInterval;
+    private double backoffCoefficient = 1.0;
+    private Duration maxRetryInterval = Duration.ZERO;
+    private Duration retryTimeout = Duration.ZERO;
 
-    private RetryPolicy(Builder builder) {
-        this.maxNumberOfAttempts = builder.maxNumberOfAttempts;
-        this.firstRetryInterval = builder.firstRetryInterval;
-        this.backoffCoefficient = builder.backoffCoefficient;
-        this.maxRetryInterval = builder.maxRetryInterval != null ? builder.maxRetryInterval : Duration.ZERO;
-        this.retryTimeout = builder.retryTimeout != null ? builder.retryTimeout : Duration.ZERO;
+    public RetryPolicy(int maxNumberOfAttempts, Duration firstRetryInterval) {
+        this.setMaxNumberOfAttempts(maxNumberOfAttempts);
+        this.setFirstRetryInterval(firstRetryInterval);
     }
 
-    public static Builder newBuilder(int maxNumberOfAttempts, Duration firstRetryInterval) {
-        return new Builder(maxNumberOfAttempts, firstRetryInterval);
+    public RetryPolicy setMaxNumberOfAttempts(int maxNumberOfAttempts) {
+        if (maxNumberOfAttempts <= 0) {
+            throw new IllegalArgumentException("The value for maxNumberOfAttempts must be greater than zero.");
+        }
+        this.maxNumberOfAttempts = maxNumberOfAttempts;
+        return this;
+    }
+
+    public RetryPolicy setFirstRetryInterval(Duration firstRetryInterval) {
+        if (firstRetryInterval == null) {
+            throw new IllegalArgumentException("firstRetryInterval cannot be null.");
+        }
+        if (firstRetryInterval.isZero() || firstRetryInterval.isNegative()) {
+            throw new IllegalArgumentException("The value for firstRetryInterval must be greater than zero.");
+        }
+        this.firstRetryInterval = firstRetryInterval;
+        return this;
+    }
+
+    public RetryPolicy setBackoffCoefficient(double backoffCoefficient) {
+        if (backoffCoefficient < 1.0) {
+            throw new IllegalArgumentException("The value for backoffCoefficient must be greater or equal to 1.0.");
+        }
+        this.backoffCoefficient = backoffCoefficient;
+        return this;
+    }
+
+    public RetryPolicy setMaxRetryInterval(@Nullable Duration maxRetryInterval) {
+        if (maxRetryInterval != null && maxRetryInterval.compareTo(this.firstRetryInterval) < 0) {
+            throw new IllegalArgumentException("The value for maxRetryInterval must be greater than or equal to the value for firstRetryInterval.");
+        }
+        this.maxRetryInterval = maxRetryInterval;
+        return this;
+    }
+
+    public RetryPolicy setRetryTimeout(Duration retryTimeout) {
+        if (retryTimeout != null && retryTimeout.compareTo(this.firstRetryInterval) < 0) {
+            throw new IllegalArgumentException("The value for retryTimeout must be greater than or equal to the value for firstRetryInterval.");
+        }
+        this.retryTimeout = retryTimeout;
+        return this;
     }
 
     public int getMaxNumberOfAttempts() {
@@ -45,65 +81,4 @@ public class RetryPolicy {
     public Duration getRetryTimeout() {
         return this.retryTimeout;
      }
-
-    public static class Builder {
-        private int maxNumberOfAttempts;
-        private Duration firstRetryInterval;
-        private double backoffCoefficient;
-        private Duration maxRetryInterval;
-        private Duration retryTimeout;
-
-        private Builder(int maxNumberOfAttempts, Duration firstRetryInterval) {
-            this.setMaxNumberOfAttempts(maxNumberOfAttempts);
-            this.setFirstRetryInterval(firstRetryInterval);
-            this.setBackoffCoefficient(1.0);
-        }
-
-        public RetryPolicy build() {
-            return new RetryPolicy(this);
-        }
-
-        public Builder setMaxNumberOfAttempts(int maxNumberOfAttempts) {
-            if (maxNumberOfAttempts <= 0) {
-                throw new IllegalArgumentException("The value for maxNumberOfAttempts must be greater than zero.");
-            }
-            this.maxNumberOfAttempts = maxNumberOfAttempts;
-            return this;
-        }
-
-        public Builder setFirstRetryInterval(Duration firstRetryInterval) {
-            if (firstRetryInterval == null) {
-                throw new IllegalArgumentException("firstRetryInterval cannot be null.");
-            }
-            if (firstRetryInterval.isZero() || firstRetryInterval.isNegative()) {
-                throw new IllegalArgumentException("The value for firstRetryInterval must be greater than zero.");
-            }
-            this.firstRetryInterval = firstRetryInterval;
-            return this;
-        }
-
-        public Builder setBackoffCoefficient(double backoffCoefficient) {
-            if (backoffCoefficient < 1.0) {
-                throw new IllegalArgumentException("The value for backoffCoefficient must be greater or equal to 1.0.");
-            }
-            this.backoffCoefficient = backoffCoefficient;
-            return this;
-        }
-
-        public Builder setMaxRetryInterval(@Nullable Duration maxRetryInterval) {
-            if (maxRetryInterval != null && maxRetryInterval.compareTo(this.firstRetryInterval) < 0) {
-                throw new IllegalArgumentException("The value for maxRetryInterval must be greater than or equal to the value for firstRetryInterval.");
-            }
-            this.maxRetryInterval = maxRetryInterval;
-            return this;
-        }
-
-        public Builder setRetryTimeout(Duration retryTimeout) {
-            if (retryTimeout != null && retryTimeout.compareTo(this.firstRetryInterval) < 0) {
-                throw new IllegalArgumentException("The value for retryTimeout must be greater than or equal to the value for firstRetryInterval.");
-            }
-            this.retryTimeout = retryTimeout;
-            return this;
-        }
-    }
 }
