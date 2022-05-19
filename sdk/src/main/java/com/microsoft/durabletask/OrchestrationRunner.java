@@ -14,6 +14,10 @@ import java.util.logging.Logger;
 public final class OrchestrationRunner {
     private static final Logger logger = Logger.getLogger(OrchestrationRunner.class.getPackage().getName());
 
+    private OrchestrationRunner(){
+
+    }
+
     public static <R> String loadAndRun(
             String triggerStateProtoBase64String,
             OrchestratorFunction<R> orchestratorFunc) {

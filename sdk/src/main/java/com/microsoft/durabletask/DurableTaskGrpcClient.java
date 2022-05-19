@@ -254,12 +254,12 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
         private int port;
         private Channel channel;
 
-        public Builder setDataConverter(DataConverter dataConverter) {
+        public Builder dataConverter(DataConverter dataConverter) {
             this.dataConverter = dataConverter;
             return this;
         }
 
-        public Builder useGrpcChannel(Channel channel) {
+        public Builder grpcChannel(Channel channel) {
             this.channel = channel;
             return this;
         }

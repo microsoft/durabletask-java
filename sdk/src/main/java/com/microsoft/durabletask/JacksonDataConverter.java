@@ -6,7 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 
-public class JacksonDataConverter implements DataConverter {
+public final class JacksonDataConverter implements DataConverter {
     // Static singletons are recommended by the Jackson documentation
     private static final ObjectMapper jsonObjectMapper = JsonMapper.builder()
             .findAndAddModules()

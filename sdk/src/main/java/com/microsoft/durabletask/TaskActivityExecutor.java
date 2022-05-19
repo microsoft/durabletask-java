@@ -5,7 +5,7 @@ package com.microsoft.durabletask;
 import java.util.HashMap;
 import java.util.logging.Logger;
 
-public class TaskActivityExecutor {
+public final class TaskActivityExecutor {
     private final HashMap<String, TaskActivityFactory> activityFactories;
     private final DataConverter dataConverter;
     private final Logger logger;

@@ -4,7 +4,7 @@ package com.microsoft.durabletask;
 
 import java.time.Instant;
 
-public class NewOrchestrationInstanceOptions {
+public final class NewOrchestrationInstanceOptions {
     private String version;
     private String instanceId;
     private Object input;

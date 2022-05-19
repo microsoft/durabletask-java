@@ -5,7 +5,7 @@ package com.microsoft.durabletask;
 import javax.annotation.Nullable;
 import java.util.List;
 
-public class OrchestrationStatusQueryResult {
+public final class OrchestrationStatusQueryResult {
     private final List<OrchestrationMetadata> orchestrationStates;
     private final String continuationToken;
 

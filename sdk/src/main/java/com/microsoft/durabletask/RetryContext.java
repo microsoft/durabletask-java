@@ -4,7 +4,7 @@ package com.microsoft.durabletask;
 
 import java.time.Duration;
 
-public class RetryContext {
+public final class RetryContext {
     private final TaskOrchestrationContext orchestrationContext;
     private final int lastAttemptNumber;
     private final FailureDetails lastFailure;

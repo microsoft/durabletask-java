@@ -6,7 +6,7 @@ import javax.annotation.Nullable;
 import java.time.Instant;
 import java.util.List;
 
-public class OrchestrationStatusQuery {
+public final class OrchestrationStatusQuery {
     private List<OrchestrationRuntimeStatus> runtimeStatusList;
     private Instant createdTimeFrom;
     private Instant createdTimeTo;

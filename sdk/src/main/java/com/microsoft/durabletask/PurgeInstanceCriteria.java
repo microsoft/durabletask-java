@@ -6,7 +6,7 @@ import javax.annotation.Nullable;
 import java.time.Instant;
 import java.util.List;
 
-public class PurgeInstanceCriteria {
+public final class PurgeInstanceCriteria {
 
     private Instant createdTimeFrom;
     private Instant createdTimeTo;

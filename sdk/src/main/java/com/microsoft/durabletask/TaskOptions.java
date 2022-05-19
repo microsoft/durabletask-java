@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-public class TaskOptions {
+public final class TaskOptions {
     private final RetryPolicy retryPolicy;
     private final RetryHandler retryHandler;
 
