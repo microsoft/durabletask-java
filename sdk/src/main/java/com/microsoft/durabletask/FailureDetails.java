@@ -9,7 +9,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.Objects;
 
-class FailureDetails {
+final class FailureDetails {
     private final String errorType;
     private final String errorMessage;
     private final String stackTrace;

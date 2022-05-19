@@ -35,7 +35,7 @@ public interface DataConverter {
      * @throws DataConverterException if the text data cannot be deserialized
      */
     @Nullable
-    <T> T deserialize(@Nullable String data, Class<T> target) throws DataConverterException;
+    <T> T deserialize(@Nullable String data, Class<T> target);
 
     /**
      * Helper method for wrapping serialization exceptions into <code>DataConverterException</code>.

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-public class PurgeResult {
+public final class PurgeResult {
 
     private final int deletedInstanceCount;
 

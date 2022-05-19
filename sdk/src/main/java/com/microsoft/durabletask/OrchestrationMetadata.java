@@ -9,7 +9,7 @@ import java.time.Instant;
 
 import static com.microsoft.durabletask.Helpers.isNullOrEmpty;
 
-public class OrchestrationMetadata {
+public final class OrchestrationMetadata {
     private final DataConverter dataConverter;
     private final boolean requestedInputsAndOutputs;
 

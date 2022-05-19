@@ -6,7 +6,7 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.Objects;
 
-public class RetryPolicy {
+public final class RetryPolicy {
 
     private int maxNumberOfAttempts;
     private Duration firstRetryInterval;

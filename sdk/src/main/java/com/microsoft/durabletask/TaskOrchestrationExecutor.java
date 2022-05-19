@@ -19,7 +19,7 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.logging.Logger;
 
-public class TaskOrchestrationExecutor {
+public final class TaskOrchestrationExecutor {
 
     private static final String EMPTY_STRING = "";
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
