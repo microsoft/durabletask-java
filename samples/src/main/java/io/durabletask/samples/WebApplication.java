@@ -19,7 +19,7 @@ public class WebApplication {
     }
 
     private static DurableTaskGrpcWorker createTaskHubServer() {
-        DurableTaskGrpcWorker.Builder builder = DurableTaskGrpcWorker.newBuilder();
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
         
         // Orchestrations can be defined inline as anonymous classes or as concrete classes
         builder.addOrchestration(new TaskOrchestrationFactory() {

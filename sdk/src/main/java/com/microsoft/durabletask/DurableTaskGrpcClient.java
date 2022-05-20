@@ -26,7 +26,7 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
     private final ManagedChannel managedSidecarChannel;
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
-    private DurableTaskGrpcClient(Builder builder) {
+    DurableTaskGrpcClient(DurableTaskGrpcClientBuilder builder) {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
 
         Channel sidecarGrpcChannel;
@@ -243,34 +243,5 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
 
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
         return new PurgeResult(response.getDeletedInstanceCount());
-    }
-
-    public static Builder newBuilder() {
-        return new Builder();
-    }
-
-    public static class Builder {
-        private DataConverter dataConverter;
-        private int port;
-        private Channel channel;
-
-        public Builder dataConverter(DataConverter dataConverter) {
-            this.dataConverter = dataConverter;
-            return this;
-        }
-
-        public Builder grpcChannel(Channel channel) {
-            this.channel = channel;
-            return this;
-        }
-
-        public Builder forPort(int port) {
-            this.port = port;
-            return this;
-        }
-
-        public DurableTaskClient build() {
-            return new DurableTaskGrpcClient(this);
-        }
     }
 }

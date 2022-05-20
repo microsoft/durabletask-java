@@ -464,7 +464,7 @@ public class IntegrationTests extends IntegrationTestBase {
             metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
-            assertTrue(metadata.hasCustomStatus());
+            assertTrue(metadata.isCustomStatusFetched());
             assertEquals(payload, metadata.readCustomStatusAs(HashMap.class));
         }
     }
@@ -494,7 +494,7 @@ public class IntegrationTests extends IntegrationTestBase {
             metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(metadata);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
-            assertFalse(metadata.hasCustomStatus());
+            assertFalse(metadata.isCustomStatusFetched());
         }
     }
 
@@ -678,7 +678,7 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(1, result.getDeletedInstanceCount());
 
             metadata = client.getInstanceMetadata(instanceId, true);
-            assertFalse(metadata.instanceExists());
+            assertFalse(metadata.isInstancePresent());
         }
     }
 
@@ -730,7 +730,7 @@ public class IntegrationTests extends IntegrationTestBase {
             PurgeResult result = client.purgeInstances(criteria);
             assertEquals(1, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
-            assertFalse(metadata.instanceExists());
+            assertFalse(metadata.isInstancePresent());
 
             // Test CreatedTimeTo
             criteria.setCreatedTimeTo(Instant.now());
@@ -738,7 +738,7 @@ public class IntegrationTests extends IntegrationTestBase {
             result = client.purgeInstances(criteria);
             assertEquals(0, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
-            assertFalse(metadata.instanceExists());
+            assertFalse(metadata.isInstancePresent());
 
             // Test CreatedTimeFrom, CreatedTimeTo, and RuntimeStatus
             String instanceId1 = client.scheduleNewOrchestrationInstance(plusOne, 0);
@@ -771,11 +771,11 @@ public class IntegrationTests extends IntegrationTestBase {
 
             assertEquals(3, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId1, true);
-            assertFalse(metadata.instanceExists());
+            assertFalse(metadata.isInstancePresent());
             metadata = client.getInstanceMetadata(instanceId2, true);
-            assertFalse(metadata.instanceExists());
+            assertFalse(metadata.isInstancePresent());
             metadata = client.getInstanceMetadata(instanceId3, true);
-            assertFalse(metadata.instanceExists());
+            assertFalse(metadata.isInstancePresent());
         }
     }
 }

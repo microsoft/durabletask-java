@@ -25,10 +25,10 @@ public class IntegrationTestBase {
     }
 
     public class TestDurableTaskWorkerBuilder {
-        final DurableTaskGrpcWorker.Builder innerBuilder;
+        final DurableTaskGrpcWorkerBuilder innerBuilder;
 
         private TestDurableTaskWorkerBuilder() {
-            this.innerBuilder = DurableTaskGrpcWorker.newBuilder();
+            this.innerBuilder = new DurableTaskGrpcWorkerBuilder();
         }
 
         public DurableTaskGrpcWorker buildAndStart() {
