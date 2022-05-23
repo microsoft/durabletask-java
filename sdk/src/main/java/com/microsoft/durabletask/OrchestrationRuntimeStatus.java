@@ -5,13 +5,47 @@ package com.microsoft.durabletask;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import static com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationStatus.*;
 
+/**
+ * Enum describing the runtime status of the orchestration.
+ */
 public enum OrchestrationRuntimeStatus {
+    /**
+     * The orchestration started running.
+     */
     RUNNING,
+
+    /**
+     * The orchestration completed normally.
+     */
     COMPLETED,
+
+    /**
+     * The orchestration is transitioning into a new instance.
+     * <p>
+     * This status value is obsolete and exists only for compatibility reasons.
+     */
     CONTINUED_AS_NEW,
+
+    /**
+     * The orchestration completed with an unhandled exception.
+     */
     FAILED,
+
+    /**
+     * The orchestration canceled gracefully.
+     * <p>
+     * The Canceled status is not currently used and exists only for compatibility reasons.
+     */
     CANCELED,
+
+    /**
+     * The orchestration was abruptly terminated via a management API call.
+     */
     TERMINATED,
+
+    /**
+     * The orchestration was scheduled but hasn't started running.
+     */
     PENDING;
 
     static OrchestrationRuntimeStatus fromProtobuf(OrchestrationStatus status) {
