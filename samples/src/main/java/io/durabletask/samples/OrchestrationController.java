@@ -14,7 +14,7 @@ public class OrchestrationController {
     final DurableTaskClient client;
 
     public OrchestrationController() {
-        this.client = DurableTaskGrpcClient.newBuilder().build();
+        this.client = new DurableTaskGrpcClientBuilder().build();
     }
 
     @GetMapping("/hello")

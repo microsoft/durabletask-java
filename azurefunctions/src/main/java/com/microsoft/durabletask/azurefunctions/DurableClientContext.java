@@ -8,7 +8,7 @@ import com.microsoft.azure.functions.HttpResponseMessage;
 
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.durabletask.DurableTaskClient;
-import com.microsoft.durabletask.DurableTaskGrpcClient;
+import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
 
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
@@ -51,7 +51,7 @@ public class DurableClientContext {
             throw new IllegalStateException("The client context RPC base URL was invalid!", ex);
         }
 
-        return DurableTaskGrpcClient.newBuilder().forPort(rpcURL.getPort()).build();
+        return new DurableTaskGrpcClientBuilder().port(rpcURL.getPort()).build();
     }
 
     public HttpResponseMessage createCheckStatusResponse(HttpRequestMessage<?> request, String instanceId) {

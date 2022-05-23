@@ -16,7 +16,7 @@ final class ChainingPattern {
         server.start();
 
         // Start a new instance of the registered "ActivityChaining" orchestration
-        final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        final DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         String instanceId = client.scheduleNewOrchestrationInstance(
                 "ActivityChaining",
                 new NewOrchestrationInstanceOptions().setInput("Hello, world!"));
@@ -47,7 +47,7 @@ final class ChainingPattern {
     // }
 
     private static DurableTaskGrpcWorker createTaskHubServer() {
-        DurableTaskGrpcWorker.Builder builder = DurableTaskGrpcWorker.newBuilder();
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
 
         // Orchestrations can be defined inline as anonymous classes or as concrete classes
         builder.addOrchestration(new TaskOrchestrationFactory() {

@@ -21,7 +21,7 @@ class FanOutFanInPattern {
         worker.start();
 
         // Start a new instance of the registered "ActivityChaining" orchestration
-        final DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        final DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
 
         // The input is an arbitrary list of strings.
         List<String> listOfStrings =  Arrays.asList(
@@ -50,7 +50,7 @@ class FanOutFanInPattern {
     }
 
     private static DurableTaskGrpcWorker createWorker() {
-        DurableTaskGrpcWorker.Builder builder = DurableTaskGrpcWorker.newBuilder();
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
 
         // Orchestrations can be defined inline as anonymous classes or as concrete classes
         builder.addOrchestration(new TaskOrchestrationFactory() {

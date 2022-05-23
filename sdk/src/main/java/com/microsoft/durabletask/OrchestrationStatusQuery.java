@@ -4,13 +4,14 @@ package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class OrchestrationStatusQuery {
-    private List<OrchestrationRuntimeStatus> runtimeStatusList;
+    private List<OrchestrationRuntimeStatus> runtimeStatusList = new ArrayList<>();
     private Instant createdTimeFrom;
     private Instant createdTimeTo;
-    private List<String> taskHubNames;
+    private List<String> taskHubNames = new ArrayList<>();
     private int maxInstanceCount = 100;
     private String continuationToken;
     private String instanceIdPrefix;
@@ -59,7 +60,6 @@ public final class OrchestrationStatusQuery {
         return this;
     }
 
-    @Nullable
     public List<OrchestrationRuntimeStatus> getRuntimeStatusList() {
         return runtimeStatusList;
     }
@@ -78,7 +78,6 @@ public final class OrchestrationStatusQuery {
         return maxInstanceCount;
     }
 
-    @Nullable
     public List<String> getTaskHubNames() {
         return taskHubNames;
     }

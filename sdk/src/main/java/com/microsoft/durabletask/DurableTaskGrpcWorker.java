@@ -29,7 +29,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
-    private DurableTaskGrpcWorker(Builder builder) {
+    DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
 
@@ -172,70 +172,5 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
     public void stop() {
         this.close();
-    }
-
-    public static Builder newBuilder() {
-        return new Builder();
-    }
-
-    public static class Builder {
-        private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
-        private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
-        private int port;
-        private Channel channel;
-        private DataConverter dataConverter;
-
-        private Builder() {
-        }
-
-        public Builder addOrchestration(TaskOrchestrationFactory factory) {
-            String key = factory.getName();
-            if (key == null || key.length() == 0) {
-                throw new IllegalArgumentException("A non-empty task orchestration name is required.");
-            }
-
-            if (this.orchestrationFactories.containsKey(key)) {
-                throw new IllegalArgumentException(
-                        String.format("A task orchestration factory named %s is already registered.", key));
-            }
-
-            this.orchestrationFactories.put(key, factory);
-            return this;
-        }
-
-        public Builder addActivity(TaskActivityFactory factory) {
-            // TODO: Input validation
-            String key = factory.getName();
-            if (key == null || key.length() == 0) {
-                throw new IllegalArgumentException("A non-empty task activity name is required.");
-            }
-
-            if (this.activityFactories.containsKey(key)) {
-                throw new IllegalArgumentException(
-                        String.format("A task activity factory named %s is already registered.", key));
-            }
-
-            this.activityFactories.put(key, factory);
-            return this;
-        }
-
-        public Builder useGrpcChannel(Channel channel) {
-            this.channel = channel;
-            return this;
-        }
-
-        public Builder forPort(int port) {
-            this.port = port;
-            return this;
-        }
-
-        public Builder setDataConverter(DataConverter dataConverter) {
-            this.dataConverter = dataConverter;
-            return this;
-        }
-
-        public DurableTaskGrpcWorker build() {
-            return new DurableTaskGrpcWorker(this);
-        }
     }
 }

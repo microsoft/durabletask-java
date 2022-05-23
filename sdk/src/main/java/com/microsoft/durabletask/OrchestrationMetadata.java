@@ -103,7 +103,7 @@ public final class OrchestrationMetadata {
         return this.readPayloadAs(type, this.serializedCustomStatus);
     }
 
-    public boolean hasCustomStatus() {
+    public boolean isCustomStatusFetched() {
         return this.serializedCustomStatus != null && !this.serializedCustomStatus.isEmpty();
     }
 
@@ -152,7 +152,7 @@ public final class OrchestrationMetadata {
         return payload;
     }
 
-    public boolean instanceExists() {
+    public boolean isInstanceFound() {
         return !(isNullOrEmpty(this.name) && isNullOrEmpty(this.instanceId));
     }
 }

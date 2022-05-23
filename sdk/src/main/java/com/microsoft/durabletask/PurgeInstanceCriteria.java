@@ -4,13 +4,14 @@ package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class PurgeInstanceCriteria {
 
     private Instant createdTimeFrom;
     private Instant createdTimeTo;
-    private List<OrchestrationRuntimeStatus> runtimeStatusList;
+    private List<OrchestrationRuntimeStatus> runtimeStatusList = new ArrayList<>();
 
     public PurgeInstanceCriteria() {
     }
@@ -41,7 +42,6 @@ public final class PurgeInstanceCriteria {
         return this.createdTimeTo;
     }
 
-    @Nullable
     public List<OrchestrationRuntimeStatus> getRuntimeStatusList() {
         return this.runtimeStatusList;
     }

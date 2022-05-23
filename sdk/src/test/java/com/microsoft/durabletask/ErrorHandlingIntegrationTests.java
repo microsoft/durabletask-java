@@ -34,7 +34,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -73,7 +73,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -156,7 +156,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                     throw new RuntimeException(errorMessage);
                 })
                 .buildAndStart();
-        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 1);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -274,7 +274,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = DurableTaskGrpcClient.newBuilder().build();
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
