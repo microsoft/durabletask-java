@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 package com.microsoft.durabletask;
 
 import io.grpc.Channel;
@@ -17,7 +19,7 @@ public final class DurableTaskGrpcClientBuilder {
         return this;
     }
 
-    public DurableTaskGrpcClientBuilder forPort(int port) {
+    public DurableTaskGrpcClientBuilder port(int port) {
         this.port = port;
         return this;
     }

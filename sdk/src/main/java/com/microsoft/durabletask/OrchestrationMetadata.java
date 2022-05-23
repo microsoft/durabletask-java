@@ -152,7 +152,7 @@ public final class OrchestrationMetadata {
         return payload;
     }
 
-    public boolean isInstancePresent() {
+    public boolean isInstanceFound() {
         return !(isNullOrEmpty(this.name) && isNullOrEmpty(this.instanceId));
     }
 }

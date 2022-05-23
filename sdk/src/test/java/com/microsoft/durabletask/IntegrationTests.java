@@ -678,7 +678,7 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(1, result.getDeletedInstanceCount());
 
             metadata = client.getInstanceMetadata(instanceId, true);
-            assertFalse(metadata.isInstancePresent());
+            assertFalse(metadata.isInstanceFound());
         }
     }
 
@@ -730,7 +730,7 @@ public class IntegrationTests extends IntegrationTestBase {
             PurgeResult result = client.purgeInstances(criteria);
             assertEquals(1, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
-            assertFalse(metadata.isInstancePresent());
+            assertFalse(metadata.isInstanceFound());
 
             // Test CreatedTimeTo
             criteria.setCreatedTimeTo(Instant.now());
@@ -738,7 +738,7 @@ public class IntegrationTests extends IntegrationTestBase {
             result = client.purgeInstances(criteria);
             assertEquals(0, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
-            assertFalse(metadata.isInstancePresent());
+            assertFalse(metadata.isInstanceFound());
 
             // Test CreatedTimeFrom, CreatedTimeTo, and RuntimeStatus
             String instanceId1 = client.scheduleNewOrchestrationInstance(plusOne, 0);
@@ -771,11 +771,11 @@ public class IntegrationTests extends IntegrationTestBase {
 
             assertEquals(3, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId1, true);
-            assertFalse(metadata.isInstancePresent());
+            assertFalse(metadata.isInstanceFound());
             metadata = client.getInstanceMetadata(instanceId2, true);
-            assertFalse(metadata.isInstancePresent());
+            assertFalse(metadata.isInstanceFound());
             metadata = client.getInstanceMetadata(instanceId3, true);
-            assertFalse(metadata.isInstancePresent());
+            assertFalse(metadata.isInstanceFound());
         }
     }
 }

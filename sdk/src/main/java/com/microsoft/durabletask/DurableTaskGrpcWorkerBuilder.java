@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 package com.microsoft.durabletask;
 
 import io.grpc.Channel;
@@ -42,17 +44,17 @@ public final class DurableTaskGrpcWorkerBuilder {
         return this;
     }
 
-    public DurableTaskGrpcWorkerBuilder useGrpcChannel(Channel channel) {
+    public DurableTaskGrpcWorkerBuilder grpcChannel(Channel channel) {
         this.channel = channel;
         return this;
     }
 
-    public DurableTaskGrpcWorkerBuilder forPort(int port) {
+    public DurableTaskGrpcWorkerBuilder port(int port) {
         this.port = port;
         return this;
     }
 
-    public DurableTaskGrpcWorkerBuilder setDataConverter(DataConverter dataConverter) {
+    public DurableTaskGrpcWorkerBuilder dataConverter(DataConverter dataConverter) {
         this.dataConverter = dataConverter;
         return this;
     }
