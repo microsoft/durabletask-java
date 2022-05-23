@@ -190,12 +190,8 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
         Optional.ofNullable(query.getInstanceIdPrefix()).ifPresent(prefix -> instanceQueryBuilder.setInstanceIdPrefix(StringValue.of(prefix)));
         instanceQueryBuilder.setFetchInputsAndOutputs(query.isFetchInputsAndOutputs());
         instanceQueryBuilder.setMaxInstanceCount(query.getMaxInstanceCount());
-        if (query.getRuntimeStatusList() != null && !query.getRuntimeStatusList().isEmpty()){
-            query.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> instanceQueryBuilder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
-        }
-        if (query.getTaskHubNames() != null && !query.getTaskHubNames().isEmpty()){
-            query.getTaskHubNames().forEach(taskHubname -> Optional.ofNullable(taskHubname).ifPresent(name -> instanceQueryBuilder.addTaskHubNames(StringValue.of(name))));
-        }
+        query.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> instanceQueryBuilder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
+        query.getTaskHubNames().forEach(taskHubName -> Optional.ofNullable(taskHubName).ifPresent(name -> instanceQueryBuilder.addTaskHubNames(StringValue.of(name))));
         QueryInstancesResponse queryInstancesResponse = this.sidecarClient.queryInstances(QueryInstancesRequest.newBuilder().setQuery(instanceQueryBuilder).build());
         return toQueryResult(queryInstancesResponse, query.isFetchInputsAndOutputs());
     }
@@ -233,10 +229,7 @@ public class DurableTaskGrpcClient extends DurableTaskClient {
         PurgeInstanceFilter.Builder builder = PurgeInstanceFilter.newBuilder();
         builder.setCreatedTimeFrom(DataConverter.getTimestampFromInstant(purgeInstanceCriteria.getCreatedTimeFrom()));
         Optional.ofNullable(purgeInstanceCriteria.getCreatedTimeTo()).ifPresent(createdTimeTo -> builder.setCreatedTimeTo(DataConverter.getTimestampFromInstant(createdTimeTo)));
-        if (purgeInstanceCriteria.getRuntimeStatusList() != null && !purgeInstanceCriteria.getRuntimeStatusList().isEmpty()){
-            purgeInstanceCriteria.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> builder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
-        }
-
+        purgeInstanceCriteria.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> builder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
         PurgeInstancesResponse response = this.sidecarClient.purgeInstances(PurgeInstancesRequest.newBuilder().setPurgeInstanceFilter(builder).build());
         return toPurgeResult(response);
     }
