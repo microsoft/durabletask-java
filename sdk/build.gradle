@@ -10,7 +10,7 @@ group 'com.microsoft.durabletask'
 version = '0.1.0'
 archivesBaseName = 'durabletask-sdk'
 
-def grpcVersion = '1.38.0'
+def grpcVersion = '1.46.0'
 def protocVersion = '3.12.0'
 def jacksonVersion = '2.12.3'
 def PATH_TO_TEST_JAVA_RUNTIME = "$System.env.JDK_11"
