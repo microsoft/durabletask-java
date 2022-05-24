@@ -76,11 +76,10 @@ public final class OrchestrationRunner {
      *
      * @param base64EncodedOrchestratorRequest the base64-encoded protobuf payload representing an orchestrator execution request
      * @param orchestration the orchestration to execute
-     * @param <R> the type of the orchestrator function output, which must be serializable to JSON
      * @return a base64-encoded protobuf payload of orchestrator actions to be interpreted by the external orchestration engine
      * @throws IllegalArgumentException if either parameter is {@code null} or if {@code base64EncodedOrchestratorRequest} is not valid base64-encoded protobuf
      */
-    public static <R> String loadAndRun(
+    public static String loadAndRun(
             String base64EncodedOrchestratorRequest,
             TaskOrchestration orchestration) {
         byte[] decodedBytes = Base64.getDecoder().decode(base64EncodedOrchestratorRequest);
