@@ -3,6 +3,7 @@
 
 package com.microsoft.durabletask;
 
+import com.microsoft.durabletask.models.*;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -94,7 +95,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                         activityName,
                         errorMessage);
                 assertEquals(expectedMessage, details.getErrorMessage());
-                assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
+                assertEquals("com.microsoft.durabletask.models.TaskFailedException", details.getErrorType());
                 assertNotNull(details.getStackTrace());
                 // CONSIDER: Additional validation of getErrorDetails?
             }
@@ -175,7 +176,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                         subOrchestratorName,
                         errorMessage);
                 assertEquals(expectedMessage, details.getErrorMessage());
-                assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
+                assertEquals("com.microsoft.durabletask.models.TaskFailedException", details.getErrorType());
                 assertNotNull(details.getStackTrace());
                 // CONSIDER: Additional validation of getStackTrace?
             }
@@ -302,7 +303,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                     expectedTaskId,
                     expectedExceptionMessage);
             assertEquals(expectedMessage, details.getErrorMessage());
-            assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
+            assertEquals("com.microsoft.durabletask.models.TaskFailedException", details.getErrorType());
             assertNotNull(details.getStackTrace());
             return details;
         }

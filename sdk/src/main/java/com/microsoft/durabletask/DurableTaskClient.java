@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.microsoft.durabletask.models.*;
+
 import javax.annotation.Nullable;
 import java.time.Duration;
 

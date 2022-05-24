@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.microsoft.durabletask.models.DataConverter;
 import io.grpc.Channel;
 
 public final class DurableTaskGrpcClientBuilder {

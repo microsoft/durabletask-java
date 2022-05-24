@@ -5,7 +5,7 @@ import com.microsoft.azure.functions.*;
 import java.util.*;
 
 import com.microsoft.durabletask.DurableTaskClient;
-import com.microsoft.durabletask.OrchestrationRunner;
+import com.microsoft.durabletask.models.OrchestrationRunner;
 import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
 import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;

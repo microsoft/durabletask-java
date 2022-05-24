@@ -4,6 +4,7 @@ package io.durabletask.samples;
 
 import com.microsoft.durabletask.*;
 
+import com.microsoft.durabletask.models.NewOrchestrationInstanceOptions;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;

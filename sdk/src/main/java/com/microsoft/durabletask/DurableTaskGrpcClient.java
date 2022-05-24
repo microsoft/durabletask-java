@@ -8,6 +8,8 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
 
+import com.microsoft.durabletask.models.*;
+import com.microsoft.durabletask.utils.Helpers;
 import io.grpc.*;
 
 import javax.annotation.Nullable;

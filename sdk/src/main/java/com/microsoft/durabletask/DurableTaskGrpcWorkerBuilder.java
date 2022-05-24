@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.microsoft.durabletask.models.DataConverter;
+import com.microsoft.durabletask.models.TaskActivityFactory;
+import com.microsoft.durabletask.models.TaskOrchestrationFactory;
 import io.grpc.Channel;
 
 import java.util.HashMap;

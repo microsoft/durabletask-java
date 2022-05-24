@@ -4,6 +4,10 @@ package io.durabletask.samples;
 
 import com.microsoft.durabletask.*;
 
+import com.microsoft.durabletask.models.TaskActivity;
+import com.microsoft.durabletask.models.TaskActivityFactory;
+import com.microsoft.durabletask.models.TaskOrchestration;
+import com.microsoft.durabletask.models.TaskOrchestrationFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
  

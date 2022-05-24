@@ -3,6 +3,7 @@
 package io.durabletask.samples;
 
 import com.microsoft.durabletask.*;
+import com.microsoft.durabletask.models.*;
 
 import java.io.IOException;
 import java.time.Duration;
