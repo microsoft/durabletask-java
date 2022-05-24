@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 // TODO: Create async flavors of the public APIs that call into the sidecar
-public class DurableTaskGrpcClient extends DurableTaskClient {
+public final class DurableTaskGrpcClient extends DurableTaskClient {
     private static final int DEFAULT_PORT = 4001;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcClient.class.getPackage().getName());
 
