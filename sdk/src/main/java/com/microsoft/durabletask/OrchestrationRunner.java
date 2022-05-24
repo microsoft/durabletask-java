@@ -43,7 +43,7 @@ public final class OrchestrationRunner {
         return loadAndRun(triggerStateProtoBytes, orchestration);
     }
 
-    public static <R> String loadAndRun(
+    public static String loadAndRun(
             String triggerStateProtoBase64String,
             TaskOrchestration orchestration) {
         byte[] decodedBytes = Base64.getDecoder().decode(triggerStateProtoBase64String);
