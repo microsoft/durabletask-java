@@ -9,7 +9,7 @@ version = '0.1.0'
 archivesBaseName = 'durabletask-samples'
 
 dependencies {
-    implementation project(':sdk')
+    implementation project(':client')
     
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation platform("org.springframework.boot:spring-boot-dependencies:2.5.2")

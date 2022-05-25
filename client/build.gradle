@@ -7,8 +7,8 @@ plugins {
 }
 
 group 'com.microsoft.durabletask'
-version = '0.1.0'
-archivesBaseName = 'durabletask-sdk'
+version = '1.0.0-beta.1'
+archivesBaseName = 'durabletask-client'
 
 def grpcVersion = '1.46.0'
 def protocVersion = '3.12.0'
