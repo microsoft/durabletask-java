@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation project(':sdk')
+    implementation project(':client')
     implementation project(':azurefunctions')
 
     implementation 'com.microsoft.azure.functions:azure-functions-java-library:2.0.1'
