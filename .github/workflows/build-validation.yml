@@ -51,12 +51,12 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: Integration test report
-        path: sdk/build/reports/tests/integrationTest
+        path: client/build/reports/tests/integrationTest
     - name: Upload JAR output
       uses: actions/upload-artifact@v2
       with:
         name: Package
-        path: sdk/build/libs
+        path: client/build/libs
 
   functions:
 
