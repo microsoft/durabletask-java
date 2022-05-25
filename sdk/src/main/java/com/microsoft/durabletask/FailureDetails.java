@@ -9,7 +9,10 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.Objects;
 
-final class FailureDetails {
+/**
+ * Class that represents the details of a task failure.
+ */
+public final class FailureDetails {
     private final String errorType;
     private final String errorMessage;
     private final String stackTrace;
@@ -28,40 +31,71 @@ final class FailureDetails {
         this.isNonRetriable = isNonRetriable;
     }
 
-    public FailureDetails(Exception exception) {
+    FailureDetails(Exception exception) {
         this(exception.getClass().getName(), exception.getMessage(), getFullStackTrace(exception), false);
     }
 
-    public FailureDetails(TaskFailureDetails proto) {
+    FailureDetails(TaskFailureDetails proto) {
         this(proto.getErrorType(),
              proto.getErrorMessage(),
              proto.getStackTrace().getValue(),
              proto.getIsNonRetriable());
     }
 
+    /**
+     * Gets the exception class name.
+     * @return the exception class name
+     */
     @Nonnull
     public String getErrorType() {
         return this.errorType;
     }
 
+    /**
+     * Gets a summary description of the error. If the failure was caused by an exception, the exception message
+     * is returned.
+     *
+     * @return a summary description of the error
+     */
     @Nonnull
     public String getErrorMessage() {
         return this.errorMessage;
     }
 
+    /**
+     * Gets the stack trace of the failure exception.
+     * @return the stack trace of the failure exception
+     */
     @Nullable
     public String getStackTrace() {
         return this.stackTrace;
     }
 
+    /**
+     * Returns {@code true} if the exception is cannot be retried, otherwise {@code false}.
+     * @return {@code true} if the exception is cannot be retried, otherwise {@code false}.
+     */
     public boolean getIsNonRetriable() {
         return this.isNonRetriable;
     }
 
+    /**
+     * Returns {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}.
+     * <p>
+     * This method allows checking if a task failed due to a specific exception type by attempting to load the class
+     * specified in {@link #getErrorType()}. If the exception class cannot be loaded for any reason, this method will
+     * return {@code false}. Base types are supported by this method, as shown in the following example:
+     * <pre>{@code
+     * boolean isRuntimeException = failureDetails.isCausedBy(RuntimeException.class);
+     * }</pre>
+     *
+     * @param exceptionClass the class representing the exception type to test
+     * @return {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}
+     */
     public boolean isCausedBy(Class<? extends Exception> exceptionClass) {
         String actualClassName = this.getErrorType();
         try {
-            // Try using reflection to load the failure's class type and see if it's a sub-type of the specified
+            // Try using reflection to load the failure's class type and see if it's a subtype of the specified
             // exception. For example, this should always succeed if exceptionClass is System.Exception.
             Class<?> actualExceptionClass = Class.forName(actualClassName);
             return exceptionClass.isAssignableFrom(actualExceptionClass);

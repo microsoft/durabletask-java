@@ -19,7 +19,7 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.logging.Logger;
 
-public final class TaskOrchestrationExecutor {
+final class TaskOrchestrationExecutor {
 
     private static final String EMPTY_STRING = "";
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
@@ -159,7 +159,6 @@ public final class TaskOrchestrationExecutor {
             this.isReplaying = false;
         }
 
-        @Override
         public <V> Task<V> completedTask(V value) {
             CompletableTask<V> task = new CompletableTask<>();
             task.complete(value);
@@ -183,6 +182,8 @@ public final class TaskOrchestrationExecutor {
                         results.add(cf.get());
                     } catch (Exception ex) {
                         // TODO: Better exception message than this
+                        // TODO: This needs to be a TaskFailedException or some other documented exception type.
+                        //       https://github.com/microsoft/durabletask-java/issues/54
                         throw new RuntimeException("One or more tasks failed.", ex);
                     }
                 }
@@ -647,7 +648,6 @@ public final class TaskOrchestrationExecutor {
             }
         }
 
-        @Override
         public void fail(FailureDetails failureDetails) {
             // TODO: How does a parent orchestration use the output to construct an exception?
             this.completeInternal(null, failureDetails, OrchestrationStatus.ORCHESTRATION_STATUS_FAILED);

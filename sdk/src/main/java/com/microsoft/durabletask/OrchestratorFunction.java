@@ -4,6 +4,8 @@ package com.microsoft.durabletask;
 
 /**
  * Functional interface for inline orchestrator functions.
+ * <p>
+ * See the description of {@link TaskOrchestration} for more information about how to correctly implement orchestrators.
  */
 @FunctionalInterface
 public interface OrchestratorFunction<R> {

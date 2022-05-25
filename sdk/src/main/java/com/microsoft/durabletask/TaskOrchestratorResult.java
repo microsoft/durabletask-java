@@ -5,7 +5,7 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 import java.util.Collection;
 import java.util.Collections;
 
-public final class TaskOrchestratorResult {
+final class TaskOrchestratorResult {
 
     private final Collection<OrchestratorService.OrchestratorAction> actions;
 
