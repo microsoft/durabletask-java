@@ -191,7 +191,7 @@ public interface TaskOrchestrationContext {
      * @return a new {@link Task} that completes when the activity completes or fails
      */
     default Task<Void> callActivity(String name) {
-        return this.callActivity(name, null);
+        return this.callActivity(name, Void.class);
     }
 
     /**
