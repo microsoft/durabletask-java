@@ -3,9 +3,9 @@ plugins {
     id 'maven-publish'
 }
 
-group 'com.microsoft.durabletask'
-version = '0.1.0-SNAPSHOT'
-archivesBaseName = 'durabletask-azurefunctions'
+group 'com.microsoft'
+version = '1.0.0-beta.1'
+archivesBaseName = 'durabletask-azure-functions'
 
 def protocVersion = '3.12.0'
 
