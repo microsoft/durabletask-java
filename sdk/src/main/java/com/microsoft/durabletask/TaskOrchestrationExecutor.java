@@ -928,7 +928,7 @@ final class TaskOrchestrationExecutor {
             }
 
             private boolean shouldRetry() {
-                if (this.lastFailure.getIsNonRetriable()) {
+                if (this.lastFailure.isNonRetriable()) {
                      return false;
                 }
 

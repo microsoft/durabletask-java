@@ -7,7 +7,6 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.Tas
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Objects;
 
 /**
  * Class that represents the details of a task failure.
@@ -75,7 +74,7 @@ public final class FailureDetails {
      * Returns {@code true} if the exception is cannot be retried, otherwise {@code false}.
      * @return {@code true} if the exception is cannot be retried, otherwise {@code false}.
      */
-    public boolean getIsNonRetriable() {
+    public boolean isNonRetriable() {
         return this.isNonRetriable;
     }
 

@@ -5,7 +5,8 @@ package com.microsoft.durabletask;
 import io.grpc.Channel;
 
 /**
- * Builder class for constructing new {@link DurableTaskGrpcClient} objects.
+ * Builder class for constructing new {@link DurableTaskClient} objects that communicate with a sidecar process
+ * over gRPC.
  */
 public final class DurableTaskGrpcClientBuilder {
     DataConverter dataConverter;
@@ -31,7 +32,7 @@ public final class DurableTaskGrpcClientBuilder {
      * Rather, the caller remains responsible for shutting down the channel after disposing the client.
      * <p>
      * If not specified, a gRPC channel will be created automatically for each constructed
-     * {@link DurableTaskGrpcClient}.
+     * {@link DurableTaskClient}.
      *
      * @param channel the gRPC channel to use
      * @return this builder object
@@ -53,8 +54,8 @@ public final class DurableTaskGrpcClientBuilder {
     }
 
     /**
-     * Initializes a new {@link DurableTaskGrpcClient} object with the settings specified in the current builder object.
-     * @return a new {@link DurableTaskGrpcClient} object
+     * Initializes a new {@link DurableTaskClient} object with the settings specified in the current builder object.
+     * @return a new {@link DurableTaskClient} object
      */
     public DurableTaskClient build() {
         return new DurableTaskGrpcClient(this);

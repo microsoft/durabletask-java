@@ -15,9 +15,6 @@ import java.util.logging.Logger;
  * <p>
  * This static class can be used to execute orchestration logic directly. In order to use it for this purpose, the
  * caller must provide orchestration state as serialized protobuf bytes.
- * <p>
- * The Azure Functions .NET worker extension is the primary intended user of this class, where orchestration state
- * is provided by trigger bindings.
  */
 public final class OrchestrationRunner {
     private static final Logger logger = Logger.getLogger(OrchestrationRunner.class.getPackage().getName());
