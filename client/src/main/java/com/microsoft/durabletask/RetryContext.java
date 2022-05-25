@@ -25,13 +25,13 @@ public final class RetryContext {
     }
 
     /**
-     * Gets the context of the parent orchestrator.
+     * Gets the context of the current orchestration.
      * <p>
-     * The orchestrator context can be used in retry handlers to schedule timers (via the
+     * The orchestration context can be used in retry handlers to schedule timers (via the
      * {@link TaskOrchestrationContext#createTimer} methods) for implementing delays between retries. It can also be
      * used to implement time-based retry logic by using the {@link TaskOrchestrationContext#getCurrentInstant} method.
      *
-     * @return the context of the parent orchestrator
+     * @return the context of the parent orchestration
      */
     public TaskOrchestrationContext getOrchestrationContext() {
         return this.orchestrationContext;

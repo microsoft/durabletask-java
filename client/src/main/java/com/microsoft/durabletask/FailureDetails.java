@@ -10,6 +10,10 @@ import javax.annotation.Nullable;
 
 /**
  * Class that represents the details of a task failure.
+ * <p>
+ * In most cases, failures are caused by unhandled exceptions in activity or orchestrator code, in which case instances
+ * of this class will expose the details of the exception. However, it's also possible that other types of errors could
+ * result in task failures, in which case there may not be any exception-specific information.
  */
 public final class FailureDetails {
     private final String errorType;
@@ -42,8 +46,10 @@ public final class FailureDetails {
     }
 
     /**
-     * Gets the exception class name.
-     * @return the exception class name
+     * Gets the exception class name if the failure was caused by an unhandled exception. Otherwise, gets a symbolic
+     * name that describes the general type of error that was encountered.
+     *
+     * @return the error type as a {@code String} value
      */
     @Nonnull
     public String getErrorType() {
@@ -51,8 +57,8 @@ public final class FailureDetails {
     }
 
     /**
-     * Gets a summary description of the error. If the failure was caused by an exception, the exception message
-     * is returned.
+     * Gets a summary description of the error that caused this failure. If the failure was caused by an exception, the
+     * exception message is returned.
      *
      * @return a summary description of the error
      */
@@ -62,8 +68,10 @@ public final class FailureDetails {
     }
 
     /**
-     * Gets the stack trace of the failure exception.
-     * @return the stack trace of the failure exception
+     * Gets the stack trace of the exception that caused this failure, or {@code null} if the failure was caused by
+     * a non-exception error.
+     *
+     * @return the stack trace of the failure exception or {@code null} if the failure was not caused by an exception
      */
     @Nullable
     public String getStackTrace() {
@@ -71,8 +79,8 @@ public final class FailureDetails {
     }
 
     /**
-     * Returns {@code true} if the exception is cannot be retried, otherwise {@code false}.
-     * @return {@code true} if the exception is cannot be retried, otherwise {@code false}.
+     * Returns {@code true} if the failure doesn't permit retries, otherwise {@code false}.
+     * @return {@code true} if the failure doesn't permit retries, otherwise {@code false}.
      */
     public boolean isNonRetriable() {
         return this.isNonRetriable;

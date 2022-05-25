@@ -39,7 +39,7 @@ public abstract class Task<V> {
     }
 
     /**
-     * Returns {@code true} if completed in any fashion: normally, exceptionally, or via cancellation.
+     * Returns {@code true} if completed in any fashion: normally, with an exception, or via cancellation.
      * @return {@code true} if completed, otherwise {@code false}
      */
     public boolean isDone() {

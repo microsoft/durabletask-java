@@ -17,7 +17,7 @@ public final class PurgeInstanceCriteria {
     private List<OrchestrationRuntimeStatus> runtimeStatusList = new ArrayList<>();
 
     /**
-     * Sole constructor.
+     * Creates a new, default instance of the {@code PurgeInstanceCriteria} class.
      */
     public PurgeInstanceCriteria() {
     }

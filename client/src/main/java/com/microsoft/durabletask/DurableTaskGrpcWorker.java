@@ -4,7 +4,6 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 
-import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkItem.RequestCase;
@@ -68,7 +67,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      * continues until either a connection succeeds or the process receives an interrupt signal.
      */
     public void start() {
-        new Thread(() -> this.runAndBlock()).start();
+        new Thread(this::startAndBlock).start();
     }
 
     /**
@@ -103,7 +102,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      * a warning log message will be written and a new connection attempt will be made. This process
      * continues until either a connection succeeds or the process receives an interrupt signal.
      */
-    public void runAndBlock() {
+    public void startAndBlock() {
         logger.log(Level.INFO, "Durable Task worker is connecting to sidecar at {0}.", this.getSidecarAddress());
 
         TaskOrchestrationExecutor taskOrchestrationExecutor = new TaskOrchestrationExecutor(

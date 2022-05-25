@@ -61,9 +61,10 @@ public interface TaskOrchestrationContext {
     //       https://github.com/microsoft/durabletask-java/issues/54
     /**
      * Returns a new {@code Task} that is completed when all the given {@code Task}s complete. If any of the given
-     * {@code Task}s complete exceptionally, the returned {@code Task} will also complete exceptionally with information
-     * about the first encountered failure. The value of the returned {@code Task} is an ordered list of the return
-     * values of the given tasks. If no tasks are provided, returns a {@code Task} completed with value {@code null}.
+     * {@code Task}s complete with an exception, the returned {@code Task} will also complete with an exception
+     * containing details of the first encountered failure. The value of the returned {@code Task} is an ordered list of
+     * the return values of the given tasks. If no tasks are provided, returns a {@code Task} completed with value
+     * {@code null}.
      * <p>
      * This method is useful for awaiting the completion of a set of independent tasks before continuing to the next
      * step in the orchestration, as in the following example:
