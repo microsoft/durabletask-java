@@ -4,7 +4,6 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 
-import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkItem.RequestCase;
@@ -17,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * Task hub worker that connects to a sidecar process over gRPC to execute orchestrator and activity events.
+ */
 public final class DurableTaskGrpcWorker implements AutoCloseable {
     private static final int DEFAULT_PORT = 4001;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcWorker.class.getPackage().getName());
@@ -57,16 +59,23 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
     }
 
+    /**
+     * Establishes a gRPC connection to the sidecar and starts processing work-items in the background.
+     * <p>
+     * This method retries continuously to establish a connection to the sidecar. If a connection fails,
+     * a warning log message will be written and a new connection attempt will be made. This process
+     * continues until either a connection succeeds or the process receives an interrupt signal.
+     */
     public void start() {
-        new Thread(() -> {
-            try {
-                this.runAndBlock();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }).start();
+        new Thread(this::startAndBlock).start();
     }
 
+    /**
+     * Closes the internally managed gRPC channel, if one exists.
+     * <p>
+     * This method is a no-op if this client object was created using a builder with a gRPC channel object explicitly
+     * configured.
+     */
     public void close() {
         if (this.managedSidecarChannel != null) {
             try {
@@ -83,7 +92,17 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         return this.sidecarClient.getChannel().authority();
     }
 
-    public void runAndBlock() throws InterruptedException {
+    /**
+     * Establishes a gRPC connection to the sidecar and starts processing work-items on the current thread.
+     * This method call blocks indefinitely, or until the current thread is interrupted.
+     * <p>
+     * Use can alternatively use the {@link #start} method to run orchestration processing in a background thread.
+     * <p>
+     * This method retries continuously to establish a connection to the sidecar. If a connection fails,
+     * a warning log message will be written and a new connection attempt will be made. This process
+     * continues until either a connection succeeds or the process receives an interrupt signal.
+     */
+    public void startAndBlock() {
         logger.log(Level.INFO, "Durable Task worker is connecting to sidecar at {0}.", this.getSidecarAddress());
 
         TaskOrchestrationExecutor taskOrchestrationExecutor = new TaskOrchestrationExecutor(
@@ -165,11 +184,18 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 }
 
                 // Retry after 5 seconds
-                Thread.sleep(5000);
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    break;
+                }
             }
         }
     }
 
+    /**
+     * Stops the current worker's listen loop, preventing any new orchestrator or activity events from being processed.
+     */
     public void stop() {
         this.close();
     }

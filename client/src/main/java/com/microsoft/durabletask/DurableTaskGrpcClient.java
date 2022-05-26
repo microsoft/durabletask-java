@@ -17,8 +17,10 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-// TODO: Create async flavors of the public APIs that call into the sidecar
-public final class DurableTaskGrpcClient extends DurableTaskClient {
+/**
+ * Durable Task client implementation that uses gRPC to connect to a remote "sidecar" process.
+ */
+final class DurableTaskGrpcClient extends DurableTaskClient {
     private static final int DEFAULT_PORT = 4001;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcClient.class.getPackage().getName());
 
@@ -52,6 +54,12 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
     }
 
+    /**
+     * Closes the internally managed gRPC channel, if one exists.
+     * <p>
+     * This method is a no-op if this client object was created using a builder with a gRPC channel object explicitly
+     * configured.
+     */
     @Override
     public void close() {
         if (this.managedSidecarChannel != null) {

@@ -2,6 +2,13 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+/**
+ * Exception that gets thrown when awaiting a {@link Task} for an activity or sub-orchestration that fails with an
+ * unhandled exception.
+ * <p>
+ * Detailed information associated with a particular task failure can be retrieved using the {@link #getErrorDetails()}
+ * method.
+ */
 public class TaskFailedException extends Exception {
     private final FailureDetails details;
     private final String taskName;
@@ -11,34 +18,41 @@ public class TaskFailedException extends Exception {
         this(getExceptionMessage(taskName, taskId, details), taskName, taskId, details);
     }
 
-    protected TaskFailedException(String message, String taskName, int taskId, FailureDetails details) {
+    TaskFailedException(String message, String taskName, int taskId, FailureDetails details) {
         super(message);
         this.taskName = taskName;
         this.taskId = taskId;
         this.details = details;
     }
 
+    /**
+     * Gets the ID of the failed task.
+     * <p>
+     * Each durable task (activities, timers, sub-orchestrations, etc.) scheduled by a task orchestrator has an
+     * auto-incrementing ID associated with it. This ID is used to distinguish tasks from one another, even if, for
+     * example, they are tasks that call the same activity. This ID can therefore be used to more easily correlate a
+     * specific task failure to a specific task.
+     *
+     * @return the ID of the failed task
+     */
     public int getTaskId() {
         return this.taskId;
     }
 
+    /**
+     * Gets the name of the failed task.
+     *
+     * @return the name of the failed task
+     */
     public String getTaskName() {
         return this.taskName;
     }
 
-    public String getExceptionName() {
-        return this.details.getErrorType();
-    }
-
-    public String getExceptionMessage() {
-        return this.details.getErrorMessage();
-    }
-
-    public String getExceptionDetails() {
-        return this.details.getStackTrace();
-    }
-
-    FailureDetails getErrorDetails() {
+    /**
+     * Gets the details of the task failure, including exception information.
+     * @return the details of the task failure
+     */
+    public FailureDetails getErrorDetails() {
         return this.details;
     }
 

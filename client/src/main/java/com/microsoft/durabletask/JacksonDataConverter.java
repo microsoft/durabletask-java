@@ -6,6 +6,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 
+/**
+ * An implementation of {@link DataConverter} that uses Jackson APIs for data serialization.
+ */
 public final class JacksonDataConverter implements DataConverter {
     // Static singletons are recommended by the Jackson documentation
     private static final ObjectMapper jsonObjectMapper = JsonMapper.builder()

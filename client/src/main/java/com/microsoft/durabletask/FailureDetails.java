@@ -7,9 +7,15 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.Tas
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Objects;
 
-final class FailureDetails {
+/**
+ * Class that represents the details of a task failure.
+ * <p>
+ * In most cases, failures are caused by unhandled exceptions in activity or orchestrator code, in which case instances
+ * of this class will expose the details of the exception. However, it's also possible that other types of errors could
+ * result in task failures, in which case there may not be any exception-specific information.
+ */
+public final class FailureDetails {
     private final String errorType;
     private final String errorMessage;
     private final String stackTrace;
@@ -28,40 +34,75 @@ final class FailureDetails {
         this.isNonRetriable = isNonRetriable;
     }
 
-    public FailureDetails(Exception exception) {
+    FailureDetails(Exception exception) {
         this(exception.getClass().getName(), exception.getMessage(), getFullStackTrace(exception), false);
     }
 
-    public FailureDetails(TaskFailureDetails proto) {
+    FailureDetails(TaskFailureDetails proto) {
         this(proto.getErrorType(),
              proto.getErrorMessage(),
              proto.getStackTrace().getValue(),
              proto.getIsNonRetriable());
     }
 
+    /**
+     * Gets the exception class name if the failure was caused by an unhandled exception. Otherwise, gets a symbolic
+     * name that describes the general type of error that was encountered.
+     *
+     * @return the error type as a {@code String} value
+     */
     @Nonnull
     public String getErrorType() {
         return this.errorType;
     }
 
+    /**
+     * Gets a summary description of the error that caused this failure. If the failure was caused by an exception, the
+     * exception message is returned.
+     *
+     * @return a summary description of the error
+     */
     @Nonnull
     public String getErrorMessage() {
         return this.errorMessage;
     }
 
+    /**
+     * Gets the stack trace of the exception that caused this failure, or {@code null} if the failure was caused by
+     * a non-exception error.
+     *
+     * @return the stack trace of the failure exception or {@code null} if the failure was not caused by an exception
+     */
     @Nullable
     public String getStackTrace() {
         return this.stackTrace;
     }
 
-    public boolean getIsNonRetriable() {
+    /**
+     * Returns {@code true} if the failure doesn't permit retries, otherwise {@code false}.
+     * @return {@code true} if the failure doesn't permit retries, otherwise {@code false}.
+     */
+    public boolean isNonRetriable() {
         return this.isNonRetriable;
     }
 
+    /**
+     * Returns {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}.
+     * <p>
+     * This method allows checking if a task failed due to a specific exception type by attempting to load the class
+     * specified in {@link #getErrorType()}. If the exception class cannot be loaded for any reason, this method will
+     * return {@code false}. Base types are supported by this method, as shown in the following example:
+     * <pre>{@code
+     * boolean isRuntimeException = failureDetails.isCausedBy(RuntimeException.class);
+     * }</pre>
+     *
+     * @param exceptionClass the class representing the exception type to test
+     * @return {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}
+     */
     public boolean isCausedBy(Class<? extends Exception> exceptionClass) {
         String actualClassName = this.getErrorType();
         try {
-            // Try using reflection to load the failure's class type and see if it's a sub-type of the specified
+            // Try using reflection to load the failure's class type and see if it's a subtype of the specified
             // exception. For example, this should always succeed if exceptionClass is System.Exception.
             Class<?> actualExceptionClass = Class.forName(actualClassName);
             return exceptionClass.isAssignableFrom(actualExceptionClass);

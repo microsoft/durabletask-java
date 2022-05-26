@@ -9,6 +9,13 @@ import java.time.Instant;
 
 import static com.microsoft.durabletask.Helpers.isNullOrEmpty;
 
+/**
+ * Represents a snapshot of an orchestration instance's current state, including metadata.
+ * <p>
+ * Instances of this class are produced by methods in the {@link DurableTaskClient} class, such as
+ * {@link DurableTaskClient#getInstanceMetadata}, {@link DurableTaskClient#waitForInstanceStart}  and
+ * {@link DurableTaskClient#waitForInstanceCompletion}
+ */
 public final class OrchestrationMetadata {
     private final DataConverter dataConverter;
     private final boolean requestedInputsAndOutputs;
@@ -48,42 +55,92 @@ public final class OrchestrationMetadata {
         this.failureDetails = new FailureDetails(state.getFailureDetails());
     }
 
+    /**
+     * Gets the name of the orchestration.
+     * @return the name of the orchestration
+     */
     public String getName() {
         return this.name;
     }
 
+    /**
+     * Gets the unique ID of the orchestration instance.
+     * @return the unique ID of the orchestration instance
+     */
     public String getInstanceId() {
         return this.instanceId;
     }
 
+    /**
+     * Gets the current runtime status of the orchestration instance at the time this object was fetched.
+     * @return the current runtime status of the orchestration instance at the time this object was fetched
+     */
     public OrchestrationRuntimeStatus getRuntimeStatus() {
         return this.runtimeStatus;
     }
 
+    /**
+     * Gets the orchestration instance's creation time in UTC.
+     * @return the orchestration instance's creation time in UTC
+     */
     public Instant getCreatedAt() {
         return this.createdAt;
     }
 
+    /**
+     * Gets the orchestration instance's last updated time in UTC.
+     * @return the orchestration instance's last updated time in UTC
+     */
     public Instant getLastUpdatedAt() {
         return this.lastUpdatedAt;
     }
 
+    /**
+     * Gets the orchestration instance's serialized input, if any, as a string value.
+     * @return the orchestration instance's serialized input or {@code null}
+     */
     public String getSerializedInput() {
         return this.serializedInput;
     }
 
+    /**
+     * Gets the orchestration instance's serialized output, if any, as a string value.
+     * @return the orchestration instance's serialized output or {@code null}
+     */
     public String getSerializedOutput() {
         return this.serializedOutput;
     }
 
+    /**
+     * Gets the failure details, if any, for the failed orchestration instance.
+     * <p>
+     * This method returns data only if the orchestration is in the {@link OrchestrationRuntimeStatus#FAILED} state,
+     * and only if this instance metadata was fetched with the option to include output data.
+     *
+     * @return the failure details of the failed orchestration instance or {@code null}
+     */
     public FailureDetails getFailureDetails() {
         return this.failureDetails;
     }
 
+    /**
+     * Gets a value indicating whether the orchestration instance was running at the time this object was fetched.
+     *
+     * @return {@code true} if the orchestration was in a running state; otherwise {@code false}
+     */
     public boolean isRunning() {
         return this.runtimeStatus == OrchestrationRuntimeStatus.RUNNING;
     }
 
+    /**
+     * Gets a value indicating whether the orchestration instance was completed at the time this object was fetched.
+     * <p>
+     * An orchestration instance is considered completed when its runtime status value is
+     * {@link OrchestrationRuntimeStatus#COMPLETED}, {@link OrchestrationRuntimeStatus#FAILED}, or
+     * {@link OrchestrationRuntimeStatus#TERMINATED}.
+     *
+     * @return {@code true} if the orchestration was in a terminal state; otherwise {@code false}
+     */
     public boolean isCompleted() {
         return
             this.runtimeStatus == OrchestrationRuntimeStatus.COMPLETED ||
@@ -91,18 +148,59 @@ public final class OrchestrationMetadata {
             this.runtimeStatus == OrchestrationRuntimeStatus.TERMINATED;
     }
 
+    /**
+     * Deserializes the orchestration's input into an object of the specified type.
+     * <p>
+     * Deserialization is performed using the {@link DataConverter} that was configured on the {@link DurableTaskClient}
+     * object that created this orchestration metadata object.
+     *
+     * @param type the class associated with the type to deserialize the input data into
+     * @param <T> the type to deserialize the input data into
+     * @throws IllegalStateException if the metadata was fetched without the option to read inputs and outputs
+     * @return the deserialized input value
+     */
     public <T> T readInputAs(Class<T> type) {
         return this.readPayloadAs(type, this.serializedInput);
     }
 
+    /**
+     * Deserializes the orchestration's output into an object of the specified type.
+     * <p>
+     * Deserialization is performed using the {@link DataConverter} that was configured on the {@link DurableTaskClient}
+     * object that created this orchestration metadata object.
+     *
+     * @param type the class associated with the type to deserialize the output data into
+     * @param <T> the type to deserialize the output data into
+     * @throws IllegalStateException if the metadata was fetched without the option to read inputs and outputs
+     * @return the deserialized input value
+     */
     public <T> T readOutputAs(Class<T> type) {
         return this.readPayloadAs(type, this.serializedOutput);
     }
 
+    /**
+     * Deserializes the orchestration's custom status into an object of the specified type.
+     * <p>
+     * Deserialization is performed using the {@link DataConverter} that was configured on the {@link DurableTaskClient}
+     * object that created this orchestration metadata object.
+     *
+     * @param type the class associated with the type to deserialize the custom status data into
+     * @param <T> the type to deserialize the custom status data into
+     * @throws IllegalStateException if the metadata was fetched without the option to read inputs and outputs
+     * @return the deserialized input value
+     */
     public <T> T readCustomStatusAs(Class<T> type) {
         return this.readPayloadAs(type, this.serializedCustomStatus);
     }
 
+    /**
+     * Returns {@code true} if the orchestration has a non-empty custom status value; otherwise {@code false}.
+     * <p>
+     * This method will always return {@code false} if the metadata was fetched without the option to read inputs and
+     * outputs
+     *
+     * @return {@code true} if the orchestration has a non-empty custom status value; otherwise {@code false}
+     */
     public boolean isCustomStatusFetched() {
         return this.serializedCustomStatus != null && !this.serializedCustomStatus.isEmpty();
     }
@@ -120,6 +218,10 @@ public final class OrchestrationMetadata {
         return this.dataConverter.deserialize(payload, type);
     }
 
+    /**
+     * Generates a user-friendly string representation of the current metadata object.
+     * @return a user-friendly string representation of the current metadata object
+     */
     @Override
     public String toString() {
         String baseString = String.format(
@@ -152,6 +254,11 @@ public final class OrchestrationMetadata {
         return payload;
     }
 
+    /**
+     * Returns {@code true} if an orchestration instance with this ID was found; otherwise {@code false}.
+     *
+     * @return {@code true} if an orchestration instance with this ID was found; otherwise {@code false}
+     */
     public boolean isInstanceFound() {
         return !(isNullOrEmpty(this.name) && isNullOrEmpty(this.instanceId));
     }
