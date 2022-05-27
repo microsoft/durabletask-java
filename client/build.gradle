@@ -101,8 +101,8 @@ publishing {
             from components.java
             artifactId = archivesBaseName
             pom {
-                name = 'Azure Functions Durabletask Client'
-                description = 'This package contains the Java sdk that defines and manage durable orchestrations.'
+                name = 'Durable Task Client SDK for Java'
+                description = 'This package contains classes and interfaces for building Durable Task orchestrations in Java.'
                 url = "https://github.com/microsoft/durabletask-java/tree/main/client"
                 licenses {
                     license {
