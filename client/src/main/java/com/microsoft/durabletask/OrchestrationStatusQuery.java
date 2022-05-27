@@ -119,7 +119,7 @@ public final class OrchestrationStatusQuery {
      * Sets whether to fetch orchestration inputs, outputs, and custom status values. The default value is {@code false}.
      *
      * @param fetchInputsAndOutputs {@code true} to fetch orchestration inputs, outputs, and custom status values,
-     *                              otherwise {@false}
+     *                              otherwise {@code false}
      * @return this query object
      */
     public OrchestrationStatusQuery setFetchInputsAndOutputs(boolean fetchInputsAndOutputs) {

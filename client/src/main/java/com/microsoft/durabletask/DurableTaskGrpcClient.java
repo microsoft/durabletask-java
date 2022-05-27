@@ -223,7 +223,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
-    public PurgeResult purgeInstances(String instanceId) {
+    public PurgeResult purgeInstance(String instanceId) {
         PurgeInstancesRequest request = PurgeInstancesRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .build();

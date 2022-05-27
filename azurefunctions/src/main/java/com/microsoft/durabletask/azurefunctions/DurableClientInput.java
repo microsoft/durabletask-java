@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
  * <pre>
  * {@literal @}FunctionName("StartHelloCities")
  * public HttpResponseMessage startHelloCities(
- *         {@literal @}HttpTrigger(name = "request", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+ *         {@literal @}HttpTrigger(name = "request", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage{@literal <}Optional{@literal <}String{@literal >}{@literal >} request,
  *         {@literal @}DurableClientInput(name = "durableContext") DurableClientContext durableContext,
  *         final ExecutionContext context) {
  * 

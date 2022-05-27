@@ -24,7 +24,7 @@ import java.lang.annotation.Target;
  * {@literal @}FunctionName("HelloCities")
  * public String helloCitiesOrchestrator(
  *         {@literal @}DurableOrchestrationTrigger(name = "orchestratorRequestProtoBytes") String orchestratorRequestProtoBytes) {
- *     return OrchestrationRunner.loadAndRun(orchestratorRequestProtoBytes, ctx -> {
+ *     return OrchestrationRunner.loadAndRun(orchestratorRequestProtoBytes, ctx -{@literal >} {
  *         String result = "";
  *         result += ctx.callActivity("SayHello", "Tokyo", String.class).await() + ", ";
  *         result += ctx.callActivity("SayHello", "London", String.class).await() + ", ";

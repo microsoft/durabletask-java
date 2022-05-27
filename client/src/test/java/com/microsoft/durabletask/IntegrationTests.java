@@ -674,7 +674,7 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
             assertEquals(1, metadata.readOutputAs(int.class));
 
-            PurgeResult result = client.purgeInstances(instanceId);
+            PurgeResult result = client.purgeInstance(instanceId);
             assertEquals(1, result.getDeletedInstanceCount());
 
             metadata = client.getInstanceMetadata(instanceId, true);

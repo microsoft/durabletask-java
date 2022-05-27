@@ -24,7 +24,7 @@ public final class JacksonDataConverter implements DataConverter {
         try {
             return jsonObjectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
-            throw this.wrapConverterException(
+            throw new DataConverterException(
                     String.format("Failed to serialize argument of type '%s'.", value.getClass().getName()),
                     e);
         }
@@ -39,7 +39,7 @@ public final class JacksonDataConverter implements DataConverter {
         try {
             return jsonObjectMapper.readValue(jsonText, targetType);
         } catch (JsonProcessingException e) {
-            throw this.wrapConverterException(String.format("Failed to deserialize the JSON text to %s.", targetType.getName()), e);
+            throw new DataConverterException(String.format("Failed to deserialize the JSON text to %s.", targetType.getName()), e);
         }
     }
 }
