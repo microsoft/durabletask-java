@@ -274,5 +274,5 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param purgeInstanceCriteria orchestration instance filter criteria used to determine which instances to purge
      * @return the result of the purge operation, including the number of purged orchestration instances (0 or 1)
      */
-    public abstract PurgeResult purgeInstance(PurgeInstanceCriteria purgeInstanceCriteria);
+    public abstract PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria);
 }

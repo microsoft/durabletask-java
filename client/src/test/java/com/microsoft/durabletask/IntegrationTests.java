@@ -727,7 +727,7 @@ public class IntegrationTests extends IntegrationTestBase {
             PurgeInstanceCriteria criteria = new PurgeInstanceCriteria();
             criteria.setCreatedTimeFrom(startTime);
 
-            PurgeResult result = client.purgeInstance(criteria);
+            PurgeResult result = client.purgeInstances(criteria);
             assertEquals(1, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
             assertFalse(metadata.isInstanceFound());
@@ -735,7 +735,7 @@ public class IntegrationTests extends IntegrationTestBase {
             // Test CreatedTimeTo
             criteria.setCreatedTimeTo(Instant.now());
 
-            result = client.purgeInstance(criteria);
+            result = client.purgeInstances(criteria);
             assertEquals(0, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId, true);
             assertFalse(metadata.isInstanceFound());
@@ -767,7 +767,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
             criteria.setCreatedTimeTo(Instant.now());
             criteria.setRuntimeStatusList(new ArrayList<>(runtimeStatusFilters));
-            result = client.purgeInstance(criteria);
+            result = client.purgeInstances(criteria);
 
             assertEquals(3, result.getDeletedInstanceCount());
             metadata = client.getInstanceMetadata(instanceId1, true);

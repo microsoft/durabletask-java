@@ -233,7 +233,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
-    public PurgeResult purgeInstance(PurgeInstanceCriteria purgeInstanceCriteria) {
+    public PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) {
         PurgeInstanceFilter.Builder builder = PurgeInstanceFilter.newBuilder();
         builder.setCreatedTimeFrom(DataConverter.getTimestampFromInstant(purgeInstanceCriteria.getCreatedTimeFrom()));
         Optional.ofNullable(purgeInstanceCriteria.getCreatedTimeTo()).ifPresent(createdTimeTo -> builder.setCreatedTimeTo(DataConverter.getTimestampFromInstant(createdTimeTo)));
