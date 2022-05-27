@@ -26,9 +26,32 @@ targetCompatibility = JavaVersion.VERSION_1_8
 
 publishing {
     publications {
-        mavenPublication(MavenPublication) {
-            artifactId = archivesBaseName
+        mavenJava(MavenPublication) {
             from components.java
+            artifactId = archivesBaseName
+            pom {
+                name = 'Azure Durable Functions SDK for Java'
+                description = 'This package contains classes, interfaces, and annotations for developing with Azure Durable Functions in Java.'
+                url = "https://github.com/microsoft/durabletask-java/tree/main/azurefunctions"
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url = "https://opensource.org/licenses/MIT"
+                        distribution = "repo"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "Microsoft"
+                        name = "Microsoft Corporation"
+                    }
+                }
+                scm {
+                    connection = "scm:git:https://github.com/microsoft/durabletask-java"
+                    developerConnection = "scm:git:git@github.com:microsoft/durabletask-java"
+                    url = "https://github.com/microsoft/durabletask-java/tree/main/azurefunctions"
+                }
+            }
         }
     }
 }

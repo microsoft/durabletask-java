@@ -97,9 +97,32 @@ task integrationTest(type: Test) {
 
 publishing {
     publications {
-        mavenPublication(MavenPublication) {
-            artifactId = archivesBaseName
+        mavenJava(MavenPublication) {
             from components.java
+            artifactId = archivesBaseName
+            pom {
+                name = 'Durable Task Client SDK for Java'
+                description = 'This package contains classes and interfaces for building Durable Task orchestrations in Java.'
+                url = "https://github.com/microsoft/durabletask-java/tree/main/client"
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url = "https://opensource.org/licenses/MIT"
+                        distribution = "repo"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "Microsoft"
+                        name = "Microsoft Corporation"
+                    }
+                }
+                scm {
+                    connection = "scm:git:https://github.com/microsoft/durabletask-java"
+                    developerConnection = "scm:git:git@github.com:microsoft/durabletask-java"
+                    url = "https://github.com/microsoft/durabletask-java/tree/main/client"
+                }
+            }
         }
     }
 }
