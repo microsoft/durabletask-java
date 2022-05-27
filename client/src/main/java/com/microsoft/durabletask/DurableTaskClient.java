@@ -25,6 +25,7 @@ public abstract class DurableTaskClient implements AutoCloseable {
     /**
      * Releases any network resources held by this object.
      */
+    @Override
     public void close() {
         // no default implementation
     }
@@ -156,7 +157,7 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param instanceId the unique ID of the orchestration instance to wait for
      * @param timeout the amount of time to wait for the orchestration instance to start
      * @param getInputsAndOutputs <code>true</code> to fetch the orchestration instance's inputs, outputs, and custom
-     *                            status, or <c>false</c> to omit them
+     *                            status, or <code>false</code> to omit them
      * @return the orchestration instance metadata or <code>null</code> if no such instance is found
      */
     @Nullable
@@ -181,7 +182,7 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param instanceId the unique ID of the orchestration instance to wait for
      * @param timeout the amount of time to wait for the orchestration instance to complete
      * @param getInputsAndOutputs <code>true</code> to fetch the orchestration instance's inputs, outputs, and custom
-     *                            status, or <c>false</c> to omit them
+     *                            status, or <code>false</code> to omit them
      * @return the orchestration instance metadata or <code>null</code> if no such instance is found
      */
     @Nullable
@@ -254,7 +255,7 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param instanceId the unique ID of the orchestration instance to purge
      * @return the result of the purge operation, including the number of purged orchestration instances (0 or 1)
      */
-    public abstract PurgeResult purgeInstances(String instanceId);
+    public abstract PurgeResult purgeInstance(String instanceId);
 
     // TODO, https://github.com/microsoft/durabletask-java/issues/37, add a timeout parameter
     /**
@@ -273,5 +274,5 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param purgeInstanceCriteria orchestration instance filter criteria used to determine which instances to purge
      * @return the result of the purge operation, including the number of purged orchestration instances (0 or 1)
      */
-    public abstract PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria);
+    public abstract PurgeResult purgeInstance(PurgeInstanceCriteria purgeInstanceCriteria);
 }

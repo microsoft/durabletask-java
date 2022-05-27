@@ -37,17 +37,6 @@ public interface DataConverter {
     @Nullable
     <T> T deserialize(@Nullable String data, Class<T> target);
 
-    /**
-     * Helper method for wrapping serialization exceptions into <code>DataConverterException</code>.
-     *
-     * @param message the serialization-failure exception message
-     * @param cause the <code>Throwable</code> thrown by the internal serialization implementation
-     * @return a <code>DataConverterException</code> to be thrown
-     */
-    default DataConverterException wrapConverterException(String message, Throwable cause) {
-        return new DataConverterException(message, cause);
-    }
-
     // Data conversion errors are expected to be unrecoverable in most cases, hence an unchecked runtime exception
     class DataConverterException extends RuntimeException {
         public DataConverterException(String message, Throwable cause) {

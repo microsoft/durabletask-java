@@ -16,7 +16,7 @@ public interface TaskActivityContext {
     /**
      * Gets the deserialized activity input.
      *
-     * @param targetType the {@link Class<T>} object associated with {@code T}
+     * @param targetType the {@link Class} object associated with {@code T}
      * @param <T> the target type to deserialize the input into
      * @return the deserialized activity input value
      */

@@ -5,7 +5,7 @@ package com.microsoft.durabletask;
 /**
  * Class representing the results of an orchestration state purge operation.
  * <p>
- * Orchestration state can be purged using any of the {@link DurableTaskClient#purgeInstances} method overloads.
+ * Orchestration state can be purged using any of the {@link DurableTaskClient#purgeInstance} method overloads.
  */
 public final class PurgeResult {
 

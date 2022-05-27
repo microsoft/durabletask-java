@@ -12,7 +12,7 @@ import java.util.function.Function;
  * {@code Task<V>} instances are created by methods on the {@link TaskOrchestrationContext} class, which is available
  * in {@link TaskOrchestration} implementations. For example, scheduling an activity will return a task.
  * <pre>
- * Task<int> activityTask = ctx.callActivity("MyActivity", someInput, int.class);
+ * Task{@literal <}int{@literal >} activityTask = ctx.callActivity("MyActivity", someInput, int.class);
  * </pre>
  * The {@code Task<V>} class is similar to the {@link CompletableFuture} class in the Java class library, except that
  * instances of {@code Task<V>} are immutable from user code and all callbacks are invoked on the orchestrator's
