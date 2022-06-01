@@ -22,7 +22,7 @@ In a terminal or command window, run the following commands to check if the corr
 - Replace the existing core tools java worker with the downloaded version.
 	- If your core-tools install location for Windows is at - "C:\Program Files\Microsoft\Azure Functions Core Tools".
 		- Install location for MacOS if using brew - /usr/local/Cellar/azure-functions-core-tools@4/4.0.4544/workers
-		- Install location for Linux - 
+		- Install location for Linux - /usr/lib/azure-functions-core-tools-<majorVersion>
 	- Replace the `azure-functions-java-worker.jar` at "C:\Program Files\Microsoft\Azure Functions Core Tools\workers\java\" with the downloaded worker jar file.
 
 ### Create a simple Azure function 
