@@ -17,11 +17,13 @@ In a terminal or command window, run the following commands to check if the corr
 
 ### Use the latest Java worker 
 - To create and run durable functions in Java, it is recommended to use the latest java worker jar for V3 and V4
-  - V3 - v1.11.0 - [Download]()
-  - V4 - v2.2.3  - [Download]()
+  - V3 - v1.11.0 - [Download](https://javaworkerrelease.blob.core.windows.net/release/1.11.0/azure-functions-java-worker.jar?sp=r&st=2022-06-01T22:17:09Z&se=2022-12-31T07:17:09Z&spr=https&sv=2020-08-04&sr=b&sig=Lrp0sJ2q91Q2QeNIxAoy4Ulf3ewx1KdNR1td9BXDuxI%3D)
+  - V4 - v2.2.3  - [Download](https://javaworkerrelease.blob.core.windows.net/release/2.2.3/azure-functions-java-worker.jar?sp=r&st=2022-06-01T22:19:48Z&se=2022-12-31T07:19:48Z&spr=https&sv=2020-08-04&sr=b&sig=N4gcAP0jVKqAdo59WxZVFDjtfaBiwCJt%2BMBajkv%2FudI%3D)
 - Replace the existing core tools java worker with the downloaded version.
 	- If your core-tools install location for Windows is at - "C:\Program Files\Microsoft\Azure Functions Core Tools".
-	- Replace the `azure-functions-java-worker.jar` at "C:\Program Files\Microsoft\Azure Functions Core Tools\workers\java\"
+		- Install location for MacOS if using brew - /usr/local/Cellar/azure-functions-core-tools@4/4.0.4544/workers
+		- Install location for Linux - 
+	- Replace the `azure-functions-java-worker.jar` at "C:\Program Files\Microsoft\Azure Functions Core Tools\workers\java\" with the downloaded worker jar file.
 
 ### Create a simple Azure function 
 - Use maven to create a simple Azure function in Java using the below commands
@@ -34,7 +36,7 @@ In a terminal or command window, run the following commands to check if the corr
 
 ### Durable Functions in Java!
 Durable Functions is an extension of Azure Functions that lets you write stateful functions in a serverless compute environment.
-More information on terminology and patterns can be found at - [Durable Functions Overview](https://docs.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-overview?tabs=csharp)
+More information on terminology and patterns can be found at - [Durable Functions Overview](https://docs.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-overview?tabs=java)
 
 The following example code shows what the simplest "Hello World" orchestrator function might look like. Note that this example orchestrator doesn't actually orchestrate anything.
 
