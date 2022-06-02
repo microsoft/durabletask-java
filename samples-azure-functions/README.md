@@ -23,7 +23,7 @@ In a terminal or command window, run the following commands to check if the corr
 	- If your core-tools install location for Windows is at - "C:\Program Files\Microsoft\Azure Functions Core Tools".
 		- Install location for MacOS if using brew - /usr/local/Cellar/azure-functions-core-tools@4/4.0.4544/workers
 		- Install location for Linux - /usr/lib/azure-functions-core-tools-<majorVersion>
-	- Replace the `azure-functions-java-worker.jar` at "C:\Program Files\Microsoft\Azure Functions Core Tools\workers\java\" with the downloaded worker jar file.
+	- Replace the `azure-functions-java-worker.jar` at "C:\Program Files\Microsoft\Azure Functions Core Tools\workers\java\", or the appropriate location for macOS or Linux, with the downloaded worker jar file.
 
 ### Create a simple Azure function 
 - Use maven to create a simple Azure function in Java using the below commands
