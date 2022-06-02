@@ -52,11 +52,12 @@ Replace the `azure-functions-java-worker.jar` file from one of the above locatio
 
 ## Create a new Azure Functions Java app
 
-If you use Maven for building Java apps, then you can use the following `mvn` command to create a new Java Functions app (targeting Java 8):
+If you use Maven for building Java apps, then you can use the following `mvn` command to create a new Java Functions app (targeting Java 11):
 
 ```bash
-mvn archetype:generate -DarchetypeGroupId=com.microsoft.azure -DarchetypeArtifactId=azure-functions-archetype -DjavaVersion=8
+mvn archetype:generate -DarchetypeGroupId=com.microsoft.azure -DarchetypeArtifactId=azure-functions-archetype -DjavaVersion=11
 ```
+**_NOTE:_**  Update the `FUNCTIONS_EXTENSION_VERSION` app setting in `pom.xml` to ~3 to build and deploy a V3 app. 
 
 For more information about creating Azure Function apps using Maven, see the [create a Java function in Azure from the command line](https://docs.microsoft.com/azure/azure-functions/create-first-function-cli-java?tabs=bash%2Cazure-cli%2Cbrowser) documentation.
 
