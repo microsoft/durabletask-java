@@ -1,6 +1,9 @@
 # Java SDK for the Durable Task Framework
 
 [![Build](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml/badge.svg)](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+⚠ This project is preview quality and not yet ready for production use ⚠
 
 This repo contains the Java SDK for the Durable Task Framework as well as classes and annotations to support running Durable Functions for Java.
 
