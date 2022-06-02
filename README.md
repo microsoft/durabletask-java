@@ -2,9 +2,20 @@
 
 [![Build](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml/badge.svg)](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml)
 
-This repo contains the Java SDK for the Durable Task Framework.
+This repo contains the Java SDK for the Durable Task Framework as well as classes and annotations to support running Durable Functions for Java.
 
-⚠ This README is currently under construction ⚠
+## Maven Central packages
+
+The following packages are produced from this repo.
+
+| Package | Latest version |
+| - | - |
+| Durable Task - Client | ![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-client?label=durabletask-client) |
+| Durable Task - Azure Functions | ![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azure-functions?label=durabletask-azure-functions) |
+
+## Getting started with Azure Functions
+
+For information about how to get started with Durable Functions for Java, see the [Azure Functions README.md](/azurefunctions/README.md) content.
 
 ## Contributing
 
