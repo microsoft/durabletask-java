@@ -10,7 +10,7 @@ The following are the requirements for you local environment:
 - The `JAVA_HOME` environment variable must be set to the install location of the correct version of the JDK.
 - [Apache Maven](https://maven.apache.org/), version 3.0 or above for azure function app creation, is required for using automatic project creation tools. 
   - If Maven isn't your preferred development tool, check out our similar tutorials to [create a function app](https://docs.microsoft.com/en-us/azure/azure-functions/create-first-function-cli-java?tabs=bash%2Cazure-cli%2Cbrowser). This README also contains instructions for [Gradle](https://gradle.org/).
-- [Install Azure Functions Core Tools](https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local?tabs=v4%2Cwindows%2Ccsharp%2Cportal%2Cbash) version 3.0.4585+ or 4.0.4545+
+- [Install Azure Functions Core Tools](https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local?tabs=v4%2Cwindows%2Ccsharp%2Cportal%2Cbash) version 3.0.4585+ or 4.0.4590+
 
 
 ## Prerequisite check
@@ -22,10 +22,10 @@ In a terminal or command window, run the following commands to check if the corr
 
 ## Using the latest Java worker 
 
-At the time of writing, some versions of the Azure Functions Core Tools do not yet have the latest Java worker runtime required for Durable Functions for Java. The following Core Tools *minimum* versions are required:
+The version of the Java worker that supports Durable Functions is available starting in the following versions of the Azure Functions Core Tools:
 
 - v3.0.4585 or greater
-- v4.0.4545 or greater
+- v4.0.4590 or greater
 
 If you aren't able to get a version of the Core Tools in one of these version ranges, you can still use Durable Functions for Java, but you'll need to manually update the version of the Java worker used by your existing Core Tools installation. The following are steps describing how you can update to a compatible version of the Java worker. You can skip these steps if you already have a required Azure Functions Core Tools version installed locally.
 
@@ -57,10 +57,9 @@ If you use Maven for building Java apps, then you can use the following `mvn` co
 ```bash
 mvn archetype:generate -DarchetypeGroupId=com.microsoft.azure -DarchetypeArtifactId=azure-functions-archetype -DjavaVersion=11
 ```
-**_NOTE:_**  Update the `FUNCTIONS_EXTENSION_VERSION` app setting in `pom.xml` to ~3 to build and deploy a V3 app. 
+**_NOTE:_**  You can change the `FUNCTIONS_EXTENSION_VERSION` app setting in `pom.xml` to ~3 to build and deploy a V3 app. 
 
 For more information about creating Azure Function apps using Maven, see the [create a Java function in Azure from the command line](https://docs.microsoft.com/azure/azure-functions/create-first-function-cli-java?tabs=bash%2Cazure-cli%2Cbrowser) documentation.
-
 
 If you're using Gradle, then we recommend copying the [Azure Functions sample app](/samples-azure-functions/) in this repo as the starting point for your app.
 
