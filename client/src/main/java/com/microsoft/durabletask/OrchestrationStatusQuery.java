@@ -19,7 +19,7 @@ public final class OrchestrationStatusQuery {
     private String continuationToken;
     private String instanceIdPrefix;
     private boolean fetchInputsAndOutputs;
-
+    private OrchestrationQueryOrder sortOrder = OrchestrationQueryOrder.UNSPECIFIED;
     /**
      * Sole constructor.
      */
@@ -128,6 +128,20 @@ public final class OrchestrationStatusQuery {
     }
 
     /**
+     * Sets the order of query results. The default value is {@code UNSPECIFIED}.
+     *
+     * @param sortOrder {@code OrchestrationQueryOrder.UNSPECIFIED} without any sorting on query results,
+     * {@code OrchestrationQueryOrder.ASCENDING} get query results with ascending order,
+     * {@code OrchestrationQueryOrder.DESCENDING} get query results with descending order,
+     *
+     * @return this query object
+     */
+    public OrchestrationStatusQuery setSortOrder(OrchestrationQueryOrder sortOrder) {
+        this.sortOrder = sortOrder;
+        return this;
+    }
+
+    /**
      * Gets the configured runtime status filter or {@code null} if none was configured.
      * @return the configured runtime status filter as a list of values or {@code null} if none was configured
      */
@@ -193,5 +207,13 @@ public final class OrchestrationStatusQuery {
      */
     public boolean isFetchInputsAndOutputs() {
         return fetchInputsAndOutputs;
+    }
+
+    /**
+     * Gets sort order of query result.
+     * @return the sort order of query result.
+     */
+    public OrchestrationQueryOrder getSortOrder() {
+        return sortOrder;
     }
 }

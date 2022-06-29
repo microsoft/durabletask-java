@@ -549,7 +549,12 @@ public class IntegrationTests extends IntegrationTestBase {
             result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
+            query.setSortOrder(OrchestrationQueryOrder.DESCENDING);
+            OrchestrationStatusQueryResult reverseResult = client.queryInstances(query);
+            assertTrue(orderCompare(result.getOrchestrationState(), reverseResult.getOrchestrationState()));
+
             // Test CreatedTimeTo filter
+            query.setSortOrder(OrchestrationQueryOrder.UNSPECIFIED);
             query.setCreatedTimeTo(startTime);
             result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
@@ -649,6 +654,14 @@ public class IntegrationTests extends IntegrationTestBase {
             result = client.queryInstances(query);
             result.getOrchestrationState().forEach(state -> assertThrows(IllegalStateException.class, () -> state.readInputAs(String.class)));
         }
+    }
+
+    private boolean orderCompare(List<OrchestrationMetadata> list, List<OrchestrationMetadata> reverseList){
+        int size = list.size();
+        for (int i = 0; i < size; i++){
+            if (!list.get(i).getInstanceId().equals(reverseList.get(size - 1 - i).getInstanceId())) return false;
+        }
+        return true;
     }
 
     @Test

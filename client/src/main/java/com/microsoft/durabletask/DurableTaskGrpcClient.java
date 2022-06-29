@@ -196,6 +196,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         Optional.ofNullable(query.getCreatedTimeTo()).ifPresent(createdTimeTo -> instanceQueryBuilder.setCreatedTimeTo(DataConverter.getTimestampFromInstant(createdTimeTo)));
         Optional.ofNullable(query.getContinuationToken()).ifPresent(token -> instanceQueryBuilder.setContinuationToken(StringValue.of(token)));
         Optional.ofNullable(query.getInstanceIdPrefix()).ifPresent(prefix -> instanceQueryBuilder.setInstanceIdPrefix(StringValue.of(prefix)));
+        Optional.ofNullable(query.getSortOrder()).ifPresent(order -> instanceQueryBuilder.setSortOrder(OrchestrationQueryOrder.toProtobuf(order)));
         instanceQueryBuilder.setFetchInputsAndOutputs(query.isFetchInputsAndOutputs());
         instanceQueryBuilder.setMaxInstanceCount(query.getMaxInstanceCount());
         query.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> instanceQueryBuilder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
