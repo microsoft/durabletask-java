@@ -549,6 +549,7 @@ public class IntegrationTests extends IntegrationTestBase {
             result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
+            // Reverse query results
             query.setSortOrder(OrchestrationQueryOrder.DESCENDING);
             OrchestrationStatusQueryResult reverseResult = client.queryInstances(query);
             assertTrue(orderCompare(result.getOrchestrationState(), reverseResult.getOrchestrationState()));
