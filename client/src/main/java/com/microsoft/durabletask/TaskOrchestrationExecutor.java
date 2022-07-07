@@ -399,7 +399,7 @@ final class TaskOrchestrationExecutor {
             // If a non-infinite timeout is specified, schedule an internal durable timer.
             // If the timer expires and the external event task hasn't yet completed, we'll cancel the task.
             if (hasTimeout) {
-                this.createTimer(timeout).thenRun(() -> {
+                this.createTimer(timeout).future.thenRun(() -> {
                     if (!eventTask.isDone()) {
                         // Book-keeping - remove the task record for the canceled task
                         eventQueue.removeIf(t -> t.task == eventTask);
@@ -1055,31 +1055,6 @@ final class TaskOrchestrationExecutor {
 
             public boolean completeExceptionally(Throwable ex) {
                 return this.future.completeExceptionally(ex);
-            }
-
-            @Override
-            public Task<Void> thenRun(Runnable action) {
-                return new CompletableTask<>(this.future.thenRun(action));
-            }
-
-            @Override
-            public Task<Void> thenAccept(Consumer<? super V> action) {
-                return new CompletableTask<>(this.future.thenAccept(action));
-            }
-
-            @Override
-            public <R> Task<R> thenApply(Function<? super V, ? extends R> fn) {
-                return new CompletableTask<>(this.future.thenApply(fn));
-            }
-
-            @Override
-            public <R> Task<R> thenCompose(Function<? super V, ? extends Task<R>> fn) {
-                CompletableFuture<R> nextFuture = this.future.thenCompose(result -> {
-                    Task<R> nextTask = fn.apply(result);
-                    return nextTask.future;
-                });
-
-                return new CompletableTask<>(nextFuture);
             }
         }
     }

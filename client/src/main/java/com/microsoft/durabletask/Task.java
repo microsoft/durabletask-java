@@ -14,10 +14,6 @@ import java.util.function.Function;
  * <pre>
  * Task{@literal <}int{@literal >} activityTask = ctx.callActivity("MyActivity", someInput, int.class);
  * </pre>
- * The {@code Task<V>} class is similar to the {@link CompletableFuture} class in the Java class library, except that
- * instances of {@code Task<V>} are immutable from user code and all callbacks are invoked on the orchestrator's
- * main execution thread. Internally, {@code Task<V>} uses {@code CompletableFuture<T>} in its internal implementation
- * in a way that makes it compatible with orchestrator code constraints.
  * <p>
  * Orchestrator code uses the {@link #await()} method to block on the completion of the task and retrieve the result.
  * If the task is not yet complete, the {@code await()} method will throw an {@link OrchestratorBlockedEvent}, which
@@ -63,41 +59,4 @@ public abstract class Task<V> {
      *                                  This {@code Throwable} must never be caught in user code.
      */
     public abstract V await() throws TaskFailedException, OrchestratorBlockedEvent;
-
-    /**
-     * Returns a new {@code Task<V>} that, when this task completes normally, executes the given action.
-     *
-     * @param fn the action to run before completing the returned {@code Task<V>}
-     * @return the new {@code Task<V>}
-     */
-    public abstract Task<Void> thenRun(Runnable fn);
-
-    /**
-     * Returns a new {@code Task<V>} that, when this task completes normally, executes the given action with this task's
-     * result as the argument to the supplied action.
-     *
-     * @param fn the action to run before completing the returned {@code Task<V>}
-     * @return the new {@code Task<V>}
-     */
-    public abstract Task<Void> thenAccept(Consumer<? super V> fn);
-
-    /**
-     * Returns a new {@code Task<V>} that, when this task completes normally, executes the given action with this task's
-     * result as the argument to the supplied function.
-     *
-     * @param fn The function to use to compute the value of the returned {@code Task<V>}
-     * @param <R> the function's return type
-     * @return the new {@code Task<V>}
-     */
-    public abstract <R> Task<R> thenApply(Function<? super V, ? extends R> fn);
-
-    /**
-     * Returns a new {@code Task<V>} that, when this task completes normally, is executed with this task as the argument
-     * to the supplied function.
-     *
-     * @param fn the function returning a new {@code Task<V>}
-     * @param <R> the type of the returned {@code Task<V>}'s result
-     * @return the new {@code Task<V>}
-     */
-    public abstract <R> Task<R> thenCompose(Function<? super V, ? extends Task<R>> fn);
 }
