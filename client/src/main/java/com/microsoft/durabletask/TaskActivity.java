@@ -21,6 +21,7 @@ package com.microsoft.durabletask;
  * Activities are scheduled by orchestrators using one of the {@link TaskOrchestrationContext#callActivity} method
  * overloads.
  */
+@FunctionalInterface
 public interface TaskActivity {
     /**
      * Executes the activity logic and returns a value which will be serialized and returned to the calling orchestrator.
