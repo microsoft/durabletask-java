@@ -59,6 +59,7 @@ package com.microsoft.durabletask;
  *     </li>
  * </ul>
  */
+@FunctionalInterface
 public interface TaskOrchestration {
     /**
      * Executes the orchestrator logic.
