@@ -129,7 +129,7 @@ public final class OrchestrationMetadata {
      * @return {@code true} if the orchestration was in a running state; otherwise {@code false}
      */
     public boolean isRunning() {
-        return this.runtimeStatus == OrchestrationRuntimeStatus.RUNNING;
+        return isInstanceFound() && this.runtimeStatus == OrchestrationRuntimeStatus.RUNNING;
     }
 
     /**
