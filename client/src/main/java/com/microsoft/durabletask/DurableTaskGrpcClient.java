@@ -138,8 +138,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
                 .setGetInputsAndOutputs(getInputsAndOutputs)
                 .build();
         GetInstanceResponse response = this.sidecarClient.getInstance(request);
-        OrchestrationMetadata orchestrationMetadata = new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
-        return orchestrationMetadata.isInstanceFound() ? orchestrationMetadata : null;
+        return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
     @Override
