@@ -126,7 +126,7 @@ public final class OrchestrationMetadata {
     /**
      * Gets a value indicating whether the orchestration instance was running at the time this object was fetched.
      *
-     * @return {@code true} if the orchestration was in a running state; otherwise {@code false}
+     * @return {@code true} if the orchestration existed and was in a running state; otherwise {@code false}
      */
     public boolean isRunning() {
         return isInstanceFound() && this.runtimeStatus == OrchestrationRuntimeStatus.RUNNING;
