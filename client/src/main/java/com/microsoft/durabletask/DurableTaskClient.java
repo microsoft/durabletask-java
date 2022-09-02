@@ -122,7 +122,8 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param getInputsAndOutputs <code>true</code> to fetch the orchestration instance's inputs, outputs, and custom
      *                            status, or <code>false</code> to omit them
      * @return a metadata record that describes the orchestration instance and its execution status, or
-     *         <code>null</code> if no such instance is found.
+     *         a default instance if no such instance is found. Please refer to method
+     *         {@link OrchestrationMetadata#isInstanceFound()} to check if an instance is found.
      */
     @Nullable
     public abstract OrchestrationMetadata getInstanceMetadata(String instanceId, boolean getInputsAndOutputs);
