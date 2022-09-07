@@ -822,7 +822,7 @@ final class TaskOrchestrationExecutor {
                 }
 
                 if (this.currentHistoryList == this.newEvents && this.currentHistoryIndex >= this.newEvents.size()) {
-                    // We're done enumerating the history
+                    // We're done enumerating the new events
                     return false;
                 }
 
