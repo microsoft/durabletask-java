@@ -9,11 +9,12 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 class FanOutFanInPattern {
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         // The TaskHubServer listens over gRPC for new orchestration and activity execution requests
         final DurableTaskGrpcWorker worker = createWorker();
 

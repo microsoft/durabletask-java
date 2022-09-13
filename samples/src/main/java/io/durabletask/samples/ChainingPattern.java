@@ -6,9 +6,10 @@ import com.microsoft.durabletask.*;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 
 final class ChainingPattern {
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         // The TaskHubServer listens over gRPC for new orchestration and activity execution requests
         final DurableTaskGrpcWorker server = createTaskHubServer();
 
