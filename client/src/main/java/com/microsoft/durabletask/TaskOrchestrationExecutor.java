@@ -47,7 +47,7 @@ final class TaskOrchestrationExecutor {
         } catch (Exception e) {
             // The orchestrator threw an unhandled exception - fail it
             // TODO: What's the right way to log this?
-            logger.severe("The orchestrator failed with an unhandled exception: " + e.toString());
+            logger.warning("The orchestrator failed with an unhandled exception: " + e.toString());
             context.fail(new FailureDetails(e));
         } catch (OrchestratorBlockedEvent orchestratorBlockedEvent) {
             logger.fine("The orchestrator has yielded and will await for new events.");
