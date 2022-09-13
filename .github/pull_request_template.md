@@ -8,10 +8,9 @@ resolves #issue_for_this_pr
 
 * [ ] My changes **do not** require documentation changes
     * [ ] Otherwise: Documentation issue linked to PR
-* [ ] My changes **should not** be added to the `CHANGELOG.md` for the next release
-    * [ ] Otherwise: I've added my notes to `CHANGELOG.md`
 * [ ] My changes **do not** need to be backported to a previous version
     * [ ] Otherwise: Backport tracked by issue/PR #issue_or_pr
+* [ ] My changes are added to the `CHANGELOG.md`
 * [ ] I have added all required tests (Unit tests, E2E tests)
 
 <!-- Optional: delete if not applicable  -->
