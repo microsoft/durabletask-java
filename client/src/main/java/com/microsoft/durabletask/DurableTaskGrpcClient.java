@@ -162,7 +162,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
             response = grpcClient.waitForInstanceStart(request);
         } catch (StatusRuntimeException e) {
             if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
-                throw new TimeoutException("Start orchestration timeout reached");
+                throw new TimeoutException("Start orchestration timeout reached.");
             }
             throw e;
         }
@@ -189,7 +189,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
             response = grpcClient.waitForInstanceCompletion(request);
         } catch (StatusRuntimeException e) {
             if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
-                throw new TimeoutException("Orchestration instance completion timeout reached");
+                throw new TimeoutException("Orchestration instance completion timeout reached.");
             }
             throw e;
         }

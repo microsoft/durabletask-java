@@ -796,6 +796,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     try {
+                        // The orchestration remains in the "Pending" state until the first await statement
                         TimeUnit.SECONDS.sleep(5);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -823,6 +824,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .addActivity(plusOneActivityName, ctx -> {
                     try {
+                        // The orchestration is started but not completed within the orchestration completion timeout due the below activity delay
                         TimeUnit.SECONDS.sleep(5);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
