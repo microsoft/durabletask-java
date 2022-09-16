@@ -332,7 +332,12 @@ public class IntegrationTests extends IntegrationTestBase {
                         .collect(Collectors.toList());
 
                 // Wait for all tasks to complete, then sort and reverse the results
-                List<String> results = ctx.allOf(parallelTasks).await();
+                List<String> results;
+                try {
+                    results = ctx.allOf(parallelTasks).await();
+                } catch (CompositeTaskFailedException e) {
+                    throw new RuntimeException(e);
+                }
                 Collections.sort(results);
                 Collections.reverse(results);
                 ctx.complete(results);
@@ -838,6 +843,42 @@ public class IntegrationTests extends IntegrationTestBase {
             client.createTaskHub(true);
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             assertThrows(TimeoutException.class, () -> client.waitForInstanceCompletion(instanceId, Duration.ofSeconds(2), false));
+        }
+    }
+
+    @Test
+    void activityFanOutWithException() {
+        final String orchestratorName = "ActivityFanOut";
+        final String activityName = "Divide";
+        final int activityCount = 10;
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    // Schedule each task to run in parallel
+                    List<Task<Integer>> parallelTasks = IntStream.range(0, activityCount)
+                            .mapToObj(i -> ctx.callActivity(activityName, i, Integer.class))
+                            .collect(Collectors.toList());
+
+                    // Wait for all tasks to complete
+                    List<Integer> results;
+                    try {
+                        results = ctx.allOf(parallelTasks).await();
+                        ctx.complete(results);
+                    } catch (CompositeTaskFailedException e) {
+                        e.printStackTrace();
+                    } catch (Exception e){
+                        e.printStackTrace();
+                    }
+                })
+                .addActivity(activityName, ctx -> activityCount / ctx.getInput(Integer.class))
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
         }
     }
 }

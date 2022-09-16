@@ -14,8 +14,6 @@ import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.logging.Logger;
 
@@ -166,30 +164,39 @@ final class TaskOrchestrationExecutor {
         }
 
         @Override
-        public <V> Task<List<V>> allOf(List<Task<V>> tasks) {
+        public <V> Task<List<V>> allOf(List<Task<V>> tasks) throws CompositeTaskFailedException{
             Helpers.throwIfArgumentNull(tasks, "tasks");
 
             CompletableFuture<V>[] futures = tasks.stream()
                     .map(t -> t.future)
                     .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
 
-            return new CompletableTask<>(CompletableFuture.allOf(futures).thenApply(x -> {
+//            List<Exception> exceptions = new ArrayList<>(futures.length);
+
+            CompletableTask<List<V>> completableTask = new CompletableTask<>(CompletableFuture.allOf(futures).thenApply(x -> {
                 ArrayList<V> results = new ArrayList<>(futures.length);
+                List<Exception> exceptions = new ArrayList<>(futures.length);
 
                 // All futures are expected to be completed at this point
                 for (CompletableFuture<V> cf : futures) {
                     try {
                         results.add(cf.get());
                     } catch (Exception ex) {
-                        // TODO: Better exception message than this
-                        // TODO: This needs to be a TaskFailedException or some other documented exception type.
-                        //       https://github.com/microsoft/durabletask-java/issues/54
-                        throw new RuntimeException("One or more tasks failed.", ex);
+                        exceptions.add(ex);
                     }
+                }
+
+                if(exceptions.size() > 0){
+                    throw new CompositeTaskFailedException("One or more tasks failed.", exceptions);
                 }
 
                 return results;
             }));
+
+//            if(exceptions.size() > 0){
+//                throw new CompositeTaskFailedException("One or more tasks failed.", exceptions);
+//            }
+            return completableTask;
         }
 
         @Override
