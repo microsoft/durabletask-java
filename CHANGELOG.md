@@ -3,6 +3,8 @@
 ### New
 
 * Add CHANGELOG.md file to track changes across versions
+* context.allOf() throws CompositeTaskFailedException(RuntimeException) when one or more tasks fail ([#54](https://github.com/microsoft/durabletask-java/issues/54))
+
 
 ### Updates
 

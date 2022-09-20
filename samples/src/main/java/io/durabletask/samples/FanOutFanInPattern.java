@@ -71,12 +71,7 @@ class FanOutFanInPattern {
                             .collect(Collectors.toList());
 
                     // Fan-in to get the total word count from all the individual activity results.
-                    List<Integer> allWordCountResults;
-                    try {
-                        allWordCountResults = ctx.allOf(tasks).await();
-                    } catch (CompositeTaskFailedException e) {
-                        throw new RuntimeException(e);
-                    }
+                    List<Integer> allWordCountResults = ctx.allOf(tasks).await();
                     int totalWordCount = allWordCountResults.stream().mapToInt(Integer::intValue).sum();
 
                     // Save the final result as the orchestration output.

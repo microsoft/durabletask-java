@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -332,12 +333,7 @@ public class IntegrationTests extends IntegrationTestBase {
                         .collect(Collectors.toList());
 
                 // Wait for all tasks to complete, then sort and reverse the results
-                List<String> results;
-                try {
-                    results = ctx.allOf(parallelTasks).await();
-                } catch (CompositeTaskFailedException e) {
-                    throw new RuntimeException(e);
-                }
+                List<String> results = ctx.allOf(parallelTasks).await();
                 Collections.sort(results);
                 Collections.reverse(results);
                 ctx.complete(results);
@@ -850,27 +846,32 @@ public class IntegrationTests extends IntegrationTestBase {
     void activityFanOutWithException() {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "Divide";
-        final int activityCount = 10;
+        final int count = 10;
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
                     // Schedule each task to run in parallel
-                    List<Task<Integer>> parallelTasks = IntStream.range(0, activityCount)
+                    List<Task<Integer>> parallelTasks = IntStream.of(1,2,0,4,0,6)
                             .mapToObj(i -> ctx.callActivity(activityName, i, Integer.class))
                             .collect(Collectors.toList());
 
                     // Wait for all tasks to complete
-                    List<Integer> results;
                     try {
-                        results = ctx.allOf(parallelTasks).await();
+                        List<Integer> results = ctx.allOf(parallelTasks).await();
                         ctx.complete(results);
-                    } catch (CompositeTaskFailedException e) {
-                        e.printStackTrace();
-                    } catch (Exception e){
-                        e.printStackTrace();
+                    }catch (CompositeTaskFailedException e){
+                        assertNotNull(e);
+                        assertEquals(2, e.getExceptions().size());
+                        assertEquals(ExecutionException.class, e.getExceptions().get(0).getClass());
+                        assertEquals(ExecutionException.class, e.getExceptions().get(1).getClass());
+                        assertEquals(TaskFailedException.class, e.getExceptions().get(0).getCause().getClass());
+                        assertEquals(TaskFailedException.class, e.getExceptions().get(1).getCause().getClass());
+                        assertTrue(e.getExceptions().get(0).getCause().getMessage().contains("unhandled exception: / by zero"));
+                        assertTrue(e.getExceptions().get(1).getCause().getMessage().contains("unhandled exception: / by zero"));
+                        throw e;
                     }
                 })
-                .addActivity(activityName, ctx -> activityCount / ctx.getInput(Integer.class))
+                .addActivity(activityName, ctx -> count / ctx.getInput(Integer.class))
                 .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
@@ -879,6 +880,15 @@ public class IntegrationTests extends IntegrationTestBase {
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            List<?> output = instance.readOutputAs(List.class);
+            assertNull(output);
+
+            FailureDetails details = instance.getFailureDetails();
+            assertNotNull(details);
+            assertEquals("One or more tasks failed.", details.getErrorMessage());
+            assertEquals("com.microsoft.durabletask.CompositeTaskFailedException", details.getErrorType());
+            assertNotNull(details.getStackTrace());
         }
     }
 }

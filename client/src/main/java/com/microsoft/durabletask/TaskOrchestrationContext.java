@@ -80,7 +80,7 @@ public interface TaskOrchestrationContext {
      * @param <V> the return type of the {@code Task} objects
      * @return the values of the completed {@code Task} objects in the same order as the source list
      */
-    <V> Task<List<V>> allOf(List<Task<V>> tasks) throws CompositeTaskFailedException;
+    <V> Task<List<V>> allOf(List<Task<V>> tasks);
 
     /**
      * Returns a new {@code Task} that is completed when any of the tasks in {@code tasks} completes.

@@ -164,39 +164,39 @@ final class TaskOrchestrationExecutor {
         }
 
         @Override
-        public <V> Task<List<V>> allOf(List<Task<V>> tasks) throws CompositeTaskFailedException{
+        public <V> Task<List<V>> allOf(List<Task<V>> tasks) {
             Helpers.throwIfArgumentNull(tasks, "tasks");
 
             CompletableFuture<V>[] futures = tasks.stream()
                     .map(t -> t.future)
                     .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
 
-//            List<Exception> exceptions = new ArrayList<>(futures.length);
+            return new CompletableTask<>(CompletableFuture.allOf(futures)
+                    .thenApply(x -> {
+                        List<V> results = new ArrayList<>(futures.length);
 
-            CompletableTask<List<V>> completableTask = new CompletableTask<>(CompletableFuture.allOf(futures).thenApply(x -> {
-                ArrayList<V> results = new ArrayList<>(futures.length);
-                List<Exception> exceptions = new ArrayList<>(futures.length);
-
-                // All futures are expected to be completed at this point
-                for (CompletableFuture<V> cf : futures) {
-                    try {
-                        results.add(cf.get());
-                    } catch (Exception ex) {
-                        exceptions.add(ex);
-                    }
-                }
-
-                if(exceptions.size() > 0){
-                    throw new CompositeTaskFailedException("One or more tasks failed.", exceptions);
-                }
-
-                return results;
-            }));
-
-//            if(exceptions.size() > 0){
-//                throw new CompositeTaskFailedException("One or more tasks failed.", exceptions);
-//            }
-            return completableTask;
+                        // All futures are expected to be completed at this point
+                        for (CompletableFuture<V> cf : futures) {
+                            try {
+                                results.add(cf.get());
+                            } catch (Exception ex) {
+                                throw new RuntimeException("One or more tasks failed.", ex);
+                            }
+                        }
+                        return results;
+                    })
+                    .exceptionally(throwable -> {
+                        ArrayList<Exception> exceptions = new ArrayList<>(futures.length);
+                        for (CompletableFuture<V> cf : futures) {
+                            try {
+                                cf.get();
+                            } catch (Exception ex) {
+                                exceptions.add(ex);
+                            }
+                        }
+                        throw new CompositeTaskFailedException("One or more tasks failed.", exceptions);
+                    })
+            );
         }
 
         @Override
@@ -1042,6 +1042,10 @@ final class TaskOrchestrationExecutor {
             protected void handleException(Throwable e) throws TaskFailedException {
                 if (e instanceof TaskFailedException) {
                     throw (TaskFailedException)e;
+                }
+
+                if (e instanceof CompositeTaskFailedException) {
+                    throw (CompositeTaskFailedException)e;
                 }
 
                 throw new RuntimeException("Unexpected failure in the task execution", e);
