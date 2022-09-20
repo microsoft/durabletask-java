@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -40,7 +42,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void emptyOrchestration() {
+    void emptyOrchestration() throws TimeoutException {
         final String orchestratorName = "EmptyOrchestration";
         final String input = "Hello " + Instant.now();
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
@@ -63,7 +65,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void singleTimer() throws IOException {
+    void singleTimer() throws IOException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         final Duration delay = Duration.ofSeconds(3);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
@@ -86,7 +88,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void isReplaying() throws IOException, InterruptedException {
+    void isReplaying() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
@@ -122,7 +124,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void singleActivity() throws IOException, InterruptedException {
+    void singleActivity() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "SingleActivity";
         final String activityName = "Echo";
         final String input = Instant.now().toString();
@@ -154,7 +156,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void currentDateTimeUtc() throws IOException {
+    void currentDateTimeUtc() throws IOException, TimeoutException {
         final String orchestratorName = "CurrentDateTimeUtc";
         final String echoActivityName = "Echo";
 
@@ -193,7 +195,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void activityChain() throws IOException {
+    void activityChain() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityChain";
         final String plusOneActivityName = "PlusOne";
 
@@ -220,7 +222,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void subOrchestration(){
+    void subOrchestration() throws TimeoutException {
         final String orchestratorName = "SubOrchestration";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
             int result = 5;
@@ -241,7 +243,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void continueAsNew(){
+    void continueAsNew() throws TimeoutException {
         final String orchestratorName = "continueAsNew";
         final Duration delay = Duration.ofSeconds(0);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
@@ -264,7 +266,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void continueAsNewWithExternalEvents() {
+    void continueAsNewWithExternalEvents() throws TimeoutException {
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
         final int expectedEventCount = 10;
@@ -295,7 +297,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void termination() {
+    void termination() throws TimeoutException {
         final String orchestratorName = "Termination";
         final Duration delay = Duration.ofSeconds(3);
 
@@ -317,7 +319,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void activityFanOut() throws IOException {
+    void activityFanOut() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";
         final int activityCount = 10;
@@ -359,7 +361,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void externalEvents() throws IOException {
+    void externalEvents() throws IOException, TimeoutException {
         final String orchestratorName = "ExternalEvents";
         final String eventName = "MyEvent";
         final int eventCount = 10;
@@ -399,7 +401,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void externalEventsWithTimeouts(boolean raiseEvent) throws IOException {
+    void externalEventsWithTimeouts(boolean raiseEvent) throws IOException, TimeoutException {
         final String orchestratorName = "ExternalEventsWithTimeouts";
         final String eventName = "MyEvent";
 
@@ -437,7 +439,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void setCustomStatus() {
+    void setCustomStatus() throws TimeoutException {
         final String orchestratorName = "SetCustomStatus";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
@@ -470,7 +472,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void clearCustomStatus() {
+    void clearCustomStatus() throws TimeoutException {
         final String orchestratorName = "ClearCustomStatus";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
@@ -499,7 +501,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void multiInstanceQuery() {
+    void multiInstanceQuery() throws TimeoutException{
         final String plusOne = "plusOne";
         final String waitForEvent = "waitForEvent";
         final DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
@@ -528,7 +530,11 @@ public class IntegrationTests extends IntegrationTestBase {
                 client.scheduleNewOrchestrationInstance(plusOne, 0, instanceId);
                 return instanceId;
             }).collect(Collectors.toUnmodifiableList()).forEach(id -> {
-                client.waitForInstanceCompletion(id, defaultTimeout, true);
+                try {
+                    client.waitForInstanceCompletion(id, defaultTimeout, true);
+                } catch (TimeoutException e) {
+                    e.printStackTrace();
+                }
             });
 
             Instant sequencesFinishedTime = Instant.now();
@@ -538,7 +544,11 @@ public class IntegrationTests extends IntegrationTestBase {
                 client.scheduleNewOrchestrationInstance(waitForEvent, String.valueOf(i), instanceId);
                 return instanceId;
             }).collect(Collectors.toUnmodifiableList()).forEach(id -> {
-                client.waitForInstanceStart(id, defaultTimeout);
+                try {
+                    client.waitForInstanceStart(id, defaultTimeout);
+                } catch (TimeoutException e) {
+                    e.printStackTrace();
+                }
             });
 
             // Create one query object and reuse it for multiple queries
@@ -652,7 +662,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void purgeInstanceId() {
+    void purgeInstanceId() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOneActivityName = "PlusOne";
 
@@ -683,7 +693,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void purgeInstanceFilter() {
+    void purgeInstanceFilter() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOne = "PlusOne";
         final String plusTwo = "PlusTwo";
@@ -776,6 +786,58 @@ public class IntegrationTests extends IntegrationTestBase {
             assertFalse(metadata.isInstanceFound());
             metadata = client.getInstanceMetadata(instanceId3, true);
             assertFalse(metadata.isInstanceFound());
+        }
+    }
+
+    @Test()
+    void waitForInstanceStartThrowsException() {
+        final String orchestratorName = "orchestratorName";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    try {
+                        // The orchestration remains in the "Pending" state until the first await statement
+                        TimeUnit.SECONDS.sleep(5);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            assertThrows(TimeoutException.class, () -> client.waitForInstanceStart(instanceId, Duration.ofSeconds(2)));
+        }
+    }
+
+    @Test()
+    void waitForInstanceCompletionThrowsException() {
+        final String orchestratorName = "orchestratorName";
+        final String plusOneActivityName = "PlusOne";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOneActivityName, value, int.class).await();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOneActivityName, ctx -> {
+                    try {
+                        // The orchestration is started but not completed within the orchestration completion timeout due the below activity delay
+                        TimeUnit.SECONDS.sleep(5);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    return ctx.getInput(int.class) + 1;
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            client.createTaskHub(true);
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            assertThrows(TimeoutException.class, () -> client.waitForInstanceCompletion(instanceId, Duration.ofSeconds(2), false));
         }
     }
 }

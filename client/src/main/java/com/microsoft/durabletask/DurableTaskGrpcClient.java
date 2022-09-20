@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
 /**
@@ -142,7 +143,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
-    public OrchestrationMetadata waitForInstanceStart(String instanceId, Duration timeout, boolean getInputsAndOutputs) {
+    public OrchestrationMetadata waitForInstanceStart(String instanceId, Duration timeout, boolean getInputsAndOutputs) throws TimeoutException {
         GetInstanceRequest request = GetInstanceRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .setGetInputsAndOutputs(getInputsAndOutputs)
@@ -155,12 +156,21 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
                 timeout.toMillis(),
                 TimeUnit.MILLISECONDS);
-        GetInstanceResponse response = grpcClient.waitForInstanceStart(request);
+
+        GetInstanceResponse response;
+        try {
+            response = grpcClient.waitForInstanceStart(request);
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                throw new TimeoutException("Start orchestration timeout reached.");
+            }
+            throw e;
+        }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
     @Override
-    public OrchestrationMetadata waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs) {
+    public OrchestrationMetadata waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs) throws TimeoutException {
         GetInstanceRequest request = GetInstanceRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .setGetInputsAndOutputs(getInputsAndOutputs)
@@ -173,7 +183,16 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
                 timeout.toMillis(),
                 TimeUnit.MILLISECONDS);
-        GetInstanceResponse response = grpcClient.waitForInstanceCompletion(request);
+
+        GetInstanceResponse response;
+        try {
+            response = grpcClient.waitForInstanceCompletion(request);
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                throw new TimeoutException("Orchestration instance completion timeout reached.");
+            }
+            throw e;
+        }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 

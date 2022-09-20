@@ -9,6 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -24,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("integration")
 public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     @Test
-    void orchestratorException() {
+    void orchestratorException() throws TimeoutException {
         final String orchestratorName = "OrchestratorWithException";
         final String errorMessage = "Kah-BOOOOOM!!!";
 
@@ -51,7 +52,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void activityException(boolean handleException) {
+    void activityException(boolean handleException) throws TimeoutException {
         final String orchestratorName = "OrchestratorWithActivityException";
         final String activityName = "Throw";
         final String errorMessage = "Kah-BOOOOOM!!!";
@@ -103,7 +104,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
-    public void retryActivityFailures(int maxNumberOfAttempts) {
+    public void retryActivityFailures(int maxNumberOfAttempts) throws TimeoutException {
         // There is one task for each activity call and one task between each retry
         int expectedTaskCount = (maxNumberOfAttempts * 2) - 1;
         this.retryOnFailuresCoreTest(maxNumberOfAttempts, expectedTaskCount, ctx -> {
@@ -117,7 +118,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
-    public void retryActivityFailuresWithCustomLogic(int maxNumberOfAttempts) {
+    public void retryActivityFailuresWithCustomLogic(int maxNumberOfAttempts) throws TimeoutException {
         // This gets incremented every time the retry handler is invoked
         AtomicInteger retryHandlerCalls = new AtomicInteger();
 
@@ -134,7 +135,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void subOrchestrationException(boolean handleException){
+    void subOrchestrationException(boolean handleException) throws TimeoutException {
         final String orchestratorName = "OrchestrationWithBustedSubOrchestrator";
         final String subOrchestratorName = "BustedSubOrchestrator";
         final String errorMessage = "Kah-BOOOOOM!!!";
@@ -184,7 +185,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
-    public void retrySubOrchestratorFailures(int maxNumberOfAttempts) {
+    public void retrySubOrchestratorFailures(int maxNumberOfAttempts) throws TimeoutException {
         // There is one task for each sub-orchestrator call and one task between each retry
         int expectedTaskCount = (maxNumberOfAttempts * 2) - 1;
         this.retryOnFailuresCoreTest(maxNumberOfAttempts, expectedTaskCount, ctx -> {
@@ -199,7 +200,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
-    public void retrySubOrchestrationFailuresWithCustomLogic(int maxNumberOfAttempts) {
+    public void retrySubOrchestrationFailuresWithCustomLogic(int maxNumberOfAttempts) throws TimeoutException {
         // This gets incremented every time the retry handler is invoked
         AtomicInteger retryHandlerCalls = new AtomicInteger();
 
@@ -252,7 +253,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     private FailureDetails retryOnFailuresCoreTest(
             int maxNumberOfAttempts,
             int expectedTaskCount,
-            TaskOrchestration mainOrchestration) {
+            TaskOrchestration mainOrchestration) throws TimeoutException {
         final String orchestratorName = "MainOrchestrator";
 
         AtomicInteger actualAttemptCount = new AtomicInteger();
