@@ -190,11 +190,13 @@ final class TaskOrchestrationExecutor {
                         for (CompletableFuture<V> cf : futures) {
                             try {
                                 cf.get();
-                            } catch (Exception ex) {
+                            } catch (ExecutionException ex) {
+                                exceptions.add((Exception) ex.getCause());
+                            } catch (Exception ex){
                                 exceptions.add(ex);
                             }
                         }
-                        throw new CompositeTaskFailedException(exceptions.get(0).getCause().getMessage(), exceptions);
+                        throw new CompositeTaskFailedException(exceptions.get(0).getMessage(), exceptions);
                     })
             );
         }

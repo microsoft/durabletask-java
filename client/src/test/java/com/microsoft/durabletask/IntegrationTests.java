@@ -862,13 +862,11 @@ public class IntegrationTests extends IntegrationTestBase {
                     }catch (CompositeTaskFailedException e){
                         assertNotNull(e);
                         assertEquals(2, e.getExceptions().size());
-                        assertEquals(ExecutionException.class, e.getExceptions().get(0).getClass());
-                        assertEquals(ExecutionException.class, e.getExceptions().get(1).getClass());
-                        assertEquals(TaskFailedException.class, e.getExceptions().get(0).getCause().getClass());
-                        assertEquals(TaskFailedException.class, e.getExceptions().get(1).getCause().getClass());
+                        assertEquals(TaskFailedException.class, e.getExceptions().get(0).getClass());
+                        assertEquals(TaskFailedException.class, e.getExceptions().get(1).getClass());
                         // taskId in the exception below is based on parallelTasks input
-                        assertEquals(getExceptionMessage(activityName, 2, "/ by zero"), e.getExceptions().get(0).getCause().getMessage());
-                        assertEquals(getExceptionMessage(activityName, 4, "/ by zero"), e.getExceptions().get(1).getCause().getMessage());
+                        assertEquals(getExceptionMessage(activityName, 2, "/ by zero"), e.getExceptions().get(0).getMessage());
+                        assertEquals(getExceptionMessage(activityName, 4, "/ by zero"), e.getExceptions().get(1).getMessage());
                         throw e;
                     }
                 })
