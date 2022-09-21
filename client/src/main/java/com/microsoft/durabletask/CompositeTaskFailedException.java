@@ -49,7 +49,7 @@ public class CompositeTaskFailedException extends RuntimeException {
      *
      * @return a list of exceptions
      */
-    List<Exception> getExceptions() {
+    public List<Exception> getExceptions() {
         return new ArrayList<>(this.exceptions);
     }
 

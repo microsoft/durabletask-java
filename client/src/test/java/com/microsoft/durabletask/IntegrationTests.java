@@ -866,8 +866,9 @@ public class IntegrationTests extends IntegrationTestBase {
                         assertEquals(ExecutionException.class, e.getExceptions().get(1).getClass());
                         assertEquals(TaskFailedException.class, e.getExceptions().get(0).getCause().getClass());
                         assertEquals(TaskFailedException.class, e.getExceptions().get(1).getCause().getClass());
-                        assertTrue(e.getExceptions().get(0).getCause().getMessage().contains("unhandled exception: / by zero"));
-                        assertTrue(e.getExceptions().get(1).getCause().getMessage().contains("unhandled exception: / by zero"));
+                        // taskId in the exception below is based on parallelTasks input
+                        assertEquals(getExceptionMessage(activityName, 2, "/ by zero"), e.getExceptions().get(0).getCause().getMessage());
+                        assertEquals(getExceptionMessage(activityName, 4, "/ by zero"), e.getExceptions().get(1).getCause().getMessage());
                         throw e;
                     }
                 })
@@ -886,9 +887,16 @@ public class IntegrationTests extends IntegrationTestBase {
 
             FailureDetails details = instance.getFailureDetails();
             assertNotNull(details);
-            assertEquals("One or more tasks failed.", details.getErrorMessage());
+            assertEquals(getExceptionMessage(activityName, 2, "/ by zero"), details.getErrorMessage());
             assertEquals("com.microsoft.durabletask.CompositeTaskFailedException", details.getErrorType());
             assertNotNull(details.getStackTrace());
         }
+    }
+    private static String getExceptionMessage(String taskName, int expectedTaskId, String expectedExceptionMessage) {
+        return String.format(
+                "Task '%s' (#%d) failed with an unhandled exception: %s",
+                taskName,
+                expectedTaskId,
+                expectedExceptionMessage);
     }
 }

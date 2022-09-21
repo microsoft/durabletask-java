@@ -180,7 +180,7 @@ final class TaskOrchestrationExecutor {
                             try {
                                 results.add(cf.get());
                             } catch (Exception ex) {
-                                throw new RuntimeException("One or more tasks failed.", ex);
+                                results.add(null);
                             }
                         }
                         return results;
@@ -194,7 +194,7 @@ final class TaskOrchestrationExecutor {
                                 exceptions.add(ex);
                             }
                         }
-                        throw new CompositeTaskFailedException("One or more tasks failed.", exceptions);
+                        throw new CompositeTaskFailedException(exceptions.get(0).getCause().getMessage(), exceptions);
                     })
             );
         }
