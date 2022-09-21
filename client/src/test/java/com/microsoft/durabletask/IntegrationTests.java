@@ -843,7 +843,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void activityFanOutWithException() {
+    void activityFanOutWithException() throws TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "Divide";
         final int count = 10;
