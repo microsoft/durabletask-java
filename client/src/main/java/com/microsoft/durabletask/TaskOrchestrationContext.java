@@ -81,8 +81,8 @@ public interface TaskOrchestrationContext {
      * <pre>{@code
      * try {
      *     List<String> orderedResults = ctx.allOf(List.of(t1, t2, t3)).await();
-     * } catch{
-     *     e.getExceptions()
+     * } catch (CompositeTaskFailedException e) {
+     *     List<Exception> exceptions = e.getExceptions()
      * }
      * }</pre>
      *
