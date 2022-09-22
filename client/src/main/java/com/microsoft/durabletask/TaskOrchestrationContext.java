@@ -61,7 +61,7 @@ public interface TaskOrchestrationContext {
     //       https://github.com/microsoft/durabletask-java/issues/54
     /**
      * Returns a new {@code Task} that is completed when all the given {@code Task}s complete. If any of the given
-     * {@code Task}s complete with an exception, the returned {@code Task} will also complete with an exception
+     * {@code Task}s complete with an exception, the returned {@code Task} will also complete with an {@link CompositeTaskFailedException}
      * containing details of the first encountered failure. The value of the returned {@code Task} is an ordered list of
      * the return values of the given tasks. If no tasks are provided, returns a {@code Task} completed with value
      * {@code null}.
@@ -74,6 +74,16 @@ public interface TaskOrchestrationContext {
      * Task<String> t3 = ctx.callActivity("MyActivity", String.class);
      *
      * List<String> orderedResults = ctx.allOf(List.of(t1, t2, t3)).await();
+     * }</pre>
+     *
+     * Exceptions in any of the given tasks results in an unchecked {@link CompositeTaskFailedException}.
+     * This exception can be inspected to obtain failure details of individual {@link Task}s.
+     * <pre>{@code
+     * try {
+     *     List<String> orderedResults = ctx.allOf(List.of(t1, t2, t3)).await();
+     * } catch (CompositeTaskFailedException e) {
+     *     List<Exception> exceptions = e.getExceptions()
+     * }
      * }</pre>
      *
      * @param tasks the list of {@code Task} objects

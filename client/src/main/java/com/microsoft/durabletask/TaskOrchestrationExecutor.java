@@ -14,8 +14,6 @@ import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.logging.Logger;
 
@@ -173,23 +171,39 @@ final class TaskOrchestrationExecutor {
                     .map(t -> t.future)
                     .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
 
-            return new CompletableTask<>(CompletableFuture.allOf(futures).thenApply(x -> {
-                ArrayList<V> results = new ArrayList<>(futures.length);
+            return new CompletableTask<>(CompletableFuture.allOf(futures)
+                    .thenApply(x -> {
+                        List<V> results = new ArrayList<>(futures.length);
 
-                // All futures are expected to be completed at this point
-                for (CompletableFuture<V> cf : futures) {
-                    try {
-                        results.add(cf.get());
-                    } catch (Exception ex) {
-                        // TODO: Better exception message than this
-                        // TODO: This needs to be a TaskFailedException or some other documented exception type.
-                        //       https://github.com/microsoft/durabletask-java/issues/54
-                        throw new RuntimeException("One or more tasks failed.", ex);
-                    }
-                }
-
-                return results;
-            }));
+                        // All futures are expected to be completed at this point
+                        for (CompletableFuture<V> cf : futures) {
+                            try {
+                                results.add(cf.get());
+                            } catch (Exception ex) {
+                                results.add(null);
+                            }
+                        }
+                        return results;
+                    })
+                    .exceptionally(throwable -> {
+                        ArrayList<Exception> exceptions = new ArrayList<>(futures.length);
+                        for (CompletableFuture<V> cf : futures) {
+                            try {
+                                cf.get();
+                            } catch (ExecutionException ex) {
+                                exceptions.add((Exception) ex.getCause());
+                            } catch (Exception ex){
+                                exceptions.add(ex);
+                            }
+                        }
+                        throw new CompositeTaskFailedException(
+                                String.format(
+                                        "%d out of %d tasks failed with an exception. See the exceptions list for details.",
+                                        exceptions.size(),
+                                        futures.length),
+                                exceptions);
+                    })
+            );
         }
 
         @Override
@@ -1035,6 +1049,10 @@ final class TaskOrchestrationExecutor {
             protected void handleException(Throwable e) throws TaskFailedException {
                 if (e instanceof TaskFailedException) {
                     throw (TaskFailedException)e;
+                }
+
+                if (e instanceof CompositeTaskFailedException) {
+                    throw (CompositeTaskFailedException)e;
                 }
 
                 throw new RuntimeException("Unexpected failure in the task execution", e);

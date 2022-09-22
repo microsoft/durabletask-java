@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -839,5 +840,62 @@ public class IntegrationTests extends IntegrationTestBase {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             assertThrows(TimeoutException.class, () -> client.waitForInstanceCompletion(instanceId, Duration.ofSeconds(2), false));
         }
+    }
+
+    @Test
+    void activityFanOutWithException() throws TimeoutException {
+        final String orchestratorName = "ActivityFanOut";
+        final String activityName = "Divide";
+        final int count = 10;
+        final String exceptionMessage = "2 out of 6 tasks failed with an exception. See the exceptions list for details.";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    // Schedule each task to run in parallel
+                    List<Task<Integer>> parallelTasks = IntStream.of(1,2,0,4,0,6)
+                            .mapToObj(i -> ctx.callActivity(activityName, i, Integer.class))
+                            .collect(Collectors.toList());
+
+                    // Wait for all tasks to complete
+                    try {
+                        List<Integer> results = ctx.allOf(parallelTasks).await();
+                        ctx.complete(results);
+                    }catch (CompositeTaskFailedException e){
+                        assertNotNull(e);
+                        assertEquals(2, e.getExceptions().size());
+                        assertEquals(TaskFailedException.class, e.getExceptions().get(0).getClass());
+                        assertEquals(TaskFailedException.class, e.getExceptions().get(1).getClass());
+                        // taskId in the exception below is based on parallelTasks input
+                        assertEquals(getExceptionMessage(activityName, 2, "/ by zero"), e.getExceptions().get(0).getMessage());
+                        assertEquals(getExceptionMessage(activityName, 4, "/ by zero"), e.getExceptions().get(1).getMessage());
+                        throw e;
+                    }
+                })
+                .addActivity(activityName, ctx -> count / ctx.getInput(Integer.class))
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            List<?> output = instance.readOutputAs(List.class);
+            assertNull(output);
+
+            FailureDetails details = instance.getFailureDetails();
+            assertNotNull(details);
+            assertEquals(exceptionMessage, details.getErrorMessage());
+            assertEquals("com.microsoft.durabletask.CompositeTaskFailedException", details.getErrorType());
+            assertNotNull(details.getStackTrace());
+        }
+    }
+    private static String getExceptionMessage(String taskName, int expectedTaskId, String expectedExceptionMessage) {
+        return String.format(
+                "Task '%s' (#%d) failed with an unhandled exception: %s",
+                taskName,
+                expectedTaskId,
+                expectedExceptionMessage);
     }
 }
