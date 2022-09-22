@@ -196,7 +196,12 @@ final class TaskOrchestrationExecutor {
                                 exceptions.add(ex);
                             }
                         }
-                        throw new CompositeTaskFailedException(exceptions.get(0).getMessage(), exceptions);
+                        throw new CompositeTaskFailedException(
+                                String.format(
+                                        "%d out of %d tasks failed with an exception. See the exceptions list for details.",
+                                        exceptions.size(),
+                                        futures.length),
+                                exceptions);
                     })
             );
         }

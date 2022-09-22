@@ -847,6 +847,7 @@ public class IntegrationTests extends IntegrationTestBase {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "Divide";
         final int count = 10;
+        final String exceptionMessage = "2 out of 6 tasks failed with an exception. See the exceptions list for details.";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -885,7 +886,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
             FailureDetails details = instance.getFailureDetails();
             assertNotNull(details);
-            assertEquals(getExceptionMessage(activityName, 2, "/ by zero"), details.getErrorMessage());
+            assertEquals(exceptionMessage, details.getErrorMessage());
             assertEquals("com.microsoft.durabletask.CompositeTaskFailedException", details.getErrorType());
             assertNotNull(details.getStackTrace());
         }
