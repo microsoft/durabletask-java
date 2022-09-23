@@ -10,6 +10,7 @@ import com.microsoft.durabletask.TaskFailedException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Parameter;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Durable Function Orchestration Middleware
@@ -23,15 +24,15 @@ public class OrchestrationMiddleware implements FunctionWorkerMiddleware {
 
     @Override
     public void invoke(MiddlewareContext context, FunctionWorkerChain next) throws Exception {
-        Pair pair = isOrchestrationTrigger(context);
-        if (!pair.isOrchestrationTrigger){
+        Optional<String> parameterName = context.getParameterName(ORCHESTRATION_TRIGGER);
+        if (!parameterName.isPresent()){
             next.doNext(context);
             return;
         }
-        String orchestratorRequestProtoBytes = (String) context.getParameterPayloadByName(pair.parameterName);
+        String orchestratorRequestProtoBytes = (String) context.getParameterPayloadByName(parameterName.get());
         String orchestratorOutput  = OrchestrationRunner.loadAndRun(orchestratorRequestProtoBytes, ctx -> {
             try {
-                context.updateParameterPayloadByName(pair.parameterName, ctx);
+                context.updateParameterPayloadByName(parameterName.get(), ctx);
                 next.doNext(context);
                 return context.getReturnValue();
             } catch (Exception e) {
@@ -43,34 +44,5 @@ public class OrchestrationMiddleware implements FunctionWorkerMiddleware {
             }
         });
         context.setMiddlewareOutput(orchestratorOutput);
-    }
-
-    private static Pair isOrchestrationTrigger(MiddlewareContext context) {
-        for (Map.Entry<String, Parameter> entry : context.getParameterMap().entrySet()){
-            if (isOrchestrationTrigger(entry.getValue())){
-                return new Pair(true, entry.getKey());
-            }
-        }
-        return new Pair(false, null);
-    }
-
-    private static boolean isOrchestrationTrigger(Parameter parameter){
-        Annotation[] annotations = parameter.getAnnotations();
-        for (Annotation annotation : annotations) {
-            if(annotation.annotationType().getSimpleName().equals(ORCHESTRATION_TRIGGER)){
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static class Pair{
-        private final boolean isOrchestrationTrigger;
-        private final String parameterName;
-
-        private Pair(boolean isOrchestrationTrigger, String parameterName) {
-            this.isOrchestrationTrigger = isOrchestrationTrigger;
-            this.parameterName = parameterName;
-        }
     }
 }
