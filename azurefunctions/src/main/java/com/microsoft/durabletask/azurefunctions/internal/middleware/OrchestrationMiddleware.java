@@ -1,15 +1,10 @@
 package com.microsoft.durabletask.azurefunctions.internal.middleware;
 
 import com.microsoft.azure.functions.internal.MiddlewareContext;
-import com.microsoft.azure.functions.middleware.FunctionWorkerChain;
+import com.microsoft.azure.functions.middleware.FunctionMiddlewareChain;
 import com.microsoft.azure.functions.middleware.FunctionWorkerMiddleware;
 import com.microsoft.durabletask.OrchestrationRunner;
 import com.microsoft.durabletask.OrchestratorBlockedEvent;
-import com.microsoft.durabletask.TaskFailedException;
-
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Parameter;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -23,7 +18,7 @@ public class OrchestrationMiddleware implements FunctionWorkerMiddleware {
     private static final String ORCHESTRATION_TRIGGER = "DurableOrchestrationTrigger";
 
     @Override
-    public void invoke(MiddlewareContext context, FunctionWorkerChain next) throws Exception {
+    public void invoke(MiddlewareContext context, FunctionMiddlewareChain next) throws Exception {
         Optional<String> parameterName = context.getParameterName(ORCHESTRATION_TRIGGER);
         if (!parameterName.isPresent()){
             next.doNext(context);
