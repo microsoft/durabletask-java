@@ -34,19 +34,6 @@ public class AzureFunctions {
      * This is the orchestrator function. The OrchestrationRunner.loadAndRun() static
      * method is used to take the function input and execute the orchestrator logic.
      */
-//    @FunctionName("Cities")
-//    public String citiesOrchestrator(
-//            @DurableOrchestrationTrigger(name = "orchestratorRequestProtoBytes") String orchestratorRequestProtoBytes) {
-//        return OrchestrationRunner.loadAndRun(orchestratorRequestProtoBytes, ctx -> {
-//            String result = "";
-//            result += ctx.callActivity("Capitalize", "Tokyo", String.class).await() + ", ";
-//            result += ctx.callActivity("Capitalize", "London", String.class).await() + ", ";
-//            result += ctx.callActivity("Capitalize", "Seattle", String.class).await() + ", ";
-//            result += ctx.callActivity("Capitalize", "Austin", String.class).await();
-//            return result;
-//        });
-//    }
-
     @FunctionName("Cities")
     public String citiesOrchestrator(
             @DurableOrchestrationTrigger(name = "taskOrchestrationContext") TaskOrchestrationContext ctx)
