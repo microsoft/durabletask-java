@@ -23,17 +23,17 @@ public class OrchestrationMiddleware implements Middleware {
     private static final String ORCHESTRATION_TRIGGER = "DurableOrchestrationTrigger";
 
     @Override
-    public void invoke(MiddlewareContext context, MiddlewareChain next) throws Exception {
+    public void invoke(MiddlewareContext context, MiddlewareChain chain) throws Exception {
         String parameterName = context.getParameterName(ORCHESTRATION_TRIGGER);
         if (parameterName == null){
-            next.doNext(context);
+            chain.doNext(context);
             return;
         }
-        String orchestratorRequestProtoBytes = (String) context.getParameterValue(parameterName);
-        String orchestratorOutput  = OrchestrationRunner.loadAndRun(orchestratorRequestProtoBytes, ctx -> {
+        String orchestratorRequestEncodedProtoBytes = (String) context.getParameterValue(parameterName);
+        String orchestratorOutputEncodedProtoBytes  = OrchestrationRunner.loadAndRun(orchestratorRequestEncodedProtoBytes, ctx -> {
             try {
                 context.updateParameterValue(parameterName, ctx);
-                next.doNext(context);
+                chain.doNext(context);
                 return context.getReturnValue();
             } catch (Exception e) {
                 // The OrchestratorBlockedEvent will be wrapped into InvocationTargetException by using reflection to
@@ -45,6 +45,6 @@ public class OrchestrationMiddleware implements Middleware {
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }
         });
-        context.setReturnValue(orchestratorOutput);
+        context.updateReturnValue(orchestratorOutputEncodedProtoBytes);
     }
 }
