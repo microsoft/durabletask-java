@@ -30,9 +30,9 @@ public class OrchestrationMiddleware implements Middleware {
             return;
         }
         String orchestratorRequestEncodedProtoBytes = (String) context.getParameterValue(parameterName);
-        String orchestratorOutputEncodedProtoBytes  = OrchestrationRunner.loadAndRun(orchestratorRequestEncodedProtoBytes, ctx -> {
+        String orchestratorOutputEncodedProtoBytes = OrchestrationRunner.loadAndRun(orchestratorRequestEncodedProtoBytes, taskOrchestrationContext -> {
             try {
-                context.updateParameterValue(parameterName, ctx);
+                context.updateParameterValue(parameterName, taskOrchestrationContext);
                 chain.doNext(context);
                 return context.getReturnValue();
             } catch (Exception e) {
