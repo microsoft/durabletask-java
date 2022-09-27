@@ -24,10 +24,10 @@ public class OrchestrationMiddleware implements FunctionWorkerMiddleware {
             next.doNext(context);
             return;
         }
-        String orchestratorRequestProtoBytes = (String) context.getParameterPayloadByName(parameterName.get());
+        String orchestratorRequestProtoBytes = (String) context.getParameterValue(parameterName.get());
         String orchestratorOutput  = OrchestrationRunner.loadAndRun(orchestratorRequestProtoBytes, ctx -> {
             try {
-                context.updateParameterPayloadByName(parameterName.get(), ctx);
+                context.updateParameterValue(parameterName.get(), ctx);
                 next.doNext(context);
                 return context.getReturnValue();
             } catch (Exception e) {
@@ -38,6 +38,6 @@ public class OrchestrationMiddleware implements FunctionWorkerMiddleware {
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }
         });
-        context.setMiddlewareOutput(orchestratorOutput);
+        context.setReturnValue(orchestratorOutput);
     }
 }
