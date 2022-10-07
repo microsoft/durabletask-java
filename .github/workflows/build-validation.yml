@@ -83,7 +83,7 @@ jobs:
         continue-on-error: true
       - name: Download azure functions java library # TODO: Remove this step once gradle plugin is updated
         run: |
-          wget -P samples-azure-functions/build/azure-functions/azure-functions-sample/lib/ "https://repo.maven.apache.org/maven2/com/microsoft/azure/functions/azure-functions-java-library/2.0.1/azure-functions-java-library-2.0.1.jar" --show-progress
+          wget -P samples-azure-functions/build/azure-functions/azure-functions-sample/lib/ "https://repo.maven.apache.org/maven2/com/microsoft/azure/functions/azure-functions-java-library/2.1.0/azure-functions-java-library-2.1.0.jar" --show-progress
       - name: Run azure functions test
         run: samples-azure-functions/e2e-test.ps1 -DockerfilePath samples-azure-functions/Dockerfile -HttpStartPath api/StartOrchestration
         shell: pwsh
