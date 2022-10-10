@@ -18,8 +18,6 @@ public interface OrchestratorFunction<R> {
      * @param ctx the orchestration context, which provides access to additional context for the current orchestration
      *            execution
      * @return the serializable output of the orchestrator function
-     * @throws OrchestratorBlockedEvent when the orchestrator blocks on an uncompleted task, which is a normal occurrence
-     * @throws TaskFailedException when a task fails with an unhandled exception
      */
-    R apply(TaskOrchestrationContext ctx) throws OrchestratorBlockedEvent, TaskFailedException;
+    R apply(TaskOrchestrationContext ctx);
 }
