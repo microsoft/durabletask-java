@@ -66,8 +66,6 @@ public interface TaskOrchestration {
      *
      * @param ctx provides access to methods for scheduling durable tasks and getting information about the current
      *            orchestration instance.
-     * @throws TaskFailedException when an orchestrator fails with an unhandled exception
-     * @throws OrchestratorBlockedEvent when the orchestrator blocks on an uncompleted task, which is a normal occurrence
      */
-    void run(TaskOrchestrationContext ctx) throws TaskFailedException, OrchestratorBlockedEvent;
+    void run(TaskOrchestrationContext ctx);
 }

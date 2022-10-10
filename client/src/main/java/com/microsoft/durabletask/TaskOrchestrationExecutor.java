@@ -42,13 +42,13 @@ final class TaskOrchestrationExecutor {
             // or we receive a yield signal
             while (context.processNextEvent()) { /* no method body */ }
             completed = true;
+        } catch (OrchestratorBlockedException orchestratorBlockedException) {
+            logger.fine("The orchestrator has yielded and will await for new events.");
         } catch (Exception e) {
             // The orchestrator threw an unhandled exception - fail it
             // TODO: What's the right way to log this?
             logger.warning("The orchestrator failed with an unhandled exception: " + e.toString());
             context.fail(new FailureDetails(e));
-        } catch (OrchestratorBlockedEvent orchestratorBlockedEvent) {
-            logger.fine("The orchestrator has yielded and will await for new events.");
         }
 
         if (context.continuedAsNew || (completed && context.pendingActions.isEmpty() && !context.waitingForEvents())) {
@@ -712,11 +712,11 @@ final class TaskOrchestrationExecutor {
             return this.outstandingEvents.size() > 0;
         }
 
-        private boolean processNextEvent() throws TaskFailedException, OrchestratorBlockedEvent {
+        private boolean processNextEvent() {
             return this.historyEventPlayer.moveNext();
         }
 
-        private void processEvent(HistoryEvent e) throws TaskFailedException, OrchestratorBlockedEvent {
+        private void processEvent(HistoryEvent e) {
             switch (e.getEventTypeCase()) {
                 case ORCHESTRATORSTARTED:
                     Instant instant = DataConverter.getInstantFromTimestamp(e.getTimestamp());
@@ -826,7 +826,7 @@ final class TaskOrchestrationExecutor {
                 this.currentHistoryList = pastEvents;
             }
 
-            public boolean moveNext() throws TaskFailedException, OrchestratorBlockedEvent {
+            public boolean moveNext() {
                 if (this.currentHistoryList == pastEvents && this.currentHistoryIndex >= pastEvents.size()) {
                     // Move forward to the next list
                     this.currentHistoryList = this.newEvents;
@@ -860,7 +860,7 @@ final class TaskOrchestrationExecutor {
 
             // TODO: Shouldn't this be throws TaskCanceledException?
             @Override
-            protected void handleException(Throwable e) throws TaskFailedException {
+            protected void handleException(Throwable e) {
                 // Cancellation is caused by user-specified timeouts
                 if (e instanceof CancellationException) {
                     String message = String.format(
@@ -910,7 +910,7 @@ final class TaskOrchestrationExecutor {
             }
 
             @Override
-            public V await() throws TaskFailedException, OrchestratorBlockedEvent {
+            public V await() {
                 Instant startTime = this.context.getCurrentInstant();
                 while (true) {
                     Task<V> currentTask = this.taskFactory.create();
@@ -1024,7 +1024,7 @@ final class TaskOrchestrationExecutor {
             }
 
             @Override
-            public V await() throws TaskFailedException, OrchestratorBlockedEvent {
+            public V await() {
                 do {
                     // If the future is done, return its value right away
                     if (this.future.isDone()) {
@@ -1039,14 +1039,14 @@ final class TaskOrchestrationExecutor {
                 } while (ContextImplTask.this.processNextEvent());
 
                 // There's no more history left to replay and the current task is still not completed. This is normal.
-                // The OrchestratorBlockedEvent throwable allows us to yield the current thread back to the executor so
+                // The OrchestratorBlockedException exception allows us to yield the current thread back to the executor so
                 // that we can send the current set of actions back to the worker and wait for new events to come in.
                 // This is *not* an exception - it's a normal part of orchestrator control flow.
-                throw new OrchestratorBlockedEvent(
+                throw new OrchestratorBlockedException(
                         "The orchestrator is blocked and waiting for new inputs. This Throwable should never be caught by user code.");
             }
 
-            protected void handleException(Throwable e) throws TaskFailedException {
+            protected void handleException(Throwable e) {
                 if (e instanceof TaskFailedException) {
                     throw (TaskFailedException)e;
                 }
