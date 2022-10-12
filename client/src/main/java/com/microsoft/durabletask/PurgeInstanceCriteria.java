@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +16,7 @@ public final class PurgeInstanceCriteria {
     private Instant createdTimeFrom;
     private Instant createdTimeTo;
     private List<OrchestrationRuntimeStatus> runtimeStatusList = new ArrayList<>();
+    private Duration timeout;
 
     /**
      * Creates a new, default instance of the {@code PurgeInstanceCriteria} class.
@@ -59,6 +61,17 @@ public final class PurgeInstanceCriteria {
     }
 
     /**
+     * Purge orchestration instances within the specified timeout
+     *
+     * @param timeout the amount of time to wait for the purge instance operation to complete
+     * @return this criteria object
+     */
+    public PurgeInstanceCriteria setTimeout(Duration timeout) {
+        this.timeout = timeout;
+        return this;
+    }
+
+    /**
      * Gets the configured minimum orchestration creation time or {@code null} if none was configured.
      * @return the configured minimum orchestration creation time or {@code null} if none was configured
      */
@@ -83,4 +96,14 @@ public final class PurgeInstanceCriteria {
     public List<OrchestrationRuntimeStatus> getRuntimeStatusList() {
         return this.runtimeStatusList;
     }
+
+    /**
+     * Gets the configured timeout duration or {@code null} if none was configured.
+     * @return the configured timeout
+     */
+    @Nullable
+    public Duration getTimeout() {
+        return this.timeout;
+    }
+
 }

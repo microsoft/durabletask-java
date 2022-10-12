@@ -790,6 +790,63 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
+    @Test
+    void purgeInstanceFilterTimeout() throws TimeoutException {
+        final String orchestratorName = "PurgeInstance";
+        final String plusOne = "PlusOne";
+        final String plusTwo = "PlusTwo";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOne, value, int.class).await();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOne, ctx -> ctx.getInput(int.class) + 1)
+                .addOrchestrator(plusOne, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOne, value, int.class).await();
+                    ctx.complete(value);
+                })
+                .addOrchestrator(plusTwo, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusTwo, value, int.class).await();
+                    ctx.complete(value);
+                })
+                .addActivity(plusTwo, ctx -> ctx.getInput(int.class) + 2)
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            client.createTaskHub(true);
+            Instant startTime = Instant.now();
+
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(1, metadata.readOutputAs(int.class));
+
+            String instanceId1 = client.scheduleNewOrchestrationInstance(plusOne, 0);
+            metadata = client.waitForInstanceCompletion(instanceId1,  defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(1, metadata.readOutputAs(int.class));
+
+            String instanceId2 = client.scheduleNewOrchestrationInstance(plusTwo, 10);
+            metadata = client.waitForInstanceCompletion(instanceId2,  defaultTimeout, true);
+            assertNotNull(metadata);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+            assertEquals(12, metadata.readOutputAs(int.class));
+
+            PurgeInstanceCriteria criteria = new PurgeInstanceCriteria();
+            criteria.setCreatedTimeFrom(startTime);
+            criteria.setTimeout(Duration.ofNanos(1));
+
+            assertThrows(TimeoutException.class, () -> client.purgeInstances(criteria));
+        }
+    }
+
     @Test()
     void waitForInstanceStartThrowsException() {
         final String orchestratorName = "orchestratorName";

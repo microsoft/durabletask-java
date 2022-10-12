@@ -252,13 +252,31 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
-    public PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) {
+    public PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) throws TimeoutException {
         PurgeInstanceFilter.Builder builder = PurgeInstanceFilter.newBuilder();
         builder.setCreatedTimeFrom(DataConverter.getTimestampFromInstant(purgeInstanceCriteria.getCreatedTimeFrom()));
         Optional.ofNullable(purgeInstanceCriteria.getCreatedTimeTo()).ifPresent(createdTimeTo -> builder.setCreatedTimeTo(DataConverter.getTimestampFromInstant(createdTimeTo)));
         purgeInstanceCriteria.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> builder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
-        PurgeInstancesResponse response = this.sidecarClient.purgeInstances(PurgeInstancesRequest.newBuilder().setPurgeInstanceFilter(builder).build());
-        return toPurgeResult(response);
+
+        Duration timeout = purgeInstanceCriteria.getTimeout();
+        if (timeout == null || timeout.isNegative() || timeout.isZero()) {
+            timeout = Duration.ofMinutes(10);
+        }
+
+        TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
+                timeout.toMillis(),
+                TimeUnit.MILLISECONDS);
+
+        PurgeInstancesResponse response;
+        try {
+            response = grpcClient.purgeInstances(PurgeInstancesRequest.newBuilder().setPurgeInstanceFilter(builder).build());
+            return toPurgeResult(response);
+        } catch (StatusRuntimeException e) {
+            if(e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED){
+                throw new TimeoutException("Purge instances completion timeout reached.");
+            }
+            throw e;
+        }
     }
 
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
