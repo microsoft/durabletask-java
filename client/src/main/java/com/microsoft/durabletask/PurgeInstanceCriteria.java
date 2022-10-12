@@ -61,7 +61,7 @@ public final class PurgeInstanceCriteria {
     }
 
     /**
-     * Purge orchestration instances within the specified timeout
+     * Sets a timeout duration for the purge operation. Setting to {@code null} will reset the timeout to be the default value.
      *
      * @param timeout the amount of time to wait for the purge instance operation to complete
      * @return this criteria object

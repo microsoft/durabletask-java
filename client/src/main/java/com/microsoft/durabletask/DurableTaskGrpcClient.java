@@ -260,7 +260,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
 
         Duration timeout = purgeInstanceCriteria.getTimeout();
         if (timeout == null || timeout.isNegative() || timeout.isZero()) {
-            timeout = Duration.ofMinutes(10);
+            timeout = Duration.ofMinutes(4);
         }
 
         TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
@@ -272,8 +272,9 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
             response = grpcClient.purgeInstances(PurgeInstancesRequest.newBuilder().setPurgeInstanceFilter(builder).build());
             return toPurgeResult(response);
         } catch (StatusRuntimeException e) {
-            if(e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED){
-                throw new TimeoutException("Purge instances completion timeout reached.");
+            if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                String timeOutException = String.format("Purge instances timeout duration of %s reached.", timeout);
+                throw new TimeoutException(timeOutException);
             }
             throw e;
         }
