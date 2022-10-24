@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
 /**
@@ -142,7 +143,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
-    public OrchestrationMetadata waitForInstanceStart(String instanceId, Duration timeout, boolean getInputsAndOutputs) {
+    public OrchestrationMetadata waitForInstanceStart(String instanceId, Duration timeout, boolean getInputsAndOutputs) throws TimeoutException {
         GetInstanceRequest request = GetInstanceRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .setGetInputsAndOutputs(getInputsAndOutputs)
@@ -155,12 +156,21 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
                 timeout.toMillis(),
                 TimeUnit.MILLISECONDS);
-        GetInstanceResponse response = grpcClient.waitForInstanceStart(request);
+
+        GetInstanceResponse response;
+        try {
+            response = grpcClient.waitForInstanceStart(request);
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                throw new TimeoutException("Start orchestration timeout reached.");
+            }
+            throw e;
+        }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
     @Override
-    public OrchestrationMetadata waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs) {
+    public OrchestrationMetadata waitForInstanceCompletion(String instanceId, Duration timeout, boolean getInputsAndOutputs) throws TimeoutException {
         GetInstanceRequest request = GetInstanceRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .setGetInputsAndOutputs(getInputsAndOutputs)
@@ -173,7 +183,16 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
                 timeout.toMillis(),
                 TimeUnit.MILLISECONDS);
-        GetInstanceResponse response = grpcClient.waitForInstanceCompletion(request);
+
+        GetInstanceResponse response;
+        try {
+            response = grpcClient.waitForInstanceCompletion(request);
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                throw new TimeoutException("Orchestration instance completion timeout reached.");
+            }
+            throw e;
+        }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
@@ -233,13 +252,32 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
-    public PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) {
+    public PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) throws TimeoutException {
         PurgeInstanceFilter.Builder builder = PurgeInstanceFilter.newBuilder();
         builder.setCreatedTimeFrom(DataConverter.getTimestampFromInstant(purgeInstanceCriteria.getCreatedTimeFrom()));
         Optional.ofNullable(purgeInstanceCriteria.getCreatedTimeTo()).ifPresent(createdTimeTo -> builder.setCreatedTimeTo(DataConverter.getTimestampFromInstant(createdTimeTo)));
         purgeInstanceCriteria.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> builder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
-        PurgeInstancesResponse response = this.sidecarClient.purgeInstances(PurgeInstancesRequest.newBuilder().setPurgeInstanceFilter(builder).build());
-        return toPurgeResult(response);
+
+        Duration timeout = purgeInstanceCriteria.getTimeout();
+        if (timeout == null || timeout.isNegative() || timeout.isZero()) {
+            timeout = Duration.ofMinutes(4);
+        }
+
+        TaskHubSidecarServiceBlockingStub grpcClient = this.sidecarClient.withDeadlineAfter(
+                timeout.toMillis(),
+                TimeUnit.MILLISECONDS);
+
+        PurgeInstancesResponse response;
+        try {
+            response = grpcClient.purgeInstances(PurgeInstancesRequest.newBuilder().setPurgeInstanceFilter(builder).build());
+            return toPurgeResult(response);
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                String timeOutException = String.format("Purge instances timeout duration of %s reached.", timeout);
+                throw new TimeoutException(timeOutException);
+            }
+            throw e;
+        }
     }
 
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){

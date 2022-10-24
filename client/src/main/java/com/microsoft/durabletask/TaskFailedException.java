@@ -9,7 +9,7 @@ package com.microsoft.durabletask;
  * Detailed information associated with a particular task failure can be retrieved using the {@link #getErrorDetails()}
  * method.
  */
-public class TaskFailedException extends Exception {
+public class TaskFailedException extends RuntimeException {
     private final FailureDetails details;
     private final String taskName;
     private final int taskId;

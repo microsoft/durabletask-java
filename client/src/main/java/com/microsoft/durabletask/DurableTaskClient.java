@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
 import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Base class that defines client operations for managing orchestration instances.
@@ -140,10 +141,11 @@ public abstract class DurableTaskClient implements AutoCloseable {
      *
      * @param instanceId the unique ID of the orchestration instance to wait for
      * @param timeout the amount of time to wait for the orchestration instance to start
+     * @throws TimeoutException when the orchestration instance is not started within the specified amount of time
      * @return the orchestration instance metadata or <code>null</code> if no such instance is found
      */
     @Nullable
-    public OrchestrationMetadata waitForInstanceStart(String instanceId, Duration timeout) {
+    public OrchestrationMetadata waitForInstanceStart(String instanceId, Duration timeout) throws TimeoutException {
         return this.waitForInstanceStart(instanceId, timeout, false);
     }
 
@@ -159,13 +161,14 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param timeout the amount of time to wait for the orchestration instance to start
      * @param getInputsAndOutputs <code>true</code> to fetch the orchestration instance's inputs, outputs, and custom
      *                            status, or <code>false</code> to omit them
+     * @throws TimeoutException when the orchestration instance is not started within the specified amount of time
      * @return the orchestration instance metadata or <code>null</code> if no such instance is found
      */
     @Nullable
     public abstract OrchestrationMetadata waitForInstanceStart(
             String instanceId,
             Duration timeout,
-            boolean getInputsAndOutputs);
+            boolean getInputsAndOutputs) throws TimeoutException;
 
     /**
      * Waits for an orchestration to complete and returns an {@link OrchestrationMetadata} object that contains
@@ -184,13 +187,14 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param timeout the amount of time to wait for the orchestration instance to complete
      * @param getInputsAndOutputs <code>true</code> to fetch the orchestration instance's inputs, outputs, and custom
      *                            status, or <code>false</code> to omit them
+     * @throws TimeoutException when the orchestration instance is not completed within the specified amount of time
      * @return the orchestration instance metadata or <code>null</code> if no such instance is found
      */
     @Nullable
     public abstract OrchestrationMetadata waitForInstanceCompletion(
             String instanceId,
             Duration timeout,
-            boolean getInputsAndOutputs);
+            boolean getInputsAndOutputs) throws TimeoutException;
 
     /**
      * Terminates a running orchestration instance and updates its runtime status to <code>Terminated</code>.
@@ -258,7 +262,6 @@ public abstract class DurableTaskClient implements AutoCloseable {
      */
     public abstract PurgeResult purgeInstance(String instanceId);
 
-    // TODO, https://github.com/microsoft/durabletask-java/issues/37, add a timeout parameter
     /**
      * Purges orchestration instance metadata from the durable store using a filter that determines which instances to
      * purge data for.
@@ -273,7 +276,9 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * into multiple method calls over a period of time and have them cover smaller time windows.
      *
      * @param purgeInstanceCriteria orchestration instance filter criteria used to determine which instances to purge
+     * @throws TimeoutException when purging instances is not completed within the specified amount of time.
+     *         The default timeout for purging instances is 10 minutes
      * @return the result of the purge operation, including the number of purged orchestration instances (0 or 1)
      */
-    public abstract PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria);
+    public abstract PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) throws TimeoutException;
 }
