@@ -36,8 +36,7 @@ public class AzureFunctions {
      */
     @FunctionName("Cities")
     public String citiesOrchestrator(
-            @DurableOrchestrationTrigger(name = "taskOrchestrationContext") TaskOrchestrationContext ctx)
-            throws TaskFailedException, OrchestratorBlockedEvent {
+            @DurableOrchestrationTrigger(name = "taskOrchestrationContext") TaskOrchestrationContext ctx) {
         String result = "";
         result += ctx.callActivity("Capitalize", "Tokyo", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "London", String.class).await() + ", ";
