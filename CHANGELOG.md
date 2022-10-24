@@ -15,4 +15,6 @@
 
 ### Breaking changes
 
+* Use java worker middleware to avoid wrapper method when create orchestrator function ([#87](https://github.com/microsoft/durabletask-java/pull/87))
+
 * to be updated
