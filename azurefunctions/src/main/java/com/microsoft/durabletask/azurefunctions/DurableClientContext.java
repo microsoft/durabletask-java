@@ -70,8 +70,8 @@ public class DurableClientContext {
 
         String instanceStatusURL = baseUrl + "/runtime/webhooks/durabletask/instances/" + encodedInstanceId;
 
-        // Construct the response as an HTTP 201 with a JSON object payload
-        return request.createResponseBuilder(HttpStatus.CREATED)
+        // Construct the response as an HTTP 202 with a JSON object payload
+        return request.createResponseBuilder(HttpStatus.ACCEPTED)
                 .header("Location", instanceStatusURL + "?" + this.requiredQueryStringParameters)
                 .header("Content-Type", "application/json")
                 .body(new HttpCreateCheckStatusResponse(
