@@ -16,5 +16,6 @@
 ### Breaking changes
 
 * Use java worker middleware to avoid wrapper method when create orchestrator function ([#87](https://github.com/microsoft/durabletask-java/pull/87))
+* Fixed DurableClientContext.createCheckStatusResponse to return 202 ([#92](https://github.com/microsoft/durabletask-java/pull/92))
 
 * to be updated
