@@ -12,6 +12,7 @@
 * update DataConverterException with detail error message ([#78](https://github.com/microsoft/durabletask-java/issues/78))
 * update OrchestratorBlockedEvent and TaskFailedException to be unchecked exceptions ([#88](https://github.com/microsoft/durabletask-java/issues/88))
 * updated PurgeInstances to take a timeout parameter and throw TimeoutException ([#37](https://github.com/microsoft/durabletask-java/issues/37))
+* update dependency azure-functions-java-library to 2.2.0 - include azure-functions-java-spi as `compileOnly` dependency ([#95](https://github.com/microsoft/durabletask-java/pull/95))
 
 ### Breaking changes
 
