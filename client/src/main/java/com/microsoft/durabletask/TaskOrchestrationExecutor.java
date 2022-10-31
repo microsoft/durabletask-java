@@ -332,7 +332,7 @@ final class TaskOrchestrationExecutor {
             }
 
             // TODO:replace this with a deterministic GUID generation so that it's safe for replay,
-            //  please find potentail bug here https://github.com/microsoft/durabletask-dotnet/issues/9
+            //  please find potential bug here https://github.com/microsoft/durabletask-dotnet/issues/9
 
             if (instanceId == null) {
                 instanceId = UUID.randomUUID().toString();

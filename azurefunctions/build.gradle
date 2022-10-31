@@ -17,8 +17,9 @@ repositories {
 
 dependencies {
     api project(':client')
-    implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '2.1.0'
+    implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '2.2.0'
     implementation "com.google.protobuf:protobuf-java:${protocVersion}"
+    compileOnly "com.microsoft.azure.functions:azure-functions-java-spi:1.0.0"
 }
 
 sourceCompatibility = JavaVersion.VERSION_1_8
