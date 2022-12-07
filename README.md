@@ -3,8 +3,6 @@
 [![Build](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml/badge.svg)](https://github.com/microsoft/durabletask-java/actions/workflows/build-validation.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-⚠ This project is preview quality and not yet ready for production use ⚠
-
 This repo contains the Java SDK for the Durable Task Framework as well as classes and annotations to support running [Azure Durable Functions](https://docs.microsoft.com/azure/azure-functions/durable/durable-functions-overview?tabs=java) for Java. With this SDK, you can define, schedule, and manage durable orchestrations using ordinary Java code.
 
 ### Simple, fault-tolerant sequences
