@@ -46,7 +46,7 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
 
             // Need to keep track of this channel so we can dispose it on close()
             this.managedSidecarChannel = ManagedChannelBuilder
-                    .forAddress("127.0.0.1", port)
+                    .forAddress("localhost", port)
                     .usePlaintext()
                     .build();
             sidecarGrpcChannel = this.managedSidecarChannel;
