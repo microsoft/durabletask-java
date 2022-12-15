@@ -52,6 +52,19 @@ publishing {
                     developerConnection = "scm:git:git@github.com:microsoft/durabletask-java"
                     url = "https://github.com/microsoft/durabletask-java/tree/main/azurefunctions"
                 }
+                // use below script to include compile-only dependencies when generated pom file.
+                // This is pain point when we onboard API docs as the missing compile-only dependencies crash the
+                // API doc's team onboarding pipeline.
+                withXml {
+                    project.configurations.compileOnly.allDependencies.each { dependency ->
+                        asNode().dependencies[0].appendNode("dependency").with {
+                            it.appendNode("groupId", dependency.group)
+                            it.appendNode("artifactId", dependency.name)
+                            it.appendNode("version", dependency.version)
+                            it.appendNode("scope", "provided")
+                        }
+                    }
+                }
             }
         }
     }
