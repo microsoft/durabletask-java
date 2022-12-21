@@ -31,12 +31,12 @@ public class AzureFunctions {
     }
 
     /**
-     * This is the orchestrator function. The OrchestrationRunner.loadAndRun() static
-     * method is used to take the function input and execute the orchestrator logic.
+     * This is the orchestrator function, which can schedule activity functions, create durable timers,
+     * or wait for external events in a way that's completely fault-tolerant.
      */
     @FunctionName("Cities")
     public String citiesOrchestrator(
-            @DurableOrchestrationTrigger(name = "taskOrchestrationContext") TaskOrchestrationContext ctx) {
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
         String result = "";
         result += ctx.callActivity("Capitalize", "Tokyo", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "London", String.class).await() + ", ";
