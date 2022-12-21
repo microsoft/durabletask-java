@@ -78,8 +78,8 @@ The following packages are produced from this repo.
 
 | Package | Latest version |
 | - | - |
-| Durable Task - Client | ![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-client?label=durabletask-client) |
-| Durable Task - Azure Functions | ![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azure-functions?label=durabletask-azure-functions) |
+| Durable Task - Client | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-client?label=durabletask-client)](https://mvnrepository.com/artifact/com.microsoft/durabletask-client/1.0.0) |
+| Durable Task - Azure Functions | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azure-functions?label=durabletask-azure-functions)](https://mvnrepository.com/artifact/com.microsoft/durabletask-azure-functions/1.0.1) |
 
 ## Getting started with Azure Functions
 
