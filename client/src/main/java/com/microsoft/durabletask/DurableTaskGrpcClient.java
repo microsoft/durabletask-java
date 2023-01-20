@@ -280,6 +280,24 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         }
     }
 
+    @Override
+    public void suspendInstance(String instanceId, String reason) {
+        SuspendRequest suspendRequest = SuspendRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .setReason(StringValue.of(reason))
+                .build();
+        this.sidecarClient.suspendInstance(suspendRequest);
+    }
+
+    @Override
+    public void resumeInstance(String instanceId, String reason) {
+        ResumeRequest resumeRequest = ResumeRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .setReason(StringValue.of(reason))
+                .build();
+        this.sidecarClient.resumeInstance(resumeRequest);
+    }
+
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
         return new PurgeResult(response.getDeletedInstanceCount());
     }
