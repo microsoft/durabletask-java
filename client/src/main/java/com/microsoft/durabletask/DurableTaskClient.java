@@ -303,12 +303,12 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param instanceId the ID of the orchestration instance to suspend
      * @param reason the reason for suspending the orchestration instance
      */
-    public abstract void suspendInstance(String instanceId, String reason);
+    public abstract void suspendInstance(String instanceId, @Nullable String reason);
 
     /**
      * Resumes a running orchestration instance.
      * @param instanceId the ID of the orchestration instance to resume
      * @param reason the reason for resuming the orchestration instance
      */
-    public abstract void resumeInstance(String instanceId, String reason);
+    public abstract void resumeInstance(String instanceId, @Nullable String reason);
 }

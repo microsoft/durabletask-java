@@ -320,24 +320,39 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void suspendResumeOrchestration() throws TimeoutException {
-        final String orchestratorName = "suspendResume";
-        final Duration delay = Duration.ofSeconds(3);
+    void suspendResumeOrchestrationWithReason() throws TimeoutException, InterruptedException {
+        final String orchestratorName = "suspendResumeWithReason";
+        final String eventName = "MyEvent";
+        final String eventPayload = "testPayload";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
+                .addOrchestrator(orchestratorName, ctx -> {
+                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
+                    ctx.complete(payload);
+                })
                 .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-            String expectReason = "Suspend for testing.";
-            client.suspendInstance(instanceId, expectReason);
+            String suspendReason = "Suspend for testing.";
+            client.suspendInstance(instanceId, suspendReason);
             OrchestrationMetadata instance = client.waitForInstanceStart(instanceId, defaultTimeout);
             assertNotNull(instance);
             assertEquals(instanceId, instance.getInstanceId());
             assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
-            assertEquals(expectReason, instance.getSerializedOutput());
+
+            client.raiseEvent(instanceId, eventName, eventPayload);
+            client.waitForInstanceStart(instanceId, defaultTimeout);
+            assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
+
+            String resumeReason = "Resume for testing.";
+            client.resumeInstance(instanceId, resumeReason);
+            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(instanceId, instance.getInstanceId());
+            assertEquals(eventPayload, instance.getSerializedOutput());
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
         }
     }
 
