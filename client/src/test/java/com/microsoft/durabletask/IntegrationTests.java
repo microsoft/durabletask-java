@@ -320,6 +320,28 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
+    void suspendResumeOrchestration() throws TimeoutException {
+        final String orchestratorName = "suspendResume";
+        final Duration delay = Duration.ofSeconds(3);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            String expectReason = "Suspend for testing.";
+            client.suspendInstance(instanceId, expectReason);
+            OrchestrationMetadata instance = client.waitForInstanceStart(instanceId, defaultTimeout);
+            assertNotNull(instance);
+            assertEquals(instanceId, instance.getInstanceId());
+            assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
+            assertEquals(expectReason, instance.getSerializedOutput());
+        }
+    }
+
+    @Test
     void activityFanOut() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";
