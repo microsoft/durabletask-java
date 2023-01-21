@@ -5,6 +5,7 @@ package com.microsoft.durabletask;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.time.Duration;
+import java.time.Instant;
 
 final class Helpers {
     final static Duration maxDuration = Duration.ofSeconds(Long.MAX_VALUE, 999999999L);
@@ -29,6 +30,12 @@ final class Helpers {
     static void throwIfOrchestratorComplete(boolean isComplete) {
         if (isComplete) {
             throw new IllegalStateException("The orchestrator has already completed");
+        }
+    }
+
+    static void throwIfFireAtBeforeCurrentInstant(Instant fireAt, Instant currentInstant) {
+        if (fireAt.isBefore(currentInstant)) {
+            throw new IllegalStateException("Timer cannot be earlier than current time stamp. ");
         }
     }
 

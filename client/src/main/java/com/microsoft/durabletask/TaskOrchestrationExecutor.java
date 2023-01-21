@@ -10,6 +10,7 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.Sch
 import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -530,6 +531,21 @@ final class TaskOrchestrationExecutor {
 
             int id = this.sequenceNumber++;
             Instant fireAt = this.currentInstant.plus(duration);
+            return createInstantTimer(id, fireAt);
+        }
+
+        @Override
+        public Task<Void> createTimer(ZonedDateTime zonedDateTime) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
+            Helpers.throwIfArgumentNull(zonedDateTime, "zonedDateTime");
+
+            int id = this.sequenceNumber++;
+            Instant fireAt = zonedDateTime.toInstant();
+            Helpers.throwIfFireAtBeforeCurrentInstant(fireAt, this.currentInstant);
+            return createInstantTimer(id, fireAt);
+        }
+
+        private Task<Void> createInstantTimer(int id, Instant fireAt) {
             Timestamp ts = DataConverter.getTimestampFromInstant(fireAt);
             this.pendingActions.put(id, OrchestratorAction.newBuilder()
                     .setId(id)
