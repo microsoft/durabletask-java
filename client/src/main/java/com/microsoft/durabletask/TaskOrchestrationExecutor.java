@@ -541,7 +541,6 @@ final class TaskOrchestrationExecutor {
 
             int id = this.sequenceNumber++;
             Instant fireAt = zonedDateTime.toInstant();
-            Helpers.throwIfFireAtBeforeCurrentInstant(fireAt, this.currentInstant);
             return createInstantTimer(id, fireAt);
         }
 
