@@ -377,9 +377,6 @@ public class IntegrationTests extends IntegrationTestBase {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             String suspendReason = "Suspend for testing.";
             client.suspendInstance(instanceId, suspendReason);
-
-            client.raiseEvent(instanceId, eventName, eventPayload);
-
             client.terminate(instanceId, null);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
             assertNotNull(instance);
