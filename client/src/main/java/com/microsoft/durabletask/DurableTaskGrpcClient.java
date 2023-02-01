@@ -204,7 +204,10 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
                 "Terminating instance %s and setting output to: %s",
                 instanceId,
                 serializeOutput != null ? serializeOutput : "(null)"));
-        TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId).setOutput(StringValue.of(serializeOutput));
+        TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId);
+        if (serializeOutput != null){
+            builder.setOutput(StringValue.of(serializeOutput));
+        }
         this.sidecarClient.terminateInstance(builder.build());
     }
 
@@ -278,6 +281,26 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
             }
             throw e;
         }
+    }
+
+    @Override
+    public void suspendInstance(String instanceId, @Nullable String reason) {
+        SuspendRequest.Builder suspendRequestBuilder = SuspendRequest.newBuilder();
+        suspendRequestBuilder.setInstanceId(instanceId);
+        if (reason != null) {
+            suspendRequestBuilder.setReason(StringValue.of(reason));
+        }
+        this.sidecarClient.suspendInstance(suspendRequestBuilder.build());
+    }
+
+    @Override
+    public void resumeInstance(String instanceId, @Nullable String reason) {
+        ResumeRequest.Builder resumeRequestBuilder = ResumeRequest.newBuilder();
+        resumeRequestBuilder.setInstanceId(instanceId);
+        if (reason != null) {
+            resumeRequestBuilder.setReason(StringValue.of(reason));
+        }
+        this.sidecarClient.resumeInstance(resumeRequestBuilder.build());
     }
 
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){

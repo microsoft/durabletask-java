@@ -1,3 +1,10 @@
+## v1.1.0
+
+### Updates
+* Support Suspend and Resume Client APIs ([#104](https://github.com/microsoft/durabletask-java/issues/104))
+* Fix the potential NPE issue of `DurableTaskClient terminate` method ([#104](https://github.com/microsoft/durabletask-java/issues/104))
+
+
 ## v1.0.0
 
 ### New
