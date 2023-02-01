@@ -320,10 +320,11 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void suspendOrchestration() throws TimeoutException, InterruptedException {
+    void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
         final String orchestratorName = "suspend";
         final String eventName = "MyEvent";
         final String eventPayload = "testPayload";
+        final Duration suspendTimeout = Duration.ofSeconds(5);
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -341,15 +342,25 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
 
             client.raiseEvent(instanceId, eventName, eventPayload);
-            instance = client.waitForInstanceStart(instanceId, defaultTimeout);
+
+            assertThrows(
+                    TimeoutException.class,
+                    () -> client.waitForInstanceCompletion(instanceId, suspendTimeout, false),
+                    "Expected to throw TimeoutException, but it didn't"
+                    );
+
+            String resumeReason = "Resume for testing.";
+            client.resumeInstance(instanceId, resumeReason);
+            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(instance);
             assertEquals(instanceId, instance.getInstanceId());
-            assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
+            assertEquals(eventPayload, instance.readOutputAs(String.class));
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
         }
     }
 
     @Test
-    void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
+    void terminateSuspendOrchestration() throws TimeoutException, InterruptedException {
         final String orchestratorName = "suspendResume";
         final String eventName = "MyEvent";
         final String eventPayload = "testPayload";
@@ -369,13 +380,11 @@ public class IntegrationTests extends IntegrationTestBase {
 
             client.raiseEvent(instanceId, eventName, eventPayload);
 
-            String resumeReason = "Resume for testing.";
-            client.resumeInstance(instanceId, resumeReason);
-            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            client.terminate(instanceId, null);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
             assertNotNull(instance);
             assertEquals(instanceId, instance.getInstanceId());
-            assertEquals(eventPayload, instance.readOutputAs(String.class));
-            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
         }
     }
 
