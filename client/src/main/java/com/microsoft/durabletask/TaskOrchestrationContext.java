@@ -166,7 +166,9 @@ public interface TaskOrchestrationContext {
      * @param zonedDateTime timestamp with specific zone when the timer should expire
      * @return a new {@code Task} that completes after the specified delay
      */
-    Task<Void> createTimer(ZonedDateTime zonedDateTime);
+    default Task<Void> createTimer(ZonedDateTime zonedDateTime) {
+        throw new UnsupportedOperationException("This method is not implemented, please use Class has implementation for this method.");
+    }
 
     /**
      * Transitions the orchestration into the {@link OrchestrationRuntimeStatus#COMPLETED} state with the given output.
