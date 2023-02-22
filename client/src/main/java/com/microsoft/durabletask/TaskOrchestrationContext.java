@@ -5,6 +5,7 @@ package com.microsoft.durabletask;
 import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -154,6 +155,20 @@ public interface TaskOrchestrationContext {
      * @return a new {@code Task} that completes after the specified delay
      */
     Task<Void> createTimer(Duration delay);
+
+    /**
+     * Creates a durable timer that expires after the specified timestamp with specific zone.
+     * <p>
+     * Specifying a long delay (for example, a delay of a few days or more) may result in the creation of multiple,
+     * internally-managed durable timers. The orchestration code doesn't need to be aware of this behavior. However,
+     * it may be visible in framework logs and the stored history state.
+     *
+     * @param zonedDateTime timestamp with specific zone when the timer should expire
+     * @return a new {@code Task} that completes after the specified delay
+     */
+    default Task<Void> createTimer(ZonedDateTime zonedDateTime) {
+        throw new UnsupportedOperationException("This method is not implemented. Please use an orchestration context class that has an implementation for this method.");
+    }
 
     /**
      * Transitions the orchestration into the {@link OrchestrationRuntimeStatus#COMPLETED} state with the given output.
