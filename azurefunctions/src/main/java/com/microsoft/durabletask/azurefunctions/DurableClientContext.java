@@ -9,12 +9,16 @@ import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
+import com.microsoft.durabletask.OrchestrationMetadata;
+import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 
 /**
  * The binding value type for the {@literal @}DurableClientInput parameter.
@@ -24,6 +28,7 @@ public class DurableClientContext {
     private String rpcBaseUrl;
     private String taskHubName;
     private String requiredQueryStringParameters;
+    private DurableTaskClient client;
 
     /**
      * Gets the name of the client binding's task hub.
@@ -51,7 +56,28 @@ public class DurableClientContext {
             throw new IllegalStateException("The client context RPC base URL was invalid!", ex);
         }
 
-        return new DurableTaskGrpcClientBuilder().port(rpcURL.getPort()).build();
+        this.client = new DurableTaskGrpcClientBuilder().port(rpcURL.getPort()).build();
+        return this.client;
+    }
+
+    public HttpResponseMessage waitForCompletionOrCreateCheckStatusResponse(
+            HttpRequestMessage<?> request,
+            String instanceId,
+            Duration timeout) {
+        // each invocation is handled by an individual thread, we don't have thread safety issue here.
+        if (this.client == null) {
+            this.client = getClient();
+        }
+        OrchestrationMetadata orchestration;
+        try {
+            orchestration = this.client.waitForInstanceStart(instanceId, timeout, true);
+            return request.createResponseBuilder(HttpStatus.ACCEPTED)
+                    .header("Content-Type", "application/json")
+                    .body(orchestration.getSerializedOutput())
+                    .build();
+        } catch (TimeoutException e) {
+            return createCheckStatusResponse(request, instanceId);
+        }
     }
 
     public HttpResponseMessage createCheckStatusResponse(HttpRequestMessage<?> request, String instanceId) {
