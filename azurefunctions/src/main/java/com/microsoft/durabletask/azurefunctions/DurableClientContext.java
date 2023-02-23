@@ -60,6 +60,20 @@ public class DurableClientContext {
         return this.client;
     }
 
+    /**
+     * Creates an HTTP response which either contains a payload of management URLs for a non-completed instance
+     * or contains the payload containing the output of the completed orchestration.
+     * <p>
+     * If the orchestration instance completes within the specified timeout, then the HTTP response payload will
+     * contains the output of the orchestration instance formatted as JSON. However, if the orchestration does not
+     * complete within the specified timeout, then the HTTP response will be identical to that of the
+     * {@link #createCheckStatusResponse(HttpRequestMessage, String)} API.
+     * </p>
+     * @param request the HTTP request that triggered the current function
+     * @param instanceId the unique ID of the instance to check
+     * @param timeout total allowed timeout for output from the durable function
+     * @return an HTTP response which may include a 202 and location header or a 200 with the durable function output in the response body
+     */
     public HttpResponseMessage waitForCompletionOrCreateCheckStatusResponse(
             HttpRequestMessage<?> request,
             String instanceId,
@@ -69,7 +83,7 @@ public class DurableClientContext {
         }
         OrchestrationMetadata orchestration;
         try {
-            orchestration = this.client.waitForInstanceStart(instanceId, timeout, true);
+            orchestration = this.client.waitForInstanceCompletion(instanceId, timeout, true);
             return request.createResponseBuilder(HttpStatus.ACCEPTED)
                     .header("Content-Type", "application/json")
                     .body(orchestration.getSerializedOutput())
@@ -79,6 +93,18 @@ public class DurableClientContext {
         }
     }
 
+    /**
+     * Creates an HTTP response that is useful for checking the status of the specified instance.
+     * <p>
+     * The payload of the returned
+     * @see <a href="https://learn.microsoft.com/en-us/java/api/com.microsoft.azure.functions.httpresponsemessage?view=azure-java-stable">HttpResponseMessage</a>
+     * contains HTTP API URLs that can be used to query the status of the orchestration, raise events to the orchestration, or
+     * terminalte the orchestration.
+     * </p>
+     * @param request the HTTP request that triggered the current orchestration instance
+     * @param instanceId the ID of the orchestration instance to check
+     * @return an HTTP 202 response with a Location header and a payload containing instance control URLs
+     */
     public HttpResponseMessage createCheckStatusResponse(HttpRequestMessage<?> request, String instanceId) {
         // TODO: To better support scenarios involving proxies or application gateways, this
         //       code should take the X-Forwarded-Host, X-Forwarded-Proto, and Forwarded HTTP
