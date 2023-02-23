@@ -64,7 +64,6 @@ public class DurableClientContext {
             HttpRequestMessage<?> request,
             String instanceId,
             Duration timeout) {
-        // each invocation is handled by an individual thread, we don't have thread safety issue here.
         if (this.client == null) {
             this.client = getClient();
         }
