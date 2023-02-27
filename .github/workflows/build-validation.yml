@@ -43,6 +43,9 @@ jobs:
       # TODO: Move the sidecar into a central image repository
     - name: Initialize Durable Task Sidecar
       run: docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d kaibocai/durabletask-sidecar:latest start --backend Emulator
+#    wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
+    - name: Wait for 10 seconds
+      run: sleep 10
     - name: Integration Tests with Gradle
       uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
       with:
