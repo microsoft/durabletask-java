@@ -58,7 +58,7 @@ jobs:
         name: Package
         path: client/build/libs
 
-  functions:
+  functions-e2e-tests:
 
     needs: build
     runs-on: ubuntu-latest
@@ -81,7 +81,7 @@ jobs:
         with:
           arguments: azureFunctionsPackage
         continue-on-error: true
-      - name: Run azure functions test
+      - name: Setup azure functions runtime
         run: samples-azure-functions/e2e-test.ps1 -DockerfilePath samples-azure-functions/Dockerfile
         shell: pwsh
       - name: End to End Tests with Gradle

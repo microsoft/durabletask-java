@@ -12,15 +12,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("e2e")
 public class EndToEndTests {
-
     private static final String hostHealthPingPath = "/admin/host/ping";
     private static final String startOrchestrationPath = "/api/StartOrchestration";
-
-
-//    @BeforeAll
-//    public void initSpec() {
-//
-//    }
 
     @Order(1)
     @Test
@@ -41,6 +34,6 @@ public class EndToEndTests {
                 Thread.sleep(1000);
             } else break;
         }
-        assertEquals("fail", runTimeStatus);
+        assertEquals("Completed", runTimeStatus);
     }
 }
