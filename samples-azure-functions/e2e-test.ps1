@@ -3,7 +3,7 @@
 param(
 	[Parameter(Mandatory=$true)]
 	[string]$DockerfilePath,
-	[Parameter(Mandatory=$true)]
+#	[Parameter(Mandatory=$true)]
 #	[string]$HttpStartPath,
     [string]$ImageName="dfapp",
 	[string]$ContainerName="app",
