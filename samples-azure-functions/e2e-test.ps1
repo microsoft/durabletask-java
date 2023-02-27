@@ -4,7 +4,7 @@ param(
 	[Parameter(Mandatory=$true)]
 	[string]$DockerfilePath,
 	[Parameter(Mandatory=$true)]
-	[string]$HttpStartPath,
+#	[string]$HttpStartPath,
     [string]$ImageName="dfapp",
 	[string]$ContainerName="app",
 	[switch]$NoSetup=$false,
@@ -43,53 +43,53 @@ if ($sleep -gt  0) {
 # Check to see what containers are running
 docker ps
 
-try {
-	# Make sure the Functions runtime is up and running
-	$pingUrl = "http://localhost:8080/admin/host/ping"
-	Write-Host "Pinging app at $pingUrl to ensure the host is healthy" -ForegroundColor Yellow
-	Invoke-RestMethod -Method Post -Uri "http://localhost:8080/admin/host/ping"
+#try {
+#	# Make sure the Functions runtime is up and running
+#	$pingUrl = "http://localhost:8080/admin/host/ping"
+#	Write-Host "Pinging app at $pingUrl to ensure the host is healthy" -ForegroundColor Yellow
+#	Invoke-RestMethod -Method Post -Uri "http://localhost:8080/admin/host/ping"
+#
+#	if ($NoValidation -eq $false) {
+#		# Note that any HTTP protocol errors (e.g. HTTP 4xx or 5xx) will cause an immediate failure
+#		$startOrchestrationUri = "http://localhost:8080/$HttpStartPath"
+#		Write-Host "Starting a new orchestration instance via POST to $startOrchestrationUri..." -ForegroundColor Yellow
+#
+#		$result = Invoke-RestMethod -Method Post -Uri $startOrchestrationUri
+#		Write-Host "Started orchestration with instance ID '$($result.id)'!" -ForegroundColor Yellow
+#		Write-Host "Waiting for orchestration to complete..." -ForegroundColor Yellow
+#
+#		$retryCount = 0
+#		$success = $false
+#		$statusUrl = $result.statusQueryGetUri
+#
+#		while ($retryCount -lt 15) {
+#			$result = Invoke-RestMethod -Method Get -Uri $statusUrl
+#			$runtimeStatus = $result.runtimeStatus
+#			Write-Host "Orchestration is $runtimeStatus" -ForegroundColor Yellow
+#
+#			if ($result.runtimeStatus -eq "Completed") {
+#				$success = $true
+#				break
+#			}
+#
+#			Start-Sleep -Seconds 1
+#			$retryCount = $retryCount + 1
+#		}
+#	}
+#
+#	if ($success -eq $false) {
+#		throw "Orchestration didn't complete in time! :("
+#	}
+#} catch {
+#	Write-Host "An error occurred:" -ForegroundColor Red
+#	Write-Host $_ -ForegroundColor Red
+#
+#	# Dump the docker logs to make debugging the issue easier
+#	Write-Host "Below are the docker logs for the app container:" -ForegroundColor Red
+#	docker logs $ContainerName
+#
+#	# Rethrow the original exception
+#	throw
+#}
 
-	if ($NoValidation -eq $false) {
-		# Note that any HTTP protocol errors (e.g. HTTP 4xx or 5xx) will cause an immediate failure
-		$startOrchestrationUri = "http://localhost:8080/$HttpStartPath"
-		Write-Host "Starting a new orchestration instance via POST to $startOrchestrationUri..." -ForegroundColor Yellow
-
-		$result = Invoke-RestMethod -Method Post -Uri $startOrchestrationUri
-		Write-Host "Started orchestration with instance ID '$($result.id)'!" -ForegroundColor Yellow
-		Write-Host "Waiting for orchestration to complete..." -ForegroundColor Yellow
-
-		$retryCount = 0
-		$success = $false
-		$statusUrl = $result.statusQueryGetUri
-
-		while ($retryCount -lt 15) {
-			$result = Invoke-RestMethod -Method Get -Uri $statusUrl
-			$runtimeStatus = $result.runtimeStatus
-			Write-Host "Orchestration is $runtimeStatus" -ForegroundColor Yellow
-
-			if ($result.runtimeStatus -eq "Completed") {
-				$success = $true
-				break
-			}
-
-			Start-Sleep -Seconds 1
-			$retryCount = $retryCount + 1
-		}
-	}
-
-	if ($success -eq $false) {
-		throw "Orchestration didn't complete in time! :("
-	}
-} catch {
-	Write-Host "An error occurred:" -ForegroundColor Red
-	Write-Host $_ -ForegroundColor Red
-
-	# Dump the docker logs to make debugging the issue easier
-	Write-Host "Below are the docker logs for the app container:" -ForegroundColor Red
-	docker logs $ContainerName
-
-	# Rethrow the original exception
-	throw
-}
-
-Write-Host "Success!" -ForegroundColor Green
+#Write-Host "Success!" -ForegroundColor Green

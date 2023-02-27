@@ -1,5 +1,5 @@
 plugins {
-    id "com.microsoft.azure.azurefunctions" version "1.9.0"
+    id "com.microsoft.azure.azurefunctions" version "1.11.1"
 }
 apply plugin: 'java'
 apply plugin: "com.microsoft.azure.azurefunctions"
@@ -19,16 +19,26 @@ dependencies {
     implementation project(':client')
     implementation project(':azurefunctions')
 
-    implementation 'com.microsoft.azure.functions:azure-functions-java-library:2.2.0'
+    implementation 'com.microsoft.azure.functions:azure-functions-java-library:3.0.0'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.6.2'
-    testImplementation 'org.mockito:mockito-core:3.3.3'
-    runtimeOnly "io.grpc:grpc-netty-shaded:1.38.0"
+    testImplementation 'io.rest-assured:rest-assured:5.3.0'
+    testImplementation 'io.rest-assured:json-path:5.3.0'
+
 }
 
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
 
 compileJava.options.encoding = 'UTF-8'
+
+task endToEndTest(type: Test) {
+    useJUnitPlatform {
+        includeTags 'e2e'
+    }
+    dependsOn build
+    testLogging.showStandardStreams = true
+}
+
 
 azurefunctions {
     resourceGroup = 'java-functions-group'
