@@ -41,6 +41,6 @@ public class EndToEndTests {
                 Thread.sleep(1000);
             } else break;
         }
-        assertEquals("Completed", runTimeStatus);
+        assertEquals("fail", runTimeStatus);
     }
 }
