@@ -11,6 +11,7 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 
 import io.grpc.*;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -28,6 +29,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
     private final ManagedChannel managedSidecarChannel;
     private final DataConverter dataConverter;
+    private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
+    private final Duration maximumTimerInterval;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
@@ -57,6 +60,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
+        this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
     }
 
     /**
@@ -108,6 +112,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         TaskOrchestrationExecutor taskOrchestrationExecutor = new TaskOrchestrationExecutor(
                 this.orchestrationFactories,
                 this.dataConverter,
+                this.maximumTimerInterval,
                 logger);
         TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,

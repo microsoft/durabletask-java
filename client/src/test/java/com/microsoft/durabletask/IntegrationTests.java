@@ -87,6 +87,30 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
+    void longTimer() throws TimeoutException {
+        final String orchestratorName = "LongTimer";
+        final Duration delay = Duration.ofSeconds(7);
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
+                .setMaximumTimerInterval(Duration.ofSeconds(3))
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            Duration timeout = delay.plus(defaultTimeout);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, timeout, false);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            // Verify that the delay actually happened
+            long expectedCompletionSecond = instance.getCreatedAt().plus(delay).getEpochSecond();
+            long actualCompletionSecond = instance.getLastUpdatedAt().getEpochSecond();
+            assertTrue(expectedCompletionSecond <= actualCompletionSecond);
+        }
+    }
+
+    @Test
     void singleTimeStampTimer() throws IOException, TimeoutException {
         final String orchestratorName = "SingleTimeStampTimer";
         final Duration delay = Duration.ofSeconds(3);
