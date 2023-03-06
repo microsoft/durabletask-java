@@ -4,7 +4,7 @@
 * Support Suspend and Resume Client APIs ([#104](https://github.com/microsoft/durabletask-java/issues/104))
 * Fix the potential NPE issue of `DurableTaskClient terminate` method ([#104](https://github.com/microsoft/durabletask-java/issues/104))
 * Add waitForCompletionOrCreateCheckStatusResponse client API ([#115](https://github.com/microsoft/durabletask-java/pull/115))
-
+* Support long timers by breaking up into smaller timers ([#114](https://github.com/microsoft/durabletask-java/issues/114))
 
 ## v1.0.0
 
