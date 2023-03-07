@@ -38,6 +38,11 @@ public class IntegrationTestBase {
             return server;
         }
 
+        public TestDurableTaskWorkerBuilder setMaximumTimerInterval(Duration maximumTimerInterval) {
+            this.innerBuilder.maximumTimerInterval(maximumTimerInterval);
+            return this;
+        }
+
         public TestDurableTaskWorkerBuilder addOrchestrator(
                 String name,
                 TaskOrchestration implementation) {

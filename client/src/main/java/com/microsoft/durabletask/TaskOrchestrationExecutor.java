@@ -24,13 +24,16 @@ final class TaskOrchestrationExecutor {
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
+    private final Duration maximumTimerInterval;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
             DataConverter dataConverter,
+            Duration maximumTimerInterval,
             Logger logger) {
         this.orchestrationFactories = orchestrationFactories;
         this.dataConverter = dataConverter;
+        this.maximumTimerInterval = maximumTimerInterval;
         this.logger = logger;
     }
 
@@ -77,6 +80,7 @@ final class TaskOrchestrationExecutor {
         private final LinkedList<HistoryEvent> unprocessedEvents = new LinkedList<>();
         private final Queue<HistoryEvent> eventsWhileSuspended = new ArrayDeque<>();
         private final DataConverter dataConverter = TaskOrchestrationExecutor.this.dataConverter;
+        private final Duration maximumTimerInterval = TaskOrchestrationExecutor.this.maximumTimerInterval;
         private final Logger logger = TaskOrchestrationExecutor.this.logger;
         private final OrchestrationHistoryIterator historyEventPlayer;
         private int sequenceNumber;
@@ -547,9 +551,8 @@ final class TaskOrchestrationExecutor {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(duration, "duration");
 
-            int id = this.sequenceNumber++;
-            Instant fireAt = this.currentInstant.plus(duration);
-            return createInstantTimer(id, fireAt);
+            Instant finalFireAt = this.currentInstant.plus(duration);
+            return createTimer(finalFireAt);
         }
 
         @Override
@@ -557,9 +560,18 @@ final class TaskOrchestrationExecutor {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(zonedDateTime, "zonedDateTime");
 
-            int id = this.sequenceNumber++;
-            Instant fireAt = zonedDateTime.toInstant();
-            return createInstantTimer(id, fireAt);
+            Instant finalFireAt = zonedDateTime.toInstant();
+            return createTimer(finalFireAt);
+        }
+
+        private Task<Void> createTimer(Instant finalFireAt) {
+            Duration remainingTime = Duration.between(this.currentInstant, finalFireAt);
+            while (remainingTime.compareTo(this.maximumTimerInterval) > 0) {
+                Instant nextFireAt = this.currentInstant.plus(this.maximumTimerInterval);
+                createInstantTimer(this.sequenceNumber++, nextFireAt).await();
+                remainingTime = Duration.between(this.currentInstant, finalFireAt);
+            }
+            return createInstantTimer(this.sequenceNumber++, finalFireAt);
         }
 
         private Task<Void> createInstantTimer(int id, Instant fireAt) {

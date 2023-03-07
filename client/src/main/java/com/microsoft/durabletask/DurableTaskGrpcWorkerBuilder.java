@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import io.grpc.Channel;
 
+import java.time.Duration;
 import java.util.HashMap;
 
 /**
@@ -15,6 +16,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     int port;
     Channel channel;
     DataConverter dataConverter;
+    Duration maximumTimerInterval;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -96,6 +98,18 @@ public final class DurableTaskGrpcWorkerBuilder {
      */
     public DurableTaskGrpcWorkerBuilder dataConverter(DataConverter dataConverter) {
         this.dataConverter = dataConverter;
+        return this;
+    }
+
+    /**
+     * Sets the maximum timer interval. If not specified, the default maximum timer interval duration will be used.
+     * The default maximum timer interval duration is 3 days.
+     *
+     * @param maximumTimerInterval the maximum timer interval
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder maximumTimerInterval(Duration maximumTimerInterval) {
+        this.maximumTimerInterval = maximumTimerInterval;
         return this;
     }
 
