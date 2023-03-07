@@ -547,16 +547,6 @@ final class TaskOrchestrationExecutor {
             }
         }
 
-        private Task<Void> createTimer(Instant finalFireAt) {
-            Duration remainingTime = Duration.between(this.currentInstant, finalFireAt);
-            while (remainingTime.compareTo(this.maximumTimerInterval) > 0) {
-                Instant nextFireAt = this.currentInstant.plus(this.maximumTimerInterval);
-                createInstantTimer(this.sequenceNumber++, nextFireAt).await();
-                remainingTime = Duration.between(this.currentInstant, finalFireAt);
-            }
-            return createInstantTimer(this.sequenceNumber++, finalFireAt);
-        }
-
         public Task<Void> createTimer(Duration duration) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(duration, "duration");
@@ -572,6 +562,16 @@ final class TaskOrchestrationExecutor {
 
             Instant finalFireAt = zonedDateTime.toInstant();
             return createTimer(finalFireAt);
+        }
+
+        private Task<Void> createTimer(Instant finalFireAt) {
+            Duration remainingTime = Duration.between(this.currentInstant, finalFireAt);
+            while (remainingTime.compareTo(this.maximumTimerInterval) > 0) {
+                Instant nextFireAt = this.currentInstant.plus(this.maximumTimerInterval);
+                createInstantTimer(this.sequenceNumber++, nextFireAt).await();
+                remainingTime = Duration.between(this.currentInstant, finalFireAt);
+            }
+            return createInstantTimer(this.sequenceNumber++, finalFireAt);
         }
 
         private Task<Void> createInstantTimer(int id, Instant fireAt) {
