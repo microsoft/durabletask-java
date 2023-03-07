@@ -7,6 +7,7 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -55,7 +56,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 instanceId,
                 defaultTimeout,
                 true);
-            
+
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
             assertEquals(input, instance.readInputAs(String.class));
@@ -90,8 +91,12 @@ public class IntegrationTests extends IntegrationTestBase {
     void longTimer() throws TimeoutException {
         final String orchestratorName = "LongTimer";
         final Duration delay = Duration.ofSeconds(7);
+        AtomicInteger counter = new AtomicInteger();
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
+                .addOrchestrator(orchestratorName, ctx -> {
+                    counter.incrementAndGet();
+                    ctx.createTimer(delay).await();
+                })
                 .setMaximumTimerInterval(Duration.ofSeconds(3))
                 .buildAndStart();
 
@@ -107,6 +112,44 @@ public class IntegrationTests extends IntegrationTestBase {
             long expectedCompletionSecond = instance.getCreatedAt().plus(delay).getEpochSecond();
             long actualCompletionSecond = instance.getLastUpdatedAt().getEpochSecond();
             assertTrue(expectedCompletionSecond <= actualCompletionSecond);
+
+            // Verify that the correct number of timers were created
+            // This should yield 4 (first invocation + replay invocations for internal timers 3s + 3s + 1s)
+            assertEquals(4, counter.get());
+        }
+    }
+
+    @Test
+    void longTimeStampTimer() throws TimeoutException {
+        final String orchestratorName = "LongTimeStampTimer";
+        final Duration delay = Duration.ofSeconds(7);
+        final ZonedDateTime zonedDateTime = ZonedDateTime.of(LocalDateTime.now().plusSeconds(delay.getSeconds()), ZoneId.systemDefault());
+
+        AtomicInteger counter = new AtomicInteger();
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    counter.incrementAndGet();
+                    ctx.createTimer(zonedDateTime).await();
+                })
+                .setMaximumTimerInterval(Duration.ofSeconds(3))
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            Duration timeout = delay.plus(defaultTimeout);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, timeout, false);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            // Verify that the delay actually happened
+            long expectedCompletionSecond = zonedDateTime.toInstant().getEpochSecond();
+            long actualCompletionSecond = instance.getLastUpdatedAt().getEpochSecond();
+            assertTrue(expectedCompletionSecond <= actualCompletionSecond);
+
+            // Verify that the correct number of timers were created
+            // This should yield 4 (first invocation + replay invocations for internal timers 3s + 3s + 1s)
+            assertEquals(4, counter.get());
         }
     }
 

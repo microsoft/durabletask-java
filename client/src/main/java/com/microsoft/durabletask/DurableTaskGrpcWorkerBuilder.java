@@ -103,6 +103,7 @@ public final class DurableTaskGrpcWorkerBuilder {
 
     /**
      * Sets the maximum timer interval. If not specified, the default maximum timer interval duration will be used.
+     * The default maximum timer interval duration is 3 days.
      *
      * @param maximumTimerInterval the maximum timer interval
      * @return this builder object

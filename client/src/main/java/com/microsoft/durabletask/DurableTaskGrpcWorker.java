@@ -23,13 +23,13 @@ import java.util.logging.Logger;
 public final class DurableTaskGrpcWorker implements AutoCloseable {
     private static final int DEFAULT_PORT = 4001;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcWorker.class.getPackage().getName());
+    private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
 
     private final ManagedChannel managedSidecarChannel;
     private final DataConverter dataConverter;
-    private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
     private final Duration maximumTimerInterval;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
