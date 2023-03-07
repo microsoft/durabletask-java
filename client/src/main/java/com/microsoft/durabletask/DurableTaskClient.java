@@ -321,4 +321,19 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param reason the reason for resuming the orchestration instance
      */
     public abstract void resumeInstance(String instanceId, @Nullable String reason);
+
+    /**
+     * Rewinds a failed orchestration instance.
+     * @param instanceId the ID of the orchestration instance to rewind
+     * @param reason the reason for rewinding the orchestration instance
+     */
+    public abstract void rewindInstance(String instanceId, @Nullable String reason);
+
+    /**
+     * Rewinds a failed orchestration instance.
+     * @param instanceId the ID of the orchestration instance to rewind
+     */
+    public void rewindInstance(String instanceId) {
+        this.rewindInstance(instanceId, null);
+    }
 }

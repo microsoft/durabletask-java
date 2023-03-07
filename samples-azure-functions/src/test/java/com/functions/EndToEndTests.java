@@ -21,6 +21,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("e2e")
 public class EndToEndTests {
+    private static final String hostHealthPingPath = "/admin/host/ping";
+    private static final String startOrchestrationPath = "/api/StartOrchestration";
+    private static final String approvalWorkFlow = "/api/ApprovalWorkflowOrchestration";
+    private static JsonPath rewindTestJsonPath = null;
 
     @Order(1)
     @Test
@@ -202,4 +206,37 @@ public class EndToEndTests {
         }
         return false;
     }
+
+    @Order(2)
+    @Test
+    public void approvalWorkFlow() throws InterruptedException {
+        Response response = post(approvalWorkFlow);
+        rewindTestJsonPath = response.jsonPath();
+        Thread.sleep(3000);
+        String statusQueryGetUri = rewindTestJsonPath.get("statusQueryGetUri");
+        Response statusResponse = get(statusQueryGetUri);
+        String runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+        assertEquals("Failed", runTimeStatus);
+    }
+
+    @Order(3)
+    @Test
+    public void rewindInstance() throws InterruptedException {
+        String rewindPostUri = rewindTestJsonPath.get("rewindPostUri");
+        Response response = post(rewindPostUri);
+
+        Thread.sleep(3000);
+
+        String statusQueryGetUri = rewindTestJsonPath.get("statusQueryGetUri");
+        String runTimeStatus = null;
+        for (int i = 0; i < 5; i++) {
+            Response statusResponse = get(statusQueryGetUri);
+            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            if (!"Completed".equals(runTimeStatus)) {
+                Thread.sleep(1000);
+            } else break;
+        }
+        assertEquals("Completed", runTimeStatus);
+    }
 }
+
