@@ -64,7 +64,6 @@ public class RewindInstance {
     public int requestSecondaryApproval(
             @DurableActivityTrigger(name = "name") int number,
             final ExecutionContext context) throws InterruptedException {
-        System.out.println("Test RequestSecondaryApproval " + approvalFlag);
         return number / approvalFlag++;
     }
 
@@ -80,12 +79,7 @@ public class RewindInstance {
         String reason = "Orchestrator failed and needs to be revived.";
 
         DurableTaskClient client = durableContext.getClient();
-
-        try {
-            client.rewindInstance(instanceId, reason);
-            return "Failed orchestration instance is revived.";
-        }catch (Exception e){
-            return "Exception when rewinding orchestration instance";
-        }
+        client.rewindInstance(instanceId, reason);
+        return "Failed orchestration instance is scheduled for rewind.";
     }
 }

@@ -24,7 +24,7 @@ public class EndToEndTests {
     private static final String hostHealthPingPath = "/admin/host/ping";
     private static final String startOrchestrationPath = "/api/StartOrchestration";
     private static final String approvalWorkFlow = "/api/ApprovalWorkflowOrchestration";
-    private static JsonPath rewindTestJsonPath = null;
+    private static final String rewindInstance = "/api/RewindInstance";
 
     @Order(1)
     @Test
@@ -209,28 +209,29 @@ public class EndToEndTests {
 
     @Order(2)
     @Test
-    public void approvalWorkFlow() throws InterruptedException {
+    public void testRewindInstanceAPI() throws InterruptedException {
         Response response = post(approvalWorkFlow);
-        rewindTestJsonPath = response.jsonPath();
+        JsonPath rewindTestJsonPath = response.jsonPath();
+
+        // Wait for the ApprovalWorkflowOrchestration to fail
         Thread.sleep(3000);
+
+        String instanceId = rewindTestJsonPath.get("id");
         String statusQueryGetUri = rewindTestJsonPath.get("statusQueryGetUri");
         Response statusResponse = get(statusQueryGetUri);
         String runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
         assertEquals("Failed", runTimeStatus);
-    }
 
-    @Order(3)
-    @Test
-    public void rewindInstance() throws InterruptedException {
-        String rewindPostUri = rewindTestJsonPath.get("rewindPostUri");
-        Response response = post(rewindPostUri);
+        // Rewind the instance
+        String rewindPostUri = rewindInstance + "?instanceId=" + instanceId;
+        response = post(rewindPostUri);
+        assertEquals("Failed orchestration instance is scheduled for rewind.", response.toString());
 
+        // Wait for orchestration to rewind and complete
         Thread.sleep(3000);
 
-        String statusQueryGetUri = rewindTestJsonPath.get("statusQueryGetUri");
-        String runTimeStatus = null;
         for (int i = 0; i < 5; i++) {
-            Response statusResponse = get(statusQueryGetUri);
+            statusResponse = get(statusQueryGetUri);
             runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
             if (!"Completed".equals(runTimeStatus)) {
                 Thread.sleep(1000);
