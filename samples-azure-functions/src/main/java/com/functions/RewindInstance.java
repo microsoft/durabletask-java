@@ -1,9 +1,6 @@
 package com.functions;
 
-import com.microsoft.azure.functions.ExecutionContext;
-import com.microsoft.azure.functions.HttpMethod;
-import com.microsoft.azure.functions.HttpRequestMessage;
-import com.microsoft.azure.functions.HttpResponseMessage;
+import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
@@ -81,5 +78,18 @@ public class RewindInstance {
         DurableTaskClient client = durableContext.getClient();
         client.rewindInstance(instanceId, reason);
         return "Failed orchestration instance is scheduled for rewind.";
+    }
+
+    /**
+     * This HTTP-triggered function resets the approvalFlag variable for testing purposes.
+     */
+    @FunctionName("ResetApproval")
+    public static HttpResponseMessage resetApproval(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS)
+            HttpRequestMessage<Optional<String>> request,
+            final ExecutionContext context) {
+        context.getLogger().info("ResetApproval function invoked.");
+        approvalFlag = 0;
+        return request.createResponseBuilder(HttpStatus.OK).body(approvalFlag).build();
     }
 }
