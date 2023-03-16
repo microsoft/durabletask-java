@@ -16,6 +16,13 @@ public class HttpManagementPayload {
     private final String statusQueryGetUri;
     private final String terminatePostUri;
 
+    /**
+     * Creates a {@link HttpManagementPayload} to manage orchestration instances
+     *
+     * @param instanceId The ID of the orchestration instance
+     * @param instanceStatusURL The base webhook url of the orchestration instance
+     * @param requiredQueryStringParameters The query parameters to include with the http request
+     */
     public HttpManagementPayload(
             String instanceId,
             String instanceStatusURL,
