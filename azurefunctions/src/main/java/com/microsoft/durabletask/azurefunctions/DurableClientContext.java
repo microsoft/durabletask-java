@@ -111,44 +111,42 @@ public class DurableClientContext {
         //       request headers into consideration and generate the base URL accordingly.
         //       More info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Forwarded.
         //       One potential workaround is to set ASPNETCORE_FORWARDEDHEADERS_ENABLED to true.
+
+        // Construct the response as an HTTP 202 with a JSON object payload
+        return request.createResponseBuilder(HttpStatus.ACCEPTED)
+                .header("Location", this.getInstanceStatusURL(request, instanceId) + "?" + this.requiredQueryStringParameters)
+                .header("Content-Type", "application/json")
+                .body(this.getClientResponseLinks(request, instanceId))
+                .build();
+    }
+
+    /**
+     * Creates a {@link HttpManagementPayload} that is useful for checking the status of the specified instance.
+     *
+     * @param request    The HTTP request that triggered the current orchestration instance.
+     * @param instanceId The ID of the orchestration instance to check.
+     * @return The {@link HttpManagementPayload} with URLs that can be used to query the status of the orchestration,
+     *         raise events to the orchestration, or terminate the orchestration.
+     */
+    public HttpManagementPayload createHttpManagementPayload(HttpRequestMessage<?> request, String instanceId) {
+        return this.getClientResponseLinks(request, instanceId);
+    }
+
+    private HttpManagementPayload getClientResponseLinks(HttpRequestMessage<?> request, String instanceId) {
+        String instanceStatusURL = this.getInstanceStatusURL(request, instanceId);
+        return new HttpManagementPayload(instanceId, instanceStatusURL, this.requiredQueryStringParameters);
+    }
+
+    private String getInstanceStatusURL(HttpRequestMessage<?> request, String instanceId) {
         String baseUrl = request.getUri().getScheme() + "://" + request.getUri().getAuthority();
         String encodedInstanceId;
+
         try {
             encodedInstanceId = URLEncoder.encode(instanceId, StandardCharsets.UTF_8.toString());
         } catch (UnsupportedEncodingException ex) {
             throw new IllegalArgumentException("Failed to encode the instance ID: " + instanceId, ex);
         }
 
-        String instanceStatusURL = baseUrl + "/runtime/webhooks/durabletask/instances/" + encodedInstanceId;
-
-        // Construct the response as an HTTP 202 with a JSON object payload
-        return request.createResponseBuilder(HttpStatus.ACCEPTED)
-                .header("Location", instanceStatusURL + "?" + this.requiredQueryStringParameters)
-                .header("Content-Type", "application/json")
-                .body(new HttpCreateCheckStatusResponse(
-                        instanceId,
-                        instanceStatusURL,
-                        this.requiredQueryStringParameters))
-                .build();
-            }
-
-    private static class HttpCreateCheckStatusResponse {
-        // These fields are serialized to JSON
-        public final String id;
-        public final String purgeHistoryDeleteUri;
-        public final String sendEventPostUri;
-        public final String statusQueryGetUri;
-        public final String terminatePostUri;
-
-        public HttpCreateCheckStatusResponse(
-                String instanceId,
-                String instanceStatusURL,
-                String requiredQueryStringParameters) {
-            this.id = instanceId;
-            this.purgeHistoryDeleteUri = instanceStatusURL + "?" + requiredQueryStringParameters;
-            this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}?" + requiredQueryStringParameters;
-            this.statusQueryGetUri = instanceStatusURL + "?" + requiredQueryStringParameters;
-            this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
-        }
+        return baseUrl + "/runtime/webhooks/durabletask/instances/" + encodedInstanceId;
     }
 }

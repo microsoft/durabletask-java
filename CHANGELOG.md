@@ -11,6 +11,7 @@
 ### New
 
 * Add CHANGELOG.md file to track changes across versions
+* Added createHttpManagementPayload API ([#63](https://github.com/microsoft/durabletask-java/issues/63))
 
 ### Updates
 
