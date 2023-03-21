@@ -12,8 +12,11 @@ package com.microsoft.durabletask.azurefunctions;
 public class HttpManagementPayload {
     private final String id;
     private final String purgeHistoryDeleteUri;
+    private final String restartPostUri;
+    private final String resumePostUri;
     private final String sendEventPostUri;
     private final String statusQueryGetUri;
+    private final String suspendPostUri;
     private final String terminatePostUri;
 
     /**
@@ -29,8 +32,11 @@ public class HttpManagementPayload {
             String requiredQueryStringParameters) {
         this.id = instanceId;
         this.purgeHistoryDeleteUri = instanceStatusURL + "?" + requiredQueryStringParameters;
+        this.restartPostUri = instanceStatusURL + "/restart?" + requiredQueryStringParameters;
+        this.resumePostUri = instanceStatusURL + "/resume?reason={text}&" +  requiredQueryStringParameters;
         this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}?" + requiredQueryStringParameters;
         this.statusQueryGetUri = instanceStatusURL + "?" + requiredQueryStringParameters;
+        this.suspendPostUri = instanceStatusURL + "/suspend?reason={text}&" + requiredQueryStringParameters;
         this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
     }
 
@@ -77,5 +83,32 @@ public class HttpManagementPayload {
      */
     public String getPurgeHistoryDeleteUri() {
         return this.purgeHistoryDeleteUri;
+    }
+
+    /**
+     * Gets the HTTP POST instance restart endpoint.
+     *
+     * @return The HTTP URL for posting instance restart commands.
+     */
+    public String getRestartPostUri() {
+        return restartPostUri;
+    }
+
+    /**
+     * Gets the HTTP POST instance resume endpoint.
+     *
+     * @return The HTTP URL for posting instance resume commands.
+     */
+    public String getResumePostUri() {
+        return resumePostUri;
+    }
+
+    /**
+     * Gets the HTTP POST instance suspend endpoint.
+     *
+     * @return The HTTP URL for posting instance suspend commands.
+     */
+    public String getSuspendPostUri() {
+        return suspendPostUri;
     }
 }

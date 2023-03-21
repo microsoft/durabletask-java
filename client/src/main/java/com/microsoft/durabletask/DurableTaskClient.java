@@ -311,4 +311,6 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param reason the reason for resuming the orchestration instance
      */
     public abstract void resumeInstance(String instanceId, @Nullable String reason);
+
+    public abstract String restartInstance(String instanceId, boolean restartWithNewInstanceId);
 }

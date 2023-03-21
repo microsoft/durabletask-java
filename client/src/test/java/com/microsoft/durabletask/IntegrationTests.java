@@ -408,6 +408,55 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void restartOrchestrationWithNewInstanceId(boolean restartWithNewInstanceId) throws TimeoutException {
+        final String orchestratorName = "restart";
+        final Duration delay = Duration.ofSeconds(3);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "RestartTest");
+            client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            String newInstanceId = client.restartInstance(instanceId, restartWithNewInstanceId);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(newInstanceId, defaultTimeout, true);
+
+            if (restartWithNewInstanceId) {
+                assertNotEquals(instanceId, newInstanceId);
+            } else {
+                assertEquals(instanceId, newInstanceId);
+            }
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals("\"RestartTest\"", instance.getSerializedInput());
+        }
+    }
+
+    @Test
+    void restartOrchestrationThrowsException() {
+        final String orchestratorName = "restart";
+        final Duration delay = Duration.ofSeconds(3);
+        final String nonExistentId = "123";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "RestartTest");
+
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> client.restartInstance(nonExistentId, true)
+            );
+        }
+
+    }
+
     @Test
     void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
         final String orchestratorName = "suspend";
