@@ -447,7 +447,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
-            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "RestartTest");
+            client.scheduleNewOrchestrationInstance(orchestratorName, "RestartTest");
 
             assertThrows(
                 IllegalArgumentException.class,
