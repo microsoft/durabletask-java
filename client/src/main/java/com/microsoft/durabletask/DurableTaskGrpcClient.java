@@ -204,7 +204,10 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
                 "Terminating instance %s and setting output to: %s",
                 instanceId,
                 serializeOutput != null ? serializeOutput : "(null)"));
-        TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId).setOutput(StringValue.of(serializeOutput));
+        TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId);
+        if (serializeOutput != null) {
+            builder.setOutput(StringValue.of(serializeOutput));
+        }
         this.sidecarClient.terminateInstance(builder.build());
     }
 
