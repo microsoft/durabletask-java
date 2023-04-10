@@ -70,7 +70,6 @@ final class TaskOrchestrationExecutor {
         private String instanceId;
         private Instant currentInstant;
         private boolean isComplete;
-        private boolean isSuspended;
         private boolean isReplaying = true;
 
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
@@ -78,7 +77,6 @@ final class TaskOrchestrationExecutor {
         private final HashMap<Integer, TaskRecord<?>> openTasks = new HashMap<>();
         private final LinkedHashMap<String, Queue<TaskRecord<?>>> outstandingEvents = new LinkedHashMap<>();
         private final LinkedList<HistoryEvent> unprocessedEvents = new LinkedList<>();
-        private final Queue<HistoryEvent> eventsWhileSuspended = new ArrayDeque<>();
         private final DataConverter dataConverter = TaskOrchestrationExecutor.this.dataConverter;
         private final Duration maximumTimerInterval = TaskOrchestrationExecutor.this.maximumTimerInterval;
         private final Logger logger = TaskOrchestrationExecutor.this.logger;
@@ -87,6 +85,7 @@ final class TaskOrchestrationExecutor {
         private boolean continuedAsNew;
         private Object continuedAsNewInput;
         private boolean preserveUnprocessedEvents;
+
         private Object customStatus;
 
         public ContextImplTask(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
@@ -530,23 +529,6 @@ final class TaskOrchestrationExecutor {
             task.complete(result);
         }
 
-        private void handleEventWhileSuspended (HistoryEvent historyEvent){
-            if (historyEvent.getEventTypeCase() != HistoryEvent.EventTypeCase.EXECUTIONSUSPENDED) {
-                eventsWhileSuspended.offer(historyEvent);
-            }
-        }
-
-        private void handleExecutionSuspended(HistoryEvent historyEvent) {
-            this.isSuspended = true;
-        }
-
-        private void handleExecutionResumed(HistoryEvent historyEvent) {
-            this.isSuspended = false;
-            while (!eventsWhileSuspended.isEmpty()) {
-                this.processEvent(eventsWhileSuspended.poll());
-            }
-        }
-
         public Task<Void> createTimer(Duration duration) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(duration, "duration");
@@ -762,86 +744,75 @@ final class TaskOrchestrationExecutor {
         }
 
         private void processEvent(HistoryEvent e) {
-            boolean overrideSuspension = e.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONRESUMED || e.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONTERMINATED;
-            if (this.isSuspended && !overrideSuspension) {
-                this.handleEventWhileSuspended(e);
-            } else {
-                switch (e.getEventTypeCase()) {
-                    case ORCHESTRATORSTARTED:
-                        Instant instant = DataConverter.getInstantFromTimestamp(e.getTimestamp());
-                        this.setCurrentInstant(instant);
-                        break;
-                    case ORCHESTRATORCOMPLETED:
-                        // No action
-                        break;
-                    case EXECUTIONSTARTED:
-                        ExecutionStartedEvent startedEvent = e.getExecutionStarted();
-                        String name = startedEvent.getName();
-                        this.setName(name);
-                        String instanceId = startedEvent.getOrchestrationInstance().getInstanceId();
-                        this.setInstanceId(instanceId);
-                        String input = startedEvent.getInput().getValue();
-                        this.setInput(input);
-                        TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
-                        if (factory == null) {
-                            // Try getting the default orchestrator
-                            factory = TaskOrchestrationExecutor.this.orchestrationFactories.get("*");
-                        }
-                        // TODO: Throw if the factory is null (orchestration by that name doesn't exist)
-                        TaskOrchestration orchestrator = factory.create();
-                        orchestrator.run(this);
-                        break;
+            switch (e.getEventTypeCase()) {
+                case ORCHESTRATORSTARTED:
+                    Instant instant = DataConverter.getInstantFromTimestamp(e.getTimestamp());
+                    this.setCurrentInstant(instant);
+                    break;
+                case ORCHESTRATORCOMPLETED:
+                    // No action
+                    break;
+                case EXECUTIONSTARTED:
+                    ExecutionStartedEvent startedEvent = e.getExecutionStarted();
+                    String name = startedEvent.getName();
+                    this.setName(name);
+                    String instanceId = startedEvent.getOrchestrationInstance().getInstanceId();
+                    this.setInstanceId(instanceId);
+                    String input = startedEvent.getInput().getValue();
+                    this.setInput(input);
+                    TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
+                    if (factory == null) {
+                        // Try getting the default orchestrator
+                        factory = TaskOrchestrationExecutor.this.orchestrationFactories.get("*");
+                    }
+                    // TODO: Throw if the factory is null (orchestration by that name doesn't exist)
+                    TaskOrchestration orchestrator = factory.create();
+                    orchestrator.run(this);
+                    break;
 //                case EXECUTIONCOMPLETED:
 //                    break;
 //                case EXECUTIONFAILED:
 //                    break;
-                    case EXECUTIONTERMINATED:
-                        this.handleExecutionTerminated(e);
-                        break;
-                    case TASKSCHEDULED:
-                        this.handleTaskScheduled(e);
-                        break;
-                    case TASKCOMPLETED:
-                        this.handleTaskCompleted(e);
-                        break;
-                    case TASKFAILED:
-                        this.handleTaskFailed(e);
-                        break;
-                    case TIMERCREATED:
-                        this.handleTimerCreated(e);
-                        break;
-                    case TIMERFIRED:
-                        this.handleTimerFired(e);
-                        break;
-                    case SUBORCHESTRATIONINSTANCECREATED:
-                        this.handleSubOrchestrationCreated(e);
-                        break;
-                    case SUBORCHESTRATIONINSTANCECOMPLETED:
-                        this.handleSubOrchestrationCompleted(e);
-                        break;
-                    case SUBORCHESTRATIONINSTANCEFAILED:
-                        this.handleSubOrchestrationFailed(e);
-                        break;
+                case EXECUTIONTERMINATED:
+                    this.handleExecutionTerminated(e);
+                    break;
+                case TASKSCHEDULED:
+                    this.handleTaskScheduled(e);
+                    break;
+                case TASKCOMPLETED:
+                    this.handleTaskCompleted(e);
+                    break;
+                case TASKFAILED:
+                    this.handleTaskFailed(e);
+                    break;
+                case TIMERCREATED:
+                    this.handleTimerCreated(e);
+                    break;
+                case TIMERFIRED:
+                    this.handleTimerFired(e);
+                    break;
+                case SUBORCHESTRATIONINSTANCECREATED:
+                    this.handleSubOrchestrationCreated(e);
+                    break;
+                case SUBORCHESTRATIONINSTANCECOMPLETED:
+                    this.handleSubOrchestrationCompleted(e);
+                    break;
+                case SUBORCHESTRATIONINSTANCEFAILED:
+                    this.handleSubOrchestrationFailed(e);
+                    break;
 //                case EVENTSENT:
 //                    break;
-                    case EVENTRAISED:
-                        this.handleEventRaised(e);
-                        break;
+                case EVENTRAISED:
+                    this.handleEventRaised(e);
+                    break;
 //                case GENERICEVENT:
 //                    break;
 //                case HISTORYSTATE:
 //                    break;
 //                case EVENTTYPE_NOT_SET:
 //                    break;
-                    case EXECUTIONSUSPENDED:
-                        this.handleExecutionSuspended(e);
-                        break;
-                    case EXECUTIONRESUMED:
-                        this.handleExecutionResumed(e);
-                        break;
-                    default:
-                        throw new IllegalStateException("Don't know how to handle history type " + e.getEventTypeCase());
-                }
+                default:
+                    throw new IllegalStateException("Don't know how to handle history type " + e.getEventTypeCase());
             }
         }
 

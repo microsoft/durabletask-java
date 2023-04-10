@@ -46,12 +46,7 @@ public enum OrchestrationRuntimeStatus {
     /**
      * The orchestration was scheduled but hasn't started running.
      */
-    PENDING,
-
-    /**
-     * The orchestration is in a suspended state.
-     */
-    SUSPENDED;
+    PENDING;
 
     static OrchestrationRuntimeStatus fromProtobuf(OrchestrationStatus status) {
         switch (status) {
@@ -69,8 +64,6 @@ public enum OrchestrationRuntimeStatus {
                 return TERMINATED;
             case ORCHESTRATION_STATUS_PENDING:
                 return PENDING;
-            case ORCHESTRATION_STATUS_SUSPENDED:
-                return SUSPENDED;
             default:
                 throw new IllegalArgumentException(String.format("Unknown status value: %s", status));
         }
@@ -92,8 +85,6 @@ public enum OrchestrationRuntimeStatus {
                 return ORCHESTRATION_STATUS_TERMINATED;
             case PENDING:
                 return ORCHESTRATION_STATUS_PENDING;
-            case SUSPENDED:
-                return ORCHESTRATION_STATUS_SUSPENDED;
             default:
                 throw new IllegalArgumentException(String.format("Unknown status value: %s", status));
         }
