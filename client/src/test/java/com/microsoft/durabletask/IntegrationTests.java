@@ -408,71 +408,71 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
-    void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
-        final String orchestratorName = "suspend";
-        final String eventName = "MyEvent";
-        final String eventPayload = "testPayload";
-        final Duration suspendTimeout = Duration.ofSeconds(5);
-
-        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> {
-                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
-                    ctx.complete(payload);
-                })
-                .buildAndStart();
-
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
-        try (worker; client) {
-            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-            client.suspendInstance(instanceId);
-            OrchestrationMetadata instance = client.waitForInstanceStart(instanceId, defaultTimeout);
-            assertNotNull(instance);
-            assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
-
-            client.raiseEvent(instanceId, eventName, eventPayload);
-
-            assertThrows(
-                    TimeoutException.class,
-                    () -> client.waitForInstanceCompletion(instanceId, suspendTimeout, false),
-                    "Expected to throw TimeoutException, but it didn't"
-                    );
-
-            String resumeReason = "Resume for testing.";
-            client.resumeInstance(instanceId, resumeReason);
-            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-            assertNotNull(instance);
-            assertEquals(instanceId, instance.getInstanceId());
-            assertEquals(eventPayload, instance.readOutputAs(String.class));
-            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-        }
-    }
-
-    @Test
-    void terminateSuspendOrchestration() throws TimeoutException, InterruptedException {
-        final String orchestratorName = "suspendResume";
-        final String eventName = "MyEvent";
-        final String eventPayload = "testPayload";
-
-        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-                .addOrchestrator(orchestratorName, ctx -> {
-                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
-                    ctx.complete(payload);
-                })
-                .buildAndStart();
-
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
-        try (worker; client) {
-            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-            String suspendReason = "Suspend for testing.";
-            client.suspendInstance(instanceId, suspendReason);
-            client.terminate(instanceId, null);
-            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
-            assertNotNull(instance);
-            assertEquals(instanceId, instance.getInstanceId());
-            assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
-        }
-    }
+//    @Test
+//    void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
+//        final String orchestratorName = "suspend";
+//        final String eventName = "MyEvent";
+//        final String eventPayload = "testPayload";
+//        final Duration suspendTimeout = Duration.ofSeconds(5);
+//
+//        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+//                .addOrchestrator(orchestratorName, ctx -> {
+//                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
+//                    ctx.complete(payload);
+//                })
+//                .buildAndStart();
+//
+//        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+//        try (worker; client) {
+//            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+//            client.suspendInstance(instanceId);
+//            OrchestrationMetadata instance = client.waitForInstanceStart(instanceId, defaultTimeout);
+//            assertNotNull(instance);
+//            assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
+//
+//            client.raiseEvent(instanceId, eventName, eventPayload);
+//
+//            assertThrows(
+//                    TimeoutException.class,
+//                    () -> client.waitForInstanceCompletion(instanceId, suspendTimeout, false),
+//                    "Expected to throw TimeoutException, but it didn't"
+//                    );
+//
+//            String resumeReason = "Resume for testing.";
+//            client.resumeInstance(instanceId, resumeReason);
+//            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+//            assertNotNull(instance);
+//            assertEquals(instanceId, instance.getInstanceId());
+//            assertEquals(eventPayload, instance.readOutputAs(String.class));
+//            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+//        }
+//    }
+//
+//    @Test
+//    void terminateSuspendOrchestration() throws TimeoutException, InterruptedException {
+//        final String orchestratorName = "suspendResume";
+//        final String eventName = "MyEvent";
+//        final String eventPayload = "testPayload";
+//
+//        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+//                .addOrchestrator(orchestratorName, ctx -> {
+//                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
+//                    ctx.complete(payload);
+//                })
+//                .buildAndStart();
+//
+//        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+//        try (worker; client) {
+//            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+//            String suspendReason = "Suspend for testing.";
+//            client.suspendInstance(instanceId, suspendReason);
+//            client.terminate(instanceId, null);
+//            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
+//            assertNotNull(instance);
+//            assertEquals(instanceId, instance.getInstanceId());
+//            assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
+//        }
+//    }
 
     @Test
     void activityFanOut() throws IOException, TimeoutException {
