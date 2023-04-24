@@ -22,39 +22,47 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+
     - name: Set up JDK 11
       uses: actions/setup-java@v2
       with:
         java-version: '11'
         distribution: 'microsoft'
+
     - name: set JDK_11 environment variable test compiling and running
       env:
         ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       run: echo ::set-env name=JDK_11::$(echo $JAVA_HOME)
+
     - name: Set up JDK 8
       uses: actions/setup-java@v2
       with:
         java-version: '8'
         distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+
     - name: Build with Gradle
-      uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
-      with:
-        arguments: build
+      run: ./gradlew build
+
       # TODO: Move the sidecar into a central image repository
     - name: Initialize Durable Task Sidecar
       run: docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d kaibocai/durabletask-sidecar:latest start --backend Emulator
-#    wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
+
+      # wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
     - name: Wait for 10 seconds
       run: sleep 10
+
     - name: Integration Tests with Gradle
-      uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
-      with:
-        arguments: integrationTest
+      run: ./gradlew integrationTest
+
     - name: Archive test report
       uses: actions/upload-artifact@v2
       with:
         name: Integration test report
         path: client/build/reports/tests/integrationTest
+
     - name: Upload JAR output
       uses: actions/upload-artifact@v2
       with:
@@ -70,27 +78,32 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: true
+
       - name: Set up JDK 8
         uses: actions/setup-java@v2
         with:
           java-version: '8'
           distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+
       - name: Publish to local
-        uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
-        with:
-          arguments: publishToMavenLocal
+        run: ./gradlew publishToMavenLocal -x sign
+
       - name: Build azure functions sample
-        uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
-        with:
-          arguments: azureFunctionsPackage
+        run: ./gradlew azureFunctionsPackage
         continue-on-error: true
+
       - name: Setup azure functions runtime
         run: samples-azure-functions/e2e-test-setup.ps1 -DockerfilePath samples-azure-functions/Dockerfile
         shell: pwsh
+
       - name: End to End Tests with Gradle
-        uses: gradle/gradle-build-action@bc3340afc5e3cc44f2321809ac090d731c13c514
+        uses: gradle/gradle-build-action@v2
         with:
           arguments: endToEndTest
+
       - name: Archive test report
         uses: actions/upload-artifact@v2
         with:
