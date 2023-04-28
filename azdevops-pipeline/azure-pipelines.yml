@@ -14,8 +14,11 @@ steps:
 
 - task: Gradle@3
   inputs:
+    # Specifies the working directory to run the Gradle build. The task uses the repository root directory if the working directory is not specified.
     workingDirectory: ''
+    # Specifies the gradlew wrapper's location within the repository that will be used for the build.
     gradleWrapperFile: 'gradlew'
+    # Sets the GRADLE_OPTS environment variable, which is used to send command-line arguments to start the JVM. The xmx flag specifies the maximum memory available to the JVM.
     gradleOptions: '-Xmx3072m'
     javaHomeOption: 'JDKVersion'
     jdkVersionOption: '$(jdkVersion)'
