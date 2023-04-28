@@ -27,6 +27,7 @@ steps:
     tasks: clean assemble
   displayName: Assemble durabletask-client and durabletask-azure-functions
 
+# the secring.gpg file is required to sign the artifacts, it's generated from GnuPG, and it's stored in the library of the durabletaskframework ADO
 - task: DownloadSecureFile@1
   name: gpgSecretFile
   displayName: 'Download GPG secret file'
