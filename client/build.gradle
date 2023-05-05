@@ -4,6 +4,7 @@ plugins {
     // Generate IntelliJ IDEA's .idea & .iml project files
     id 'idea'
     id 'maven-publish'
+    id 'signing'
 }
 
 group 'com.microsoft'
@@ -96,6 +97,11 @@ task integrationTest(type: Test) {
 }
 
 publishing {
+    repositories {
+        maven {
+            url "file://$project.rootDir/repo"
+        }
+    }
     publications {
         mavenJava(MavenPublication) {
             from components.java
@@ -138,6 +144,10 @@ publishing {
             }
         }
     }
+}
+
+signing {
+    sign publishing.publications.mavenJava
 }
 
 java {
