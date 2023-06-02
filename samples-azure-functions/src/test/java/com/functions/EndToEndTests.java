@@ -49,7 +49,7 @@ public class EndToEndTests {
         for (int i = 0; i < 10; i++) {
             Response statusResponse = get(statusQueryGetUri);
             runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            assertEquals("Completed", runTimeStatus);
+            assertEquals("Running", runTimeStatus);
             Thread.sleep(1000);
         }
     }
