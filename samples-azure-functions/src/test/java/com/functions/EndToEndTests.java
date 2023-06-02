@@ -12,17 +12,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("e2e")
 public class EndToEndTests {
-    private static final String hostHealthPingPath = "/admin/host/ping";
-    private static final String startOrchestrationPath = "/api/StartOrchestration";
 
     @Order(1)
     @Test
     public void setupHost() {
+        String hostHealthPingPath = "/admin/host/ping";
         post(hostHealthPingPath).then().statusCode(200);
     }
 
     @Test
     public void basicChain() throws InterruptedException {
+        String startOrchestrationPath = "/api/StartOrchestration";
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
@@ -35,5 +35,22 @@ public class EndToEndTests {
             } else break;
         }
         assertEquals("Completed", runTimeStatus);
+    }
+
+
+    @Test
+    public void continueAsNew() throws InterruptedException {
+        String startOrchestrationPath = "api/ContinueAsNew";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        String runTimeStatus;
+        //assert that the orchestration is always running.
+        for (int i = 0; i < 10; i++) {
+            Response statusResponse = get(statusQueryGetUri);
+            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            assertEquals("Completed", runTimeStatus);
+            Thread.sleep(1000);
+        }
     }
 }
