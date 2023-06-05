@@ -52,8 +52,9 @@ public class EndToEndTests {
             assertEquals("Running", runTimeStatus);
             Thread.sleep(1000);
         }
-        Object terminatePostUri = jsonPath.get("terminatePostUri");
-        post(terminatePostUri.toString());
+        String terminatePostUri = jsonPath.get("terminatePostUri");
+        post(terminatePostUri, "Terminated the test");
+        Thread.sleep(1000);
         Response statusResponse = get(statusQueryGetUri);
         runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
         assertEquals("Terminated", runTimeStatus);
