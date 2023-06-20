@@ -3,7 +3,6 @@
 package com.microsoft.durabletask;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * Represents an asynchronous operation in a durable orchestration.
@@ -28,7 +27,6 @@ import java.util.function.Consumer;
  */
 public abstract class Task<V> {
     final CompletableFuture<V> future;
-    protected Consumer<V> consumer;
 
     Task(CompletableFuture<V> future) {
         this.future = future;
@@ -56,9 +54,4 @@ public abstract class Task<V> {
      * @return the result of the task
      */
     public abstract V await();
-
-    public Task<V> thenAccept(Consumer<V> consumer) {
-        this.consumer = consumer;
-        return this;
-    }
 }

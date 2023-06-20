@@ -37,7 +37,6 @@ public class EndToEndTests {
         assertEquals("Completed", runTimeStatus);
     }
 
-
     @Test
     public void continueAsNew() throws InterruptedException {
         String startOrchestrationPath = "api/ContinueAsNew";

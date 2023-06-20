@@ -21,6 +21,10 @@ import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
 public class SendEvent {
+
+    private final String instanceId = "123";
+    private final String eventName = "testEvent";
+    private final String eventData = "Hello World!";
     /**
      * This HTTP-triggered function starts the orchestration.
      */
@@ -31,7 +35,7 @@ public class SendEvent {
             final ExecutionContext context) throws TimeoutException, InterruptedException {
         context.getLogger().info("Java HTTP trigger processed a request.");
         DurableTaskClient client = durableContext.getClient();
-        String instanceId = client.scheduleNewOrchestrationInstance("WaitEvent", null, "123");
+        client.scheduleNewOrchestrationInstance("WaitEvent", null, instanceId);
         context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
@@ -49,16 +53,17 @@ public class SendEvent {
     }
     //
     @FunctionName("WaitEvent")
-    public String waitEvent(
+    public void waitEvent(
             @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
-        String await = ctx.waitForExternalEvent("kcevent", String.class).await();
-        return ctx.callActivity("Capitalize", await, String.class).await();
+        String await = ctx.waitForExternalEvent(eventName, String.class).await();
+        System.out.println(await);
+//        return ctx.callActivity("Capitalize", await, String.class).await();
     }
 
     @FunctionName("SendEvent")
     public void sendEvent(
             @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
-        ctx.sendEvent("123", "kcevent", "Hello World!");
+        ctx.sendEvent(instanceId, eventName, eventData);
         return;
     }
 }

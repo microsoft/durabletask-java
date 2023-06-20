@@ -15,7 +15,6 @@ import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
 import java.util.function.IntFunction;
 import java.util.logging.Logger;
 
@@ -837,6 +836,7 @@ final class TaskOrchestrationExecutor {
                         break;
                     case EVENTSENT:
                         this.handleEventSentEvent(e);
+//                        this.handleEventRaised(e);
                         break;
                     case EVENTRAISED:
                         this.handleEventRaised(e);
@@ -1099,11 +1099,7 @@ final class TaskOrchestrationExecutor {
                     // If the future is done, return its value right away
                     if (this.future.isDone()) {
                         try {
-                            V result = this.future.get();
-                            if (this.consumer != null) {
-                                this.consumer.accept(result);
-                            }
-                            return result;
+                            return this.future.get();
                         } catch (ExecutionException e) {
                             this.handleException(e.getCause());
                         } catch (Exception e) {
