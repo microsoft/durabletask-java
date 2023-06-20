@@ -36,12 +36,14 @@ public class AzureFunctions {
      */
     @FunctionName("Cities")
     public String citiesOrchestrator(
-            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx,
+            final ExecutionContext context) {
         String result = "";
         result += ctx.callActivity("Capitalize", "Tokyo", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "London", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "Seattle", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "Austin", String.class).await();
+        context.getLogger().info("Orchestrator function completed!");
         return result;
     }
 

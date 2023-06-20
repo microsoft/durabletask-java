@@ -9,8 +9,13 @@ package com.microsoft.durabletask.azurefunctions.internal.middleware;
 import com.microsoft.azure.functions.internal.spi.middleware.Middleware;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareChain;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareContext;
+import com.microsoft.durabletask.DataConverter;
 import com.microsoft.durabletask.OrchestrationRunner;
 import com.microsoft.durabletask.OrchestratorBlockedException;
+
+import java.util.Iterator;
+import java.util.ServiceLoader;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Durable Function Orchestration Middleware
@@ -21,14 +26,20 @@ import com.microsoft.durabletask.OrchestratorBlockedException;
 public class OrchestrationMiddleware implements Middleware {
 
     private static final String ORCHESTRATION_TRIGGER = "DurableOrchestrationTrigger";
+    private final Object dataConverterLock = new Object();
+    private volatile DataConverter dataConverter;
+    private final AtomicBoolean oneTimeLogicExecuted = new AtomicBoolean(false);
 
     @Override
     public void invoke(MiddlewareContext context, MiddlewareChain chain) throws Exception {
         String parameterName = context.getParameterName(ORCHESTRATION_TRIGGER);
-        if (parameterName == null){
+        if (parameterName == null) {
             chain.doNext(context);
             return;
         }
+        //invoked only for orchestrator function.
+        System.out.println("from middleware --" + Thread.currentThread().getContextClassLoader());
+        loadCustomizedDataConverterOnce();
         String orchestratorRequestEncodedProtoBytes = (String) context.getParameterValue(parameterName);
         String orchestratorOutputEncodedProtoBytes = OrchestrationRunner.loadAndRun(orchestratorRequestEncodedProtoBytes, taskOrchestrationContext -> {
             try {
@@ -39,12 +50,30 @@ public class OrchestrationMiddleware implements Middleware {
                 // The OrchestratorBlockedEvent will be wrapped into InvocationTargetException by using reflection to
                 // invoke method. Thus get the cause to check if it's OrchestratorBlockedEvent.
                 Throwable cause = e.getCause();
-                if (cause instanceof OrchestratorBlockedException){
+                if (cause instanceof OrchestratorBlockedException) {
                     throw (OrchestratorBlockedException) cause;
                 }
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }
-        });
+        }, dataConverter);
         context.updateReturnValue(orchestratorOutputEncodedProtoBytes);
+    }
+
+    private void loadCustomizedDataConverterOnce() {
+        if (!oneTimeLogicExecuted.get()) {
+            synchronized (dataConverterLock) {
+                if (!oneTimeLogicExecuted.get()) {
+                    Iterator<DataConverter> iterator = ServiceLoader.load(DataConverter.class).iterator();
+                    if (iterator.hasNext()) {
+                        this.dataConverter = iterator.next();
+                        System.out.println("assigned");
+                        if (iterator.hasNext()) {
+                            throw new IllegalStateException("Multiple implementations of DataConverter found on the classpath.");
+                        }
+                    }
+                    oneTimeLogicExecuted.compareAndSet(false,true);
+                }
+            }
+        }
     }
 }

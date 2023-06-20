@@ -36,10 +36,11 @@ public final class OrchestrationRunner {
      */
     public static <R> String loadAndRun(
             String base64EncodedOrchestratorRequest,
-            OrchestratorFunction<R> orchestratorFunc) {
+            OrchestratorFunction<R> orchestratorFunc,
+            DataConverter dataConverter) {
         // Example string: CiBhOTMyYjdiYWM5MmI0MDM5YjRkMTYxMDIwNzlmYTM1YSIaCP///////////wESCwi254qRBhDk+rgocgAicgj///////////8BEgwIs+eKkQYQzMXjnQMaVwoLSGVsbG9DaXRpZXMSACJGCiBhOTMyYjdiYWM5MmI0MDM5YjRkMTYxMDIwNzlmYTM1YRIiCiA3ODEwOTA2N2Q4Y2Q0ODg1YWU4NjQ0OTNlMmRlMGQ3OA==
         byte[] decodedBytes = Base64.getDecoder().decode(base64EncodedOrchestratorRequest);
-        byte[] resultBytes = loadAndRun(decodedBytes, orchestratorFunc);
+        byte[] resultBytes = loadAndRun(decodedBytes, orchestratorFunc, dataConverter);
         return Base64.getEncoder().encodeToString(resultBytes);
     }
 
@@ -55,7 +56,8 @@ public final class OrchestrationRunner {
      */
     public static <R> byte[] loadAndRun(
             byte[] orchestratorRequestBytes,
-            OrchestratorFunction<R> orchestratorFunc) {
+            OrchestratorFunction<R> orchestratorFunc,
+            DataConverter dataConverter) {
         if (orchestratorFunc == null) {
             throw new IllegalArgumentException("orchestratorFunc must not be null");
         }
@@ -66,7 +68,7 @@ public final class OrchestrationRunner {
             ctx.complete(output);
         };
 
-        return loadAndRun(orchestratorRequestBytes, orchestration);
+        return loadAndRun(orchestratorRequestBytes, orchestration, dataConverter);
     }
 
     /**
@@ -82,7 +84,7 @@ public final class OrchestrationRunner {
             String base64EncodedOrchestratorRequest,
             TaskOrchestration orchestration) {
         byte[] decodedBytes = Base64.getDecoder().decode(base64EncodedOrchestratorRequest);
-        byte[] resultBytes = loadAndRun(decodedBytes, orchestration);
+        byte[] resultBytes = loadAndRun(decodedBytes, orchestration, null);
         return Base64.getEncoder().encodeToString(resultBytes);
     }
 
@@ -95,7 +97,7 @@ public final class OrchestrationRunner {
      * @return a protobuf-encoded payload of orchestrator actions to be interpreted by the external orchestration engine
      * @throws IllegalArgumentException if either parameter is {@code null} or if {@code orchestratorRequestBytes} is not valid protobuf
      */
-    public static byte[] loadAndRun(byte[] orchestratorRequestBytes, TaskOrchestration orchestration) {
+    public static byte[] loadAndRun(byte[] orchestratorRequestBytes, TaskOrchestration orchestration, DataConverter dataConverter) {
         if (orchestratorRequestBytes == null || orchestratorRequestBytes.length == 0) {
             throw new IllegalArgumentException("triggerStateProtoBytes must not be null or empty");
         }
@@ -127,7 +129,7 @@ public final class OrchestrationRunner {
 
         TaskOrchestrationExecutor taskOrchestrationExecutor = new TaskOrchestrationExecutor(
                 orchestrationFactories,
-                new JacksonDataConverter(),
+                dataConverter != null ? dataConverter : new JacksonDataConverter(),
                 DEFAULT_MAXIMUM_TIMER_INTERVAL,
                 logger);
 
