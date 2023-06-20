@@ -22,7 +22,7 @@ import java.util.concurrent.TimeoutException;
 
 public class SendEvent {
 
-    private final String instanceId = "123";
+    private final String instanceId = "waitEventID";
     private final String eventName = "testEvent";
     private final String eventData = "Hello World!";
     /**
@@ -47,23 +47,26 @@ public class SendEvent {
             final ExecutionContext context) throws TimeoutException, InterruptedException {
         context.getLogger().info("Java HTTP trigger processed a request.");
         DurableTaskClient client = durableContext.getClient();
-        String instanceId = client.scheduleNewOrchestrationInstance("SendEvent");
+        String instanceId = client.scheduleNewOrchestrationInstance("SendEvent", null, "sendEventID");
         context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
     //
     @FunctionName("WaitEvent")
-    public void waitEvent(
-            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+    public String waitEvent(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx,
+            final ExecutionContext context) {
         String await = ctx.waitForExternalEvent(eventName, String.class).await();
-        System.out.println(await);
-//        return ctx.callActivity("Capitalize", await, String.class).await();
+        context.getLogger().info("Event received with payload: " + await);
+        return ctx.callActivity("Capitalize", await, String.class).await();
     }
 
     @FunctionName("SendEvent")
     public void sendEvent(
-            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx,
+            final ExecutionContext context) {
         ctx.sendEvent(instanceId, eventName, eventData);
+        context.getLogger().info("Event sent");
         return;
     }
 }
