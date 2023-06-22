@@ -37,7 +37,6 @@ public class EndToEndTests {
         assertEquals("Completed", runTimeStatus);
     }
 
-
     @Test
     public void continueAsNew() throws InterruptedException {
         String startOrchestrationPath = "api/ContinueAsNew";
@@ -58,5 +57,28 @@ public class EndToEndTests {
         Response statusResponse = get(statusQueryGetUri);
         runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
         assertEquals("Terminated", runTimeStatus);
+    }
+
+    @Test
+    public void sendEvent() throws InterruptedException {
+        String waitEventOrchestrationPath = "api/WaitEventOrchestration";
+        String SendEventOrchestrationPath = "api/SendEventOrchestration";
+        Response waitEventOrchestrationResponse = post(waitEventOrchestrationPath);
+        JsonPath jsonPath = waitEventOrchestrationResponse.jsonPath();
+        String waitEventOrchestrationStatusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        String runTimeStatus;
+        for (int i = 0; i < 10; i++) {
+            Response statusResponse = get(waitEventOrchestrationStatusQueryGetUri);
+            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            assertEquals("Running", runTimeStatus);
+            Thread.sleep(1000);
+        }
+
+        post(SendEventOrchestrationPath);
+        Thread.sleep(1000);
+
+        Response statusResponse = get(waitEventOrchestrationStatusQueryGetUri);
+        runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+        assertEquals("Completed", runTimeStatus);
     }
 }

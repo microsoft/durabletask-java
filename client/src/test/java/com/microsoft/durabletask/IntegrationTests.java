@@ -1110,4 +1110,50 @@ public class IntegrationTests extends IntegrationTestBase {
                 expectedTaskId,
                 expectedExceptionMessage);
     }
+
+    @Test
+    void sendEvent() throws IOException, InterruptedException, TimeoutException {
+        final String orchestratorOne = "Orchestrator1";
+        final String orchestratorTwo = "Orchestrator2";
+        final String instanceId = "testId";
+        final String eventName = "testEvent";
+        final String eventPayload = "testPayload";
+        final String finishMessage = "Finished Sending Event";
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorOne, ctx -> {
+                    String awaitInput = ctx.waitForExternalEvent(eventName, String.class).await();
+                    ctx.complete(awaitInput);
+                })
+                .addOrchestrator(orchestratorTwo, ctx -> {
+                    ctx.sendEvent(instanceId, eventName, eventPayload);
+                    ctx.complete(finishMessage);
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            client.scheduleNewOrchestrationInstance(orchestratorOne, null, instanceId);
+            String orchestratorTwoID = client.scheduleNewOrchestrationInstance(orchestratorTwo);
+
+            OrchestrationMetadata orchestratorOneInstance = client.waitForInstanceCompletion(
+                    instanceId,
+                    defaultTimeout,
+                    true);
+
+            assertNotNull(orchestratorOneInstance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, orchestratorOneInstance.getRuntimeStatus());
+            String outputOne = orchestratorOneInstance.readOutputAs(String.class);
+            assertEquals(eventPayload, outputOne);
+
+            OrchestrationMetadata orchestratorTwoInstance = client.waitForInstanceCompletion(
+                    orchestratorTwoID,
+                    defaultTimeout,
+                    true);
+
+            assertNotNull(orchestratorTwoInstance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, orchestratorTwoInstance.getRuntimeStatus());
+            String outputTwo = orchestratorTwoInstance.readOutputAs(String.class);
+            assertEquals(finishMessage, outputTwo);
+        }
+    }
 }

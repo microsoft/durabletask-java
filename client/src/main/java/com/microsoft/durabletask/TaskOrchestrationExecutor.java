@@ -693,6 +693,19 @@ final class TaskOrchestrationExecutor {
             task.completeExceptionally(exception);
         }
 
+        private void handleEventSentEvent(HistoryEvent e) {
+            int taskId = e.getEventId();
+            EventSentEvent eventSentEvent = e.getEventSent();
+            OrchestratorAction taskAction = this.pendingActions.remove(taskId);
+            if (taskAction == null) {
+                String message = String.format(
+                        "Non-deterministic orchestrator detected: a history event scheduling an sent-event task with sequence ID %d and name '%s' was replayed but the current orchestrator implementation didn't actually schedule this task. Was a change made to the orchestrator code after this instance had already started running?",
+                        taskId,
+                        eventSentEvent.getName());
+                throw new NonDeterministicOrchestratorException(message);
+            }
+        }
+
         private void handleExecutionTerminated(HistoryEvent e) {
             ExecutionTerminatedEvent executionTerminatedEvent = e.getExecutionTerminated();
             this.completeInternal(executionTerminatedEvent.getInput().getValue(), null, OrchestrationStatus.ORCHESTRATION_STATUS_TERMINATED);
@@ -772,6 +785,7 @@ final class TaskOrchestrationExecutor {
                         this.setCurrentInstant(instant);
                         break;
                     case ORCHESTRATORCOMPLETED:
+                    case EXECUTIONCOMPLETED:
                         // No action
                         break;
                     case EXECUTIONSTARTED:
@@ -791,8 +805,6 @@ final class TaskOrchestrationExecutor {
                         TaskOrchestration orchestrator = factory.create();
                         orchestrator.run(this);
                         break;
-//                case EXECUTIONCOMPLETED:
-//                    break;
 //                case EXECUTIONFAILED:
 //                    break;
                     case EXECUTIONTERMINATED:
@@ -822,8 +834,10 @@ final class TaskOrchestrationExecutor {
                     case SUBORCHESTRATIONINSTANCEFAILED:
                         this.handleSubOrchestrationFailed(e);
                         break;
-//                case EVENTSENT:
-//                    break;
+                    case EVENTSENT:
+                        this.handleEventSentEvent(e);
+//                        this.handleEventRaised(e);
+                        break;
                     case EVENTRAISED:
                         this.handleEventRaised(e);
                         break;
