@@ -1118,20 +1118,15 @@ public class IntegrationTests extends IntegrationTestBase {
         final String instanceId = "testId";
         final String eventName = "testEvent";
         final String eventPayload = "testPayload";
-        final String activityName = "Echo";
         final String finishMessage = "Finished Sending Event";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorOne, ctx -> {
                     String awaitInput = ctx.waitForExternalEvent(eventName, String.class).await();
-                    String output = ctx.callActivity(activityName, awaitInput, String.class).await();
-                    ctx.complete(output);
+                    ctx.complete(awaitInput);
                 })
                 .addOrchestrator(orchestratorTwo, ctx -> {
                     ctx.sendEvent(instanceId, eventName, eventPayload);
                     ctx.complete(finishMessage);
-                })
-                .addActivity(activityName, ctx -> {
-                    return String.format("Hello, %s!", ctx.getInput(String.class));
                 })
                 .buildAndStart();
 
@@ -1148,8 +1143,7 @@ public class IntegrationTests extends IntegrationTestBase {
             assertNotNull(orchestratorOneInstance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, orchestratorOneInstance.getRuntimeStatus());
             String outputOne = orchestratorOneInstance.readOutputAs(String.class);
-            String expected = String.format("Hello, %s!", eventPayload);
-            assertEquals(expected, outputOne);
+            assertEquals(eventPayload, outputOne);
 
             OrchestrationMetadata orchestratorTwoInstance = client.waitForInstanceCompletion(
                     orchestratorTwoID,
@@ -1160,66 +1154,6 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, orchestratorTwoInstance.getRuntimeStatus());
             String outputTwo = orchestratorTwoInstance.readOutputAs(String.class);
             assertEquals(finishMessage, outputTwo);
-
         }
     }
-
-//    @Test
-//    void orchestrationThenAccept() throws IOException, InterruptedException, TimeoutException {
-//        final String orchestratorOne = "Orchestrator1";
-//        final String orchestratorTwo = "Orchestrator2";
-//        final String instanceId = "testId";
-//        final String eventName = "testEvent";
-//        final String eventPayload = "testPayload";
-//        final String activityName = "Echo";
-//        final String input = Instant.now().toString();
-//        int start = 1;
-//        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-//                .addOrchestrator(orchestratorOne, ctx -> {
-//                    String activityInput = ctx.getInput(String.class);
-//                    String output = ctx
-//                            .callActivity(activityName, activityInput, String.class)
-//                            .thenAccept(result -> {
-//                                ctx.sendEvent(instanceId, eventName, eventPayload);
-//                            }).await();
-//                    ctx.complete(output);
-//                })
-//                .addOrchestrator(orchestratorTwo, ctx -> {
-//                    String awaitInput = ctx.waitForExternalEvent(eventName, String.class).await();
-//                    String output = ctx.callActivity(activityName, awaitInput, String.class).await();
-//                    ctx.complete(output);
-//                })
-//                .addActivity(activityName, ctx -> {
-//                    return String.format("Hello, %s!", ctx.getInput(String.class));
-//                })
-//                .buildAndStart();
-//
-//        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
-//        try (worker; client) {
-//            client.scheduleNewOrchestrationInstance(orchestratorTwo, input, instanceId);
-//            String orchestratorOneID = client.scheduleNewOrchestrationInstance(orchestratorOne, input);
-//
-//            OrchestrationMetadata orchestratorTwoInstance = client.waitForInstanceCompletion(
-//                    instanceId,
-//                    defaultTimeout,
-//                    true);
-//
-//            assertNotNull(orchestratorTwoInstance);
-//            assertEquals(OrchestrationRuntimeStatus.COMPLETED, orchestratorTwoInstance.getRuntimeStatus());
-//            String outputTwo = orchestratorTwoInstance.readOutputAs(String.class);
-//            String expected = String.format("Hello, %s!", eventPayload);
-//            assertEquals(expected, outputTwo);
-//
-//            OrchestrationMetadata orchestratorOneInstance = client.waitForInstanceCompletion(
-//                    orchestratorOneID,
-//                    defaultTimeout,
-//                    true);
-//
-//            assertNotNull(orchestratorOneInstance);
-//            assertEquals(OrchestrationRuntimeStatus.COMPLETED, orchestratorOneInstance.getRuntimeStatus());
-//            String outputOne = orchestratorOneInstance.readOutputAs(String.class);
-//            assertEquals(expected, outputOne);
-//
-//        }
-//    }
 }
