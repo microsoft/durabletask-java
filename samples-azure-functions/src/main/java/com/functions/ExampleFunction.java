@@ -38,8 +38,6 @@ public class ExampleFunction {
             @DurableOrchestrationTrigger(name = "taskOrchestrationContext") final TaskOrchestrationContext context,
             final ExecutionContext functionContext) {
         return context.callActivity("ToLower", "Foo", ExampleResponse.class).await();
-//                " " +
-//                context.callActivity("ToLower", "Bar", ExampleResponse.class).await();
     }
 
     @FunctionName("ToLower")
