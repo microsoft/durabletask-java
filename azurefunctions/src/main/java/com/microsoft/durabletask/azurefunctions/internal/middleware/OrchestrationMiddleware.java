@@ -38,7 +38,6 @@ public class OrchestrationMiddleware implements Middleware {
             return;
         }
         //invoked only for orchestrator function.
-        System.out.println("from middleware --" + Thread.currentThread().getContextClassLoader());
         loadCustomizedDataConverterOnce();
         String orchestratorRequestEncodedProtoBytes = (String) context.getParameterValue(parameterName);
         String orchestratorOutputEncodedProtoBytes = OrchestrationRunner.loadAndRun(orchestratorRequestEncodedProtoBytes, taskOrchestrationContext -> {
