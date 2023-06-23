@@ -65,7 +65,6 @@ public class OrchestrationMiddleware implements Middleware {
                     Iterator<DataConverter> iterator = ServiceLoader.load(DataConverter.class).iterator();
                     if (iterator.hasNext()) {
                         this.dataConverter = iterator.next();
-                        System.out.println("assigned");
                         if (iterator.hasNext()) {
                             throw new IllegalStateException("Multiple implementations of DataConverter found on the classpath.");
                         }
