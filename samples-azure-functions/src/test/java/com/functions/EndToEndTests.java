@@ -55,6 +55,7 @@ public class EndToEndTests {
         assertEquals("Terminated", runTimeStatus);
     }
 
+<<<<<<< HEAD
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void restart(boolean restartWithNewInstanceId) throws InterruptedException {
@@ -94,4 +95,36 @@ public class EndToEndTests {
         return runTimeStatus;
     }
 
+=======
+    @Test
+    public void suspendResume() throws InterruptedException {
+        String startOrchestrationPath = "api/StartResumeSuspendOrchestration";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        Thread.sleep(100);
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        Response statusResponse = get(statusQueryGetUri);
+        String runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+        assertEquals("Running", runTimeStatus);
+
+        String suspendPostUri = jsonPath.get("suspendPostUri");
+        post(suspendPostUri, "Suspend Orchestration");
+        Thread.sleep(500);
+        statusResponse = get(statusQueryGetUri);
+        runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+        assertEquals("Suspended", runTimeStatus);
+
+        String resumePostUri = jsonPath.get("resumePostUri");
+        post(resumePostUri, "Resume Orchestration");
+        Thread.sleep(500);
+        String sendEventPostUri = jsonPath.get("sendEventPostUri");
+        sendEventPostUri = sendEventPostUri.replace("{eventName}", "test");
+        post(sendEventPostUri);
+        Thread.sleep(500);
+        statusResponse = get(statusQueryGetUri);
+        runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+        assertEquals("Completed", runTimeStatus);
+
+    }
+>>>>>>> 5e2e866 (resume and suspend orhcestration)
 }

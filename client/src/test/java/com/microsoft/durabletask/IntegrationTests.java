@@ -46,16 +46,16 @@ public class IntegrationTests extends IntegrationTestBase {
         final String orchestratorName = "EmptyOrchestration";
         final String input = "Hello " + Instant.now();
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> ctx.complete(ctx.getInput(String.class)))
-            .buildAndStart();
+                .addOrchestrator(orchestratorName, ctx -> ctx.complete(ctx.getInput(String.class)))
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId,
-                defaultTimeout,
-                true);
+                    instanceId,
+                    defaultTimeout,
+                    true);
 
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -69,8 +69,8 @@ public class IntegrationTests extends IntegrationTestBase {
         final String orchestratorName = "SingleTimer";
         final Duration delay = Duration.ofSeconds(3);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
-            .buildAndStart();
+                .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
@@ -181,24 +181,24 @@ public class IntegrationTests extends IntegrationTestBase {
     void isReplaying() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                ArrayList<Boolean> list = new ArrayList<Boolean>();
-                list.add(ctx.getIsReplaying());
-                ctx.createTimer(Duration.ofSeconds(0)).await();
-                list.add(ctx.getIsReplaying());
-                ctx.createTimer(Duration.ofSeconds(0)).await();
-                list.add(ctx.getIsReplaying());
-                ctx.complete(list);
-            })
-            .buildAndStart();
+                .addOrchestrator(orchestratorName, ctx -> {
+                    ArrayList<Boolean> list = new ArrayList<Boolean>();
+                    list.add(ctx.getIsReplaying());
+                    ctx.createTimer(Duration.ofSeconds(0)).await();
+                    list.add(ctx.getIsReplaying());
+                    ctx.createTimer(Duration.ofSeconds(0)).await();
+                    list.add(ctx.getIsReplaying());
+                    ctx.complete(list);
+                })
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId,
-                defaultTimeout,
-                true);
+                    instanceId,
+                    defaultTimeout,
+                    true);
 
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -219,23 +219,23 @@ public class IntegrationTests extends IntegrationTestBase {
         final String activityName = "Echo";
         final String input = Instant.now().toString();
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                String activityInput = ctx.getInput(String.class);
-                String output = ctx.callActivity(activityName, activityInput, String.class).await();
-                ctx.complete(output);
-            })
-            .addActivity(activityName, ctx -> {
-                return String.format("Hello, %s!", ctx.getInput(String.class));
-            })
-            .buildAndStart();
+                .addOrchestrator(orchestratorName, ctx -> {
+                    String activityInput = ctx.getInput(String.class);
+                    String output = ctx.callActivity(activityName, activityInput, String.class).await();
+                    ctx.complete(output);
+                })
+                .addActivity(activityName, ctx -> {
+                    return String.format("Hello, %s!", ctx.getInput(String.class));
+                })
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId,
-                defaultTimeout,
-                true);
+                    instanceId,
+                    defaultTimeout,
+                    true);
 
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -251,28 +251,28 @@ public class IntegrationTests extends IntegrationTestBase {
         final String echoActivityName = "Echo";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                Instant currentInstant1 = ctx.getCurrentInstant();
-                Instant originalInstant1 = ctx.callActivity(echoActivityName, currentInstant1, Instant.class).await();
-                if (!currentInstant1.equals(originalInstant1)) {
-                    ctx.complete(false);
-                    return;
-                }
+                .addOrchestrator(orchestratorName, ctx -> {
+                    Instant currentInstant1 = ctx.getCurrentInstant();
+                    Instant originalInstant1 = ctx.callActivity(echoActivityName, currentInstant1, Instant.class).await();
+                    if (!currentInstant1.equals(originalInstant1)) {
+                        ctx.complete(false);
+                        return;
+                    }
 
-                Instant currentInstant2 = ctx.getCurrentInstant();
-                Instant originalInstant2 = ctx.callActivity(echoActivityName, currentInstant2, Instant.class).await();
-                if (!currentInstant2.equals(originalInstant2)) {
-                    ctx.complete(false);
-                    return;
-                }
+                    Instant currentInstant2 = ctx.getCurrentInstant();
+                    Instant originalInstant2 = ctx.callActivity(echoActivityName, currentInstant2, Instant.class).await();
+                    if (!currentInstant2.equals(originalInstant2)) {
+                        ctx.complete(false);
+                        return;
+                    }
 
-                ctx.complete(!currentInstant1.equals(currentInstant2));
-            })
-            .addActivity(echoActivityName, ctx -> {
-                // Return the input back to the caller, regardless of its type
-                return ctx.getInput(Object.class);
-            })
-            .buildAndStart();
+                    ctx.complete(!currentInstant1.equals(currentInstant2));
+                })
+                .addActivity(echoActivityName, ctx -> {
+                    // Return the input back to the caller, regardless of its type
+                    return ctx.getInput(Object.class);
+                })
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
@@ -290,16 +290,16 @@ public class IntegrationTests extends IntegrationTestBase {
         final String plusOneActivityName = "PlusOne";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                int value = ctx.getInput(int.class);
-                for (int i = 0; i < 10; i++) {
-                    value = ctx.callActivity(plusOneActivityName, i, int.class).await();
-                }
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    for (int i = 0; i < 10; i++) {
+                        value = ctx.callActivity(plusOneActivityName, i, int.class).await();
+                    }
 
-                ctx.complete(value);
-            })
-            .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
-            .buildAndStart();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
@@ -450,78 +450,78 @@ public class IntegrationTests extends IntegrationTestBase {
             client.scheduleNewOrchestrationInstance(orchestratorName, "RestartTest");
 
             assertThrows(
-                IllegalArgumentException.class,
-                () -> client.restartInstance(nonExistentId, true)
+                    IllegalArgumentException.class,
+                    () -> client.restartInstance(nonExistentId, true)
             );
         }
 
     }
 
-//    @Test
-//    void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
-//        final String orchestratorName = "suspend";
-//        final String eventName = "MyEvent";
-//        final String eventPayload = "testPayload";
-//        final Duration suspendTimeout = Duration.ofSeconds(5);
-//
-//        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-//                .addOrchestrator(orchestratorName, ctx -> {
-//                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
-//                    ctx.complete(payload);
-//                })
-//                .buildAndStart();
-//
-//        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
-//        try (worker; client) {
-//            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-//            client.suspendInstance(instanceId);
-//            OrchestrationMetadata instance = client.waitForInstanceStart(instanceId, defaultTimeout);
-//            assertNotNull(instance);
-//            assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
-//
-//            client.raiseEvent(instanceId, eventName, eventPayload);
-//
-//            assertThrows(
-//                    TimeoutException.class,
-//                    () -> client.waitForInstanceCompletion(instanceId, suspendTimeout, false),
-//                    "Expected to throw TimeoutException, but it didn't"
-//                    );
-//
-//            String resumeReason = "Resume for testing.";
-//            client.resumeInstance(instanceId, resumeReason);
-//            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
-//            assertNotNull(instance);
-//            assertEquals(instanceId, instance.getInstanceId());
-//            assertEquals(eventPayload, instance.readOutputAs(String.class));
-//            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
-//        }
-//    }
-//
-//    @Test
-//    void terminateSuspendOrchestration() throws TimeoutException, InterruptedException {
-//        final String orchestratorName = "suspendResume";
-//        final String eventName = "MyEvent";
-//        final String eventPayload = "testPayload";
-//
-//        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-//                .addOrchestrator(orchestratorName, ctx -> {
-//                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
-//                    ctx.complete(payload);
-//                })
-//                .buildAndStart();
-//
-//        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
-//        try (worker; client) {
-//            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
-//            String suspendReason = "Suspend for testing.";
-//            client.suspendInstance(instanceId, suspendReason);
-//            client.terminate(instanceId, null);
-//            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
-//            assertNotNull(instance);
-//            assertEquals(instanceId, instance.getInstanceId());
-//            assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
-//        }
-//    }
+    @Test
+    void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
+        final String orchestratorName = "suspend";
+        final String eventName = "MyEvent";
+        final String eventPayload = "testPayload";
+        final Duration suspendTimeout = Duration.ofSeconds(5);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
+                    ctx.complete(payload);
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            client.suspendInstance(instanceId);
+            OrchestrationMetadata instance = client.waitForInstanceStart(instanceId, defaultTimeout);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.SUSPENDED, instance.getRuntimeStatus());
+
+            client.raiseEvent(instanceId, eventName, eventPayload);
+
+            assertThrows(
+                    TimeoutException.class,
+                    () -> client.waitForInstanceCompletion(instanceId, suspendTimeout, false),
+                    "Expected to throw TimeoutException, but it didn't"
+                    );
+
+            String resumeReason = "Resume for testing.";
+            client.resumeInstance(instanceId, resumeReason);
+            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(instanceId, instance.getInstanceId());
+            assertEquals(eventPayload, instance.readOutputAs(String.class));
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+        }
+    }
+
+    @Test
+    void terminateSuspendOrchestration() throws TimeoutException, InterruptedException {
+        final String orchestratorName = "suspendResume";
+        final String eventName = "MyEvent";
+        final String eventPayload = "testPayload";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    String payload = ctx.waitForExternalEvent(eventName, String.class).await();
+                    ctx.complete(payload);
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            String suspendReason = "Suspend for testing.";
+            client.suspendInstance(instanceId, suspendReason);
+            client.terminate(instanceId, null);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
+            assertNotNull(instance);
+            assertEquals(instanceId, instance.getInstanceId());
+            assertEquals(OrchestrationRuntimeStatus.TERMINATED, instance.getRuntimeStatus());
+        }
+    }
 
     @Test
     void activityFanOut() throws IOException, TimeoutException {
@@ -530,20 +530,20 @@ public class IntegrationTests extends IntegrationTestBase {
         final int activityCount = 10;
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                // Schedule each task to run in parallel
-                List<Task<String>> parallelTasks = IntStream.range(0, activityCount)
-                        .mapToObj(i -> ctx.callActivity(activityName, i, String.class))
-                        .collect(Collectors.toList());
+                .addOrchestrator(orchestratorName, ctx -> {
+                    // Schedule each task to run in parallel
+                    List<Task<String>> parallelTasks = IntStream.range(0, activityCount)
+                            .mapToObj(i -> ctx.callActivity(activityName, i, String.class))
+                            .collect(Collectors.toList());
 
-                // Wait for all tasks to complete, then sort and reverse the results
-                List<String> results = ctx.allOf(parallelTasks).await();
-                Collections.sort(results);
-                Collections.reverse(results);
-                ctx.complete(results);
-            })
-            .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
-            .buildAndStart();
+                    // Wait for all tasks to complete, then sort and reverse the results
+                    List<String> results = ctx.allOf(parallelTasks).await();
+                    Collections.sort(results);
+                    Collections.reverse(results);
+                    ctx.complete(results);
+                })
+                .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
@@ -572,20 +572,20 @@ public class IntegrationTests extends IntegrationTestBase {
         final int eventCount = 10;
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                int i;
-                for (i = 0; i < eventCount; i++) {
-                    // block until the event is received
-                    int payload = ctx.waitForExternalEvent(eventName, int.class).await();
-                    if (payload != i) {
-                        ctx.complete(-1);
-                        return;
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int i;
+                    for (i = 0; i < eventCount; i++) {
+                        // block until the event is received
+                        int payload = ctx.waitForExternalEvent(eventName, int.class).await();
+                        if (payload != i) {
+                            ctx.complete(-1);
+                            return;
+                        }
                     }
-                }
 
-                ctx.complete(i);
-            })
-            .buildAndStart();
+                    ctx.complete(i);
+                })
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
@@ -611,15 +611,15 @@ public class IntegrationTests extends IntegrationTestBase {
         final String eventName = "MyEvent";
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
-            .addOrchestrator(orchestratorName, ctx -> {
-                try {
-                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).await();
-                    ctx.complete("received");
-                } catch (TaskCanceledException e) {
-                    ctx.complete(e.getMessage());
-                }
-            })
-            .buildAndStart();
+                .addOrchestrator(orchestratorName, ctx -> {
+                    try {
+                        ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).await();
+                        ctx.complete("received");
+                    } catch (TaskCanceledException e) {
+                        ctx.complete(e.getMessage());
+                    }
+                })
+                .buildAndStart();
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {

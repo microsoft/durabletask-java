@@ -292,33 +292,33 @@ public abstract class DurableTaskClient implements AutoCloseable {
      */
     public abstract String restartInstance(String instanceId, boolean restartWithNewInstanceId);
 
-//    /**
-//     * Suspends a running orchestration instance.
-//     * @param instanceId the ID of the orchestration instance to suspend
-//     */
-//    public void suspendInstance (String instanceId) {
-//        this.suspendInstance(instanceId, null);
-//    }
-//
-//    /**
-//     * Resumes a running orchestration instance.
-//     * @param instanceId the ID of the orchestration instance to resume
-//     */
-//    public void resumeInstance(String instanceId) {
-//        this.resumeInstance(instanceId, null);
-//    }
-//
-//    /**
-//     * Suspends a running orchestration instance.
-//     * @param instanceId the ID of the orchestration instance to suspend
-//     * @param reason the reason for suspending the orchestration instance
-//     */
-//    public abstract void suspendInstance(String instanceId, @Nullable String reason);
-//
-//    /**
-//     * Resumes a running orchestration instance.
-//     * @param instanceId the ID of the orchestration instance to resume
-//     * @param reason the reason for resuming the orchestration instance
-//     */
-//    public abstract void resumeInstance(String instanceId, @Nullable String reason);
+    /**
+     * Suspends a running orchestration instance.
+     * @param instanceId the ID of the orchestration instance to suspend
+     */
+    public void suspendInstance (String instanceId) {
+        this.suspendInstance(instanceId, null);
+    }
+
+    /**
+     * Resumes a running orchestration instance.
+     * @param instanceId the ID of the orchestration instance to resume
+     */
+    public void resumeInstance(String instanceId) {
+        this.resumeInstance(instanceId, null);
+    }
+
+    /**
+     * Suspends a running orchestration instance.
+     * @param instanceId the ID of the orchestration instance to suspend
+     * @param reason the reason for suspending the orchestration instance
+     */
+    public abstract void suspendInstance(String instanceId, @Nullable String reason);
+
+    /**
+     * Resumes a running orchestration instance.
+     * @param instanceId the ID of the orchestration instance to resume
+     * @param reason the reason for resuming the orchestration instance
+     */
+    public abstract void resumeInstance(String instanceId, @Nullable String reason);
 }
