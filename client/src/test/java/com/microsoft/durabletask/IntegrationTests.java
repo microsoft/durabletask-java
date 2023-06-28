@@ -1161,7 +1161,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void theApply() throws IOException, InterruptedException, TimeoutException {
+    void thenApply() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "thenApplyActivity";
         final String activityName = "Echo";
         final String suffix = "-test";
@@ -1190,6 +1190,40 @@ public class IntegrationTests extends IntegrationTestBase {
             String output = instance.readOutputAs(String.class);
             String expected = String.format("Hello, %s!%s", input, suffix);
             assertEquals(expected, output);
+        }
+    }
+
+    @Test
+    void externalEventThenAccept() throws IOException, InterruptedException, TimeoutException {
+        final String orchestratorName = "continueAsNewWithExternalEvents";
+        final String eventName = "MyEvent";
+        final int expectedEventCount = 10;
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
+            int receivedEventCount = ctx.getInput(int.class);
+
+            if (receivedEventCount < expectedEventCount) {
+                ctx.waitForExternalEvent(eventName, int.class)
+                        .thenAccept(s -> {
+                            ctx.continueAsNew(receivedEventCount + 1);
+                            return;
+                        })
+                        .await();
+            } else {
+                ctx.complete(receivedEventCount);
+            }
+        }).buildAndStart();
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+
+            for (int i = 0; i < expectedEventCount; i++) {
+                client.raiseEvent(instanceId, eventName, i);
+            }
+
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(expectedEventCount, instance.readOutputAs(int.class));
         }
     }
 }
