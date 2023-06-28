@@ -1159,4 +1159,37 @@ public class IntegrationTests extends IntegrationTestBase {
                 expectedTaskId,
                 expectedExceptionMessage);
     }
+
+    @Test
+    void theApply() throws IOException, InterruptedException, TimeoutException {
+        final String orchestratorName = "thenApplyActivity";
+        final String activityName = "Echo";
+        final String suffix = "-test";
+        final String input = Instant.now().toString();
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    String activityInput = ctx.getInput(String.class);
+                    String output = ctx.callActivity(activityName, activityInput, String.class).thenApply(s -> s + suffix).await();
+                    ctx.complete(output);
+                })
+                .addActivity(activityName, ctx -> {
+                    return String.format("Hello, %s!", ctx.getInput(String.class));
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                    instanceId,
+                    defaultTimeout,
+                    true);
+
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            String output = instance.readOutputAs(String.class);
+            String expected = String.format("Hello, %s!%s", input, suffix);
+            assertEquals(expected, output);
+        }
+    }
 }

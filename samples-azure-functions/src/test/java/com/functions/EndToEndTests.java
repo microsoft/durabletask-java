@@ -32,7 +32,6 @@ public class EndToEndTests {
         assertEquals("Completed", runTimeStatus);
     }
 
-
     @Test
     public void continueAsNew() throws InterruptedException {
         String startOrchestrationPath = "api/ContinueAsNew";
@@ -94,4 +93,24 @@ public class EndToEndTests {
         return runTimeStatus;
     }
 
+    @Test
+    public void thenChain() throws InterruptedException {
+        final String expect = "AUSTIN-test";
+        String startOrchestrationPath = "/api/StartOrchestrationThenChain";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        String runTimeStatus = null;
+        String output = null;
+        for (int i = 0; i < 15; i++) {
+            Response statusResponse = get(statusQueryGetUri);
+            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            output = statusResponse.jsonPath().get("output");
+            if (!"Completed".equals(runTimeStatus)) {
+                Thread.sleep(1000);
+            } else break;
+        }
+        assertEquals("Completed", runTimeStatus);
+        assertEquals(expect, output);
+    }
 }

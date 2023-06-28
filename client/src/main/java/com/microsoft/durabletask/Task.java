@@ -3,6 +3,9 @@
 package com.microsoft.durabletask;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Represents an asynchronous operation in a durable orchestration.
@@ -54,4 +57,9 @@ public abstract class Task<V> {
      * @return the result of the task
      */
     public abstract V await();
+
+    public abstract <U> Task<U> thenApply(Function<V,U> fn);
+
+    public abstract Task<Void> thenAccept(Consumer<V> fn);
+
 }
