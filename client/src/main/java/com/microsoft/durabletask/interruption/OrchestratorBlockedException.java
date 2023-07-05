@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-package com.microsoft.durabletask;
+package com.microsoft.durabletask.interruption;
+
+import com.microsoft.durabletask.Task;
 
 /**
  * Control flow {@code Throwable} class for orchestrator functions. This {@code Throwable} must never be caught by user
@@ -12,7 +14,7 @@ package com.microsoft.durabletask;
  * state and scheduling new tasks, resulting in the orchestration getting stuck.
  */
 public final class OrchestratorBlockedException extends RuntimeException {
-    OrchestratorBlockedException(String message) {
+    public OrchestratorBlockedException(String message) {
         super(message);
     }
 }

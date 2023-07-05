@@ -4,6 +4,8 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
+import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
+import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 
@@ -51,6 +53,9 @@ final class TaskOrchestrationExecutor {
             completed = true;
         } catch (OrchestratorBlockedException orchestratorBlockedException) {
             logger.fine("The orchestrator has yielded and will await for new events.");
+        } catch (ContinueAsNewInterruption continueAsNewInterruption) {
+            logger.fine("The orchestrator has continued as new.");
+            context.complete(null);
         } catch (Exception e) {
             // The orchestrator threw an unhandled exception - fail it
             // TODO: What's the right way to log this?
@@ -289,6 +294,13 @@ final class TaskOrchestrationExecutor {
             this.continuedAsNew = true;
             this.continuedAsNewInput = input;
             this.preserveUnprocessedEvents = preserveUnprocessedEvents;
+
+            // The ContinueAsNewInterruption exception allows the orchestration to complete immediately and return back
+            // to azure functions durable extension/sidecar.
+            // We can send the current set of actions back to the worker and wait for new events to come in.
+            // This is *not* an exception - it's a normal part of orchestrator control flow.
+            throw new ContinueAsNewInterruption(
+                    "The orchestrator invoked continueAsNew. This Throwable should never be caught by user code.");
         }
 
         @Override
