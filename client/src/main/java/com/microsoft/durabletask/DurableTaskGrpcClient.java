@@ -283,25 +283,25 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         }
     }
 
-    @Override
-    public void suspendInstance(String instanceId, @Nullable String reason) {
-        SuspendRequest.Builder suspendRequestBuilder = SuspendRequest.newBuilder();
-        suspendRequestBuilder.setInstanceId(instanceId);
-        if (reason != null) {
-            suspendRequestBuilder.setReason(StringValue.of(reason));
-        }
-        this.sidecarClient.suspendInstance(suspendRequestBuilder.build());
-    }
-
-    @Override
-    public void resumeInstance(String instanceId, @Nullable String reason) {
-        ResumeRequest.Builder resumeRequestBuilder = ResumeRequest.newBuilder();
-        resumeRequestBuilder.setInstanceId(instanceId);
-        if (reason != null) {
-            resumeRequestBuilder.setReason(StringValue.of(reason));
-        }
-        this.sidecarClient.resumeInstance(resumeRequestBuilder.build());
-    }
+//    @Override
+//    public void suspendInstance(String instanceId, @Nullable String reason) {
+//        SuspendRequest.Builder suspendRequestBuilder = SuspendRequest.newBuilder();
+//        suspendRequestBuilder.setInstanceId(instanceId);
+//        if (reason != null) {
+//            suspendRequestBuilder.setReason(StringValue.of(reason));
+//        }
+//        this.sidecarClient.suspendInstance(suspendRequestBuilder.build());
+//    }
+//
+//    @Override
+//    public void resumeInstance(String instanceId, @Nullable String reason) {
+//        ResumeRequest.Builder resumeRequestBuilder = ResumeRequest.newBuilder();
+//        resumeRequestBuilder.setInstanceId(instanceId);
+//        if (reason != null) {
+//            resumeRequestBuilder.setReason(StringValue.of(reason));
+//        }
+//        this.sidecarClient.resumeInstance(resumeRequestBuilder.build());
+//    }
 
     @Override
     public String restartInstance(String instanceId, boolean restartWithNewInstanceId) {

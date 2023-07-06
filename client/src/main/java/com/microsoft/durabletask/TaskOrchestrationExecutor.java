@@ -55,7 +55,7 @@ final class TaskOrchestrationExecutor {
             context.fail(new FailureDetails(e));
         }
 
-        if (context.continuedAsNew || (completed && context.pendingActions.isEmpty() && !context.waitingForEvents())) {
+        if ((context.continuedAsNew && !context.isComplete) || (completed && context.pendingActions.isEmpty() && !context.waitingForEvents())) {
             // There are no further actions for the orchestrator to take so auto-complete the orchestration.
             context.complete(null);
         }

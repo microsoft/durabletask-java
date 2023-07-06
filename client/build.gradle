@@ -4,10 +4,11 @@ plugins {
     // Generate IntelliJ IDEA's .idea & .iml project files
     id 'idea'
     id 'maven-publish'
+    id 'signing'
 }
 
 group 'com.microsoft'
-version = '1.0.0'
+version = '1.1.1'
 archivesBaseName = 'durabletask-client'
 
 def grpcVersion = '1.46.0'
@@ -96,6 +97,11 @@ task integrationTest(type: Test) {
 }
 
 publishing {
+    repositories {
+        maven {
+            url "file://$project.rootDir/repo"
+        }
+    }
     publications {
         mavenJava(MavenPublication) {
             from components.java
@@ -138,6 +144,10 @@ publishing {
             }
         }
     }
+}
+
+signing {
+    sign publishing.publications.mavenJava
 }
 
 java {
