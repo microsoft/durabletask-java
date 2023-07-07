@@ -12,6 +12,7 @@ package com.microsoft.durabletask.azurefunctions;
 public class HttpManagementPayload {
     private final String id;
     private final String purgeHistoryDeleteUri;
+    private final String restartPostUri;
     private final String sendEventPostUri;
     private final String statusQueryGetUri;
     private final String terminatePostUri;
@@ -29,6 +30,7 @@ public class HttpManagementPayload {
             String requiredQueryStringParameters) {
         this.id = instanceId;
         this.purgeHistoryDeleteUri = instanceStatusURL + "?" + requiredQueryStringParameters;
+        this.restartPostUri = instanceStatusURL + "/restart?" + requiredQueryStringParameters;
         this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}?" + requiredQueryStringParameters;
         this.statusQueryGetUri = instanceStatusURL + "?" + requiredQueryStringParameters;
         this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
@@ -78,4 +80,14 @@ public class HttpManagementPayload {
     public String getPurgeHistoryDeleteUri() {
         return this.purgeHistoryDeleteUri;
     }
+
+    /**
+     * Gets the HTTP POST instance restart endpoint.
+     *
+     * @return The HTTP URL for posting instance restart commands.
+     */
+    public String getRestartPostUri() {
+        return restartPostUri;
+    }
+
 }

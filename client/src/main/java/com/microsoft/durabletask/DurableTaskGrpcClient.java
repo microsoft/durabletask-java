@@ -303,6 +303,24 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
 //        this.sidecarClient.resumeInstance(resumeRequestBuilder.build());
 //    }
 
+    @Override
+    public String restartInstance(String instanceId, boolean restartWithNewInstanceId) {
+        OrchestrationMetadata metadata = this.getInstanceMetadata(instanceId, true);
+        if (!metadata.isInstanceFound()) {
+            throw new IllegalArgumentException(new StringBuilder()
+                    .append("An orchestration with instanceId ")
+                    .append(instanceId)
+                    .append(" was not found.").toString());
+        }
+
+        if (restartWithNewInstanceId) {
+            return this.scheduleNewOrchestrationInstance(metadata.getName(), this.dataConverter.deserialize(metadata.getSerializedInput(), Object.class));
+        }
+        else {
+            return this.scheduleNewOrchestrationInstance(metadata.getName(), this.dataConverter.deserialize(metadata.getSerializedInput(), Object.class), metadata.getInstanceId());
+        }
+    }
+
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
         return new PurgeResult(response.getDeletedInstanceCount());
     }

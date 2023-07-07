@@ -282,6 +282,16 @@ public abstract class DurableTaskClient implements AutoCloseable {
      */
     public abstract PurgeResult purgeInstances(PurgeInstanceCriteria purgeInstanceCriteria) throws TimeoutException;
 
+    /**
+     * Restarts an existing orchestration instance with the original input.
+     * @param instanceId the ID of the previously run orchestration instance to restart.
+     * @param restartWithNewInstanceId <code>true</code> to restart the orchestration instance with a new instance ID
+     *                                 <code>false</code> to restart the orchestration instance with same instance ID
+     * @return the ID of the scheduled orchestration instance, which is either <code>instanceId</code> or randomly
+     *         generated depending on the value of <code>restartWithNewInstanceId</code>
+     */
+    public abstract String restartInstance(String instanceId, boolean restartWithNewInstanceId);
+
 //    /**
 //     * Suspends a running orchestration instance.
 //     * @param instanceId the ID of the orchestration instance to suspend
