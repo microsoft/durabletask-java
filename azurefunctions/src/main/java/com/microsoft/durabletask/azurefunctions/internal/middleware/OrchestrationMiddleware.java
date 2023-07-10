@@ -54,7 +54,7 @@ public class OrchestrationMiddleware implements Middleware {
                 }
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }
-        }, dataConverter);
+        }, this.dataConverter);
         context.updateReturnValue(orchestratorOutputEncodedProtoBytes);
     }
 

@@ -17,9 +17,9 @@ import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
 import java.time.LocalDate;
 import java.util.Optional;
 
-public class ExampleFunction {
+public class CustomizeDataConverter {
 
-    @FunctionName("StartExampleProcess")
+    @FunctionName("StartCustomize")
     public HttpResponseMessage startExampleProcess(
             @HttpTrigger(name = "req",
                     methods = {HttpMethod.GET, HttpMethod.POST},
@@ -29,11 +29,11 @@ public class ExampleFunction {
         context.getLogger().info("Java HTTP trigger processed a request");
 
         final DurableTaskClient client = durableContext.getClient();
-        final String instanceId = client.scheduleNewOrchestrationInstance("ExampleProcess");
+        final String instanceId = client.scheduleNewOrchestrationInstance("Customize");
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
 
-    @FunctionName("ExampleProcess")
+    @FunctionName("Customize")
     public ExampleResponse exampleOrchestrator(
             @DurableOrchestrationTrigger(name = "taskOrchestrationContext") final TaskOrchestrationContext context,
             final ExecutionContext functionContext) {
@@ -48,8 +48,8 @@ public class ExampleFunction {
     }
 
     static class ExampleResponse {
-        private LocalDate date;
-        private String value;
+        private final LocalDate date;
+        private final String value;
 
         public ExampleResponse(LocalDate date, String value) {
             this.date = date;
