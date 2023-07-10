@@ -55,7 +55,6 @@ public class EndToEndTests {
         assertEquals("Terminated", runTimeStatus);
     }
 
-<<<<<<< HEAD
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void restart(boolean restartWithNewInstanceId) throws InterruptedException {
@@ -95,7 +94,6 @@ public class EndToEndTests {
         return runTimeStatus;
     }
 
-=======
     @Test
     public void suspendResume() throws InterruptedException {
         String startOrchestrationPath = "api/StartResumeSuspendOrchestration";
@@ -126,5 +124,4 @@ public class EndToEndTests {
         assertEquals("Completed", runTimeStatus);
 
     }
->>>>>>> 5e2e866 (resume and suspend orhcestration)
 }
