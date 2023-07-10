@@ -3,6 +3,9 @@
 package com.microsoft.durabletask;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Represents an asynchronous operation in a durable orchestration.
@@ -54,4 +57,21 @@ public abstract class Task<V> {
      * @return the result of the task
      */
     public abstract V await();
+
+    /**
+     * Returns a new {@link Task} that, when this Task completes normally,
+     * is executed with this Task's result as the argument to the supplied function.
+     * @param fn the function to use to compute the value of the returned Task
+     * @return the new Task
+     * @param <U> the function's return type
+     */
+    public abstract <U> Task<U> thenApply(Function<V,U> fn);
+
+    /**
+     *Returns a new {@link Task} that, when this Task completes normally,
+     * is executed with this Task's result as the argument to the supplied action.
+     * @param fn the function to use to compute the value of the returned Task
+     * @return the new Task
+     */
+    public abstract Task<Void> thenAccept(Consumer<V> fn);
 }

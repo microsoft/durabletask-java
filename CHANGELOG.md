@@ -1,3 +1,7 @@
+## v1.2.0
+* Add `thenAccept` and `thenApply` to `Task` interface ([#148](https://github.com/microsoft/durabletask-java/pull/148)) 
+
+
 ## v1.1.1
 
 ### Updates

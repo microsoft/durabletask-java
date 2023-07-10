@@ -15,7 +15,10 @@ import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntFunction;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 final class TaskOrchestrationExecutor {
@@ -1100,6 +1103,18 @@ final class TaskOrchestrationExecutor {
                 // This is *not* an exception - it's a normal part of orchestrator control flow.
                 throw new OrchestratorBlockedException(
                         "The orchestrator is blocked and waiting for new inputs. This Throwable should never be caught by user code.");
+            }
+
+            @Override
+            public <U> CompletableTask<U> thenApply(Function<V, U> fn) {
+                CompletableFuture<U> newFuture = this.future.thenApply(fn);
+                return new CompletableTask<>(newFuture);
+            }
+
+            @Override
+            public Task<Void> thenAccept(Consumer<V> fn) {
+                CompletableFuture<Void> newFuture = this.future.thenAccept(fn);
+                return new CompletableTask<>(newFuture);
             }
 
             protected void handleException(Throwable e) {
