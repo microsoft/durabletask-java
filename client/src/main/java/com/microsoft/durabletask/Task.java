@@ -58,8 +58,20 @@ public abstract class Task<V> {
      */
     public abstract V await();
 
+    /**
+     * Returns a new {@link Task} that, when this Task completes normally,
+     * is executed with this Task's result as the argument to the supplied function.
+     * @param fn the function to use to compute the value of the returned Task
+     * @return the new Task
+     * @param <U> the function's return type
+     */
     public abstract <U> Task<U> thenApply(Function<V,U> fn);
 
+    /**
+     *Returns a new {@link Task} that, when this Task completes normally,
+     * is executed with this Task's result as the argument to the supplied action.
+     * @param fn the function to use to compute the value of the returned Task
+     * @return the new Task
+     */
     public abstract Task<Void> thenAccept(Consumer<V> fn);
-
 }
