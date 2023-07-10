@@ -1,5 +1,7 @@
 package com.functions;
 
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.Order;
@@ -124,7 +126,15 @@ public class EndToEndTests {
 
         String sendEventPostUri = jsonPath.get("sendEventPostUri");
         sendEventPostUri = sendEventPostUri.replace("{eventName}", "test");
-        post(sendEventPostUri);
+
+        String requestBody = "{\"value\":\"Test\"}";
+        RestAssured
+                .given()
+                .contentType(ContentType.JSON) // Set the request content type
+                .body(requestBody) // Set the request body
+                .post(sendEventPostUri)
+                .then()
+                .statusCode(202);
 
         boolean suspendAfterEventSent = pollingCheck(statusQueryGetUri, "Suspended", null, Duration.ofSeconds(5));
         assertTrue(suspendAfterEventSent);
@@ -146,7 +156,6 @@ public class EndToEndTests {
         while (Duration.between(begin, runningTime).compareTo(timeout) <= 0) {
             Response statusResponse = get(statusQueryGetUri);
             runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            System.out.println(runTimeStatus);
             if (expectedState.equals(runTimeStatus)) {
                 return true;
             }
