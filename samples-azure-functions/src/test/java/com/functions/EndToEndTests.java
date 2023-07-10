@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import static io.restassured.RestAssured.get;
 import static io.restassured.RestAssured.post;
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,8 +31,8 @@ public class EndToEndTests {
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
-        String runTimeStatus = waitForCompletion(statusQueryGetUri);
-        assertEquals("Completed", runTimeStatus);
+        boolean pass = pollingCheck(statusQueryGetUri, "Completed", "Running", Duration.ofSeconds(20));
+        assertTrue(pass);
     }
 
     @Test
@@ -61,8 +64,8 @@ public class EndToEndTests {
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
-        String runTimeStatus = waitForCompletion(statusQueryGetUri);
-        assertEquals("Completed", runTimeStatus);
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", "Running", Duration.ofSeconds(10));
+        assertTrue(completed);
         Response statusResponse = get(statusQueryGetUri);
         String instanceId = statusResponse.jsonPath().get("instanceId");
 
@@ -70,8 +73,8 @@ public class EndToEndTests {
         Response restartResponse = post(restartPostUri);
         JsonPath restartJsonPath = restartResponse.jsonPath();
         String restartStatusQueryGetUri = restartJsonPath.get("statusQueryGetUri");
-        String restartRuntimeStatus = waitForCompletion(restartStatusQueryGetUri);
-        assertEquals("Completed", restartRuntimeStatus);
+        completed = pollingCheck(restartStatusQueryGetUri, "Completed", "Running", Duration.ofSeconds(10));
+        assertTrue(completed);
         Response restartStatusResponse = get(restartStatusQueryGetUri);
         String newInstanceId = restartStatusResponse.jsonPath().get("instanceId");
         if (restartWithNewInstanceId) {
@@ -81,18 +84,6 @@ public class EndToEndTests {
         }
     }
 
-    private String waitForCompletion(String statusQueryGetUri) throws InterruptedException {
-        String runTimeStatus = null;
-        for (int i = 0; i < 15; i++) {
-            Response statusResponse = get(statusQueryGetUri);
-            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            if (!"Completed".equals(runTimeStatus)) {
-                Thread.sleep(1000);
-            } else break;
-        }
-        return runTimeStatus;
-    }
-
     @Test
     public void thenChain() throws InterruptedException {
         final String expect = "AUSTIN-test";
@@ -100,17 +91,59 @@ public class EndToEndTests {
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", "Running", Duration.ofSeconds(20));
+        assertTrue(completed);
+        String output = get(statusQueryGetUri).jsonPath().get("output");
+        assertEquals(expect, output);
+    }
+
+    @Test
+    public void suspendResume() throws InterruptedException {
+        String startOrchestrationPath = "api/StartResumeSuspendOrchestration";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean running = pollingCheck(statusQueryGetUri, "Running", null, Duration.ofSeconds(10));
+        assertTrue(running);
+
+        String suspendPostUri = jsonPath.get("suspendPostUri");
+        post(suspendPostUri, "Suspend Orchestration");
+        boolean suspend = pollingCheck(statusQueryGetUri, "Suspend", null, Duration.ofSeconds(10));
+        assertTrue(suspend);
+
+        String sendEventPostUri = jsonPath.get("sendEventPostUri");
+        sendEventPostUri = sendEventPostUri.replace("{eventName}", "test");
+        post(sendEventPostUri);
+
+        boolean suspendAfterEventSent = pollingCheck(statusQueryGetUri, "Suspend", null, Duration.ofSeconds(10));
+        assertTrue(suspendAfterEventSent);
+
+        String resumePostUri = jsonPath.get("resumePostUri");
+        post(resumePostUri, "Resume Orchestration");
+
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(10));
+        assertTrue(completed);
+    }
+
+    private boolean pollingCheck(String statusQueryGetUri,
+                                 String expectedState,
+                                 String continueState,
+                                 Duration timeout) throws InterruptedException {
         String runTimeStatus = null;
-        String output = null;
-        for (int i = 0; i < 15; i++) {
+        Instant begin = Instant.now();
+        Instant runningTime = Instant.now();
+        while (Duration.between(begin, runningTime).compareTo(timeout) <= 0) {
             Response statusResponse = get(statusQueryGetUri);
             runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            output = statusResponse.jsonPath().get("output");
-            if (!"Completed".equals(runTimeStatus)) {
-                Thread.sleep(1000);
-            } else break;
+            if (expectedState.equals(runTimeStatus)) {
+                return true;
+            }
+            if (continueState != null && !continueState.equals(runTimeStatus)) {
+                return false;
+            }
+            Thread.sleep(1000);
+            runningTime = Instant.now();
         }
-        assertEquals("Completed", runTimeStatus);
-        assertEquals(expect, output);
+        return false;
     }
 }

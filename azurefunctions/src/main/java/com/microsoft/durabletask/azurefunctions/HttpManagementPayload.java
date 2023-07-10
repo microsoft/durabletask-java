@@ -16,6 +16,8 @@ public class HttpManagementPayload {
     private final String sendEventPostUri;
     private final String statusQueryGetUri;
     private final String terminatePostUri;
+    private final String resumePostUri;
+    private final String suspendPostUri;
 
     /**
      * Creates a {@link HttpManagementPayload} to manage orchestration instances
@@ -34,6 +36,8 @@ public class HttpManagementPayload {
         this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}?" + requiredQueryStringParameters;
         this.statusQueryGetUri = instanceStatusURL + "?" + requiredQueryStringParameters;
         this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
+        this.resumePostUri = instanceStatusURL + "/resume?reason={text}&" + requiredQueryStringParameters;
+        this.suspendPostUri = instanceStatusURL + "/suspend?reason={text}&" + requiredQueryStringParameters;
     }
 
     /**
