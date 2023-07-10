@@ -15,6 +15,18 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("e2e")
 public class EndToEndTests {
 
+    private String waitForCompletion(String statusQueryGetUri) throws InterruptedException {
+        String runTimeStatus = null;
+        for (int i = 0; i < 15; i++) {
+            Response statusResponse = get(statusQueryGetUri);
+            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            if (!"Completed".equals(runTimeStatus)) {
+                Thread.sleep(1000);
+            } else break;
+        }
+        return runTimeStatus;
+    }
+
     @Order(1)
     @Test
     public void setupHost() {
@@ -82,16 +94,13 @@ public class EndToEndTests {
         }
     }
 
-    private String waitForCompletion(String statusQueryGetUri) throws InterruptedException {
-        String runTimeStatus = null;
-        for (int i = 0; i < 15; i++) {
-            Response statusResponse = get(statusQueryGetUri);
-            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            if (!"Completed".equals(runTimeStatus)) {
-                Thread.sleep(1000);
-            } else break;
-        }
-        return runTimeStatus;
+    @Test
+    public void customizeDataConverter() throws InterruptedException {
+        String startOrchestrationPath = "/api/StartCustomize";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        String runTimeStatus = waitForCompletion(statusQueryGetUri);
+        assertEquals("Completed", runTimeStatus);
     }
-
 }
