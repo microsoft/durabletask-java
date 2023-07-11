@@ -20,8 +20,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
-import java.util.function.Supplier;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 final class TaskOrchestrationExecutor {
 
@@ -767,18 +767,18 @@ final class TaskOrchestrationExecutor {
         }
 
         private void addCarryoverEvents(CompleteOrchestrationAction.Builder builder) {
-            // Add historyEvent in the buffer
-            for (HistoryEvent e : this.unprocessedEvents) {
-                builder.addCarryoverEvents(e);
-            }
+            // Add historyEvent in the unprocessedEvents buffer
             // Add historyEvent in the new event list that haven't been added to the buffer.
             // We don't check the event in the pass event list to avoid duplicated events.
+            Set<HistoryEvent> externalEvents = new HashSet<>(this.unprocessedEvents);
             List<HistoryEvent> newEvents = this.historyEventPlayer.getNewEvents();
-            for (HistoryEvent e : newEvents) {
-                if (e.getEventTypeCase() == HistoryEvent.EventTypeCase.EVENTRAISED) {
-                    builder.addCarryoverEvents(e);
-                }
-            }
+
+            Set<HistoryEvent> filteredEvents = newEvents.stream()
+                    .filter(e -> e.getEventTypeCase() == HistoryEvent.EventTypeCase.EVENTRAISED)
+                    .collect(Collectors.toSet());
+
+            externalEvents.addAll(filteredEvents);
+            externalEvents.forEach(builder::addCarryoverEvents);
         }
         
         private boolean waitingForEvents() {
