@@ -1106,6 +1106,10 @@ final class TaskOrchestrationExecutor {
                         try {
                             return this.future.get();
                         } catch (ExecutionException e) {
+                            // rethrow if it's ContinueAsNewInterruption
+                            if (e.getCause() instanceof ContinueAsNewInterruption) {
+                                throw (ContinueAsNewInterruption) e.getCause();
+                            }
                             this.handleException(e.getCause());
                         } catch (Exception e) {
                             this.handleException(e);
