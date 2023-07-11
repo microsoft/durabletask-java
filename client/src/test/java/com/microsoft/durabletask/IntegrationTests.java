@@ -376,9 +376,6 @@ public class IntegrationTests extends IntegrationTestBase {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
             for (int i = 0; i < expectedEventCount; i++) {
-                // make sure only single event is sent to one continueAsNew session.
-                // TODO: Is there a better way to do this?
-                Thread.sleep(1000);
                 client.raiseEvent(instanceId, eventName, i);
             }
 
@@ -1220,9 +1217,6 @@ public class IntegrationTests extends IntegrationTestBase {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
             for (int i = 0; i < expectedEventCount; i++) {
-                // make sure only single event is sent to one continueAsNew session.
-                // TODO: Is there a better way to do this?
-                Thread.sleep(1000);
                 client.raiseEvent(instanceId, eventName, i);
             }
 

@@ -296,7 +296,7 @@ final class TaskOrchestrationExecutor {
             this.preserveUnprocessedEvents = preserveUnprocessedEvents;
 
             // The ContinueAsNewInterruption exception allows the orchestration to complete immediately and return back
-            // to azure functions durable extension/sidecar.
+            // to the sidecar.
             // We can send the current set of actions back to the worker and wait for new events to come in.
             // This is *not* an exception - it's a normal part of orchestrator control flow.
             throw new ContinueAsNewInterruption(
@@ -751,9 +751,7 @@ final class TaskOrchestrationExecutor {
             }
 
             if (this.continuedAsNew && this.preserveUnprocessedEvents) {
-                for (HistoryEvent e : this.unprocessedEvents) {
-                    builder.addCarryoverEvents(e);
-                }
+                addCarryoverEvents(builder);
             }
 
             if (!this.isReplaying) {
@@ -766,6 +764,21 @@ final class TaskOrchestrationExecutor {
                     .build();
             this.pendingActions.put(id, action);
             this.isComplete = true;
+        }
+
+        private void addCarryoverEvents(CompleteOrchestrationAction.Builder builder) {
+            // Add historyEvent in the buffer
+            for (HistoryEvent e : this.unprocessedEvents) {
+                builder.addCarryoverEvents(e);
+            }
+            // Add historyEvent in the new event list that haven't been added to the buffer.
+            // We don't check the event in the pass event list to avoid duplicated events.
+            List<HistoryEvent> newEvents = this.historyEventPlayer.getNewEvents();
+            for (HistoryEvent e : newEvents) {
+                if (e.getEventTypeCase() == HistoryEvent.EventTypeCase.EVENTRAISED) {
+                    builder.addCarryoverEvents(e);
+                }
+            }
         }
         
         private boolean waitingForEvents() {
@@ -915,6 +928,10 @@ final class TaskOrchestrationExecutor {
                 HistoryEvent next = this.currentHistoryList.get(this.currentHistoryIndex++);
                 ContextImplTask.this.processEvent(next);
                 return true;
+            }
+
+            List<HistoryEvent> getNewEvents() {
+                return newEvents;
             }
         }
 
