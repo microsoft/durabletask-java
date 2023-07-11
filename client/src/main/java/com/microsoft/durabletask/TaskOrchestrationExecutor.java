@@ -295,6 +295,10 @@ final class TaskOrchestrationExecutor {
             this.continuedAsNewInput = input;
             this.preserveUnprocessedEvents = preserveUnprocessedEvents;
 
+            // If there are events haven't been processed, we make sure to finish processing them before the interruption,
+            // so no event is dropped.
+            while(processNextEvent()) {}
+
             // The ContinueAsNewInterruption exception allows the orchestration to complete immediately and return back
             // to azure functions durable extension/sidecar.
             // We can send the current set of actions back to the worker and wait for new events to come in.
