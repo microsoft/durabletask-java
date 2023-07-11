@@ -356,7 +356,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void continueAsNewWithExternalEvents() throws TimeoutException {
+    void continueAsNewWithExternalEvents() throws TimeoutException, InterruptedException{
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
         final int expectedEventCount = 10;
@@ -376,6 +376,9 @@ public class IntegrationTests extends IntegrationTestBase {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
             for (int i = 0; i < expectedEventCount; i++) {
+                // make sure only single event is sent to one continueAsNew session.
+                // TODO: Is there a better way to do this?
+                Thread.sleep(1000);
                 client.raiseEvent(instanceId, eventName, i);
             }
 
@@ -1194,7 +1197,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
-    void externalEventThenAccept() throws IOException, InterruptedException, TimeoutException {
+    void externalEventThenAccept() throws InterruptedException, TimeoutException {
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
         final int expectedEventCount = 10;
@@ -1217,6 +1220,9 @@ public class IntegrationTests extends IntegrationTestBase {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
             for (int i = 0; i < expectedEventCount; i++) {
+                // make sure only single event is sent to one continueAsNew session.
+                // TODO: Is there a better way to do this?
+                Thread.sleep(1000);
                 client.raiseEvent(instanceId, eventName, i);
             }
 
