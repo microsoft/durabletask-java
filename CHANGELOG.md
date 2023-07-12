@@ -6,6 +6,9 @@
 * Support restartInstance and pass restartPostUri in HttpManagementPayload ([#108](https://github.com/microsoft/durabletask-java/issues/108))
 * Improve `TaskOrchestrationContext#continueAsNew` method so it doesn't require `return` statement right after it anymore ([#149](https://github.com/microsoft/durabletask-java/pull/149))
 
+### Fix
+* Fix retry policy not working with anyOf/allOf pattern ([#153](https://github.com/microsoft/durabletask-java/pull/153))
+
 ## v1.1.1
 
 ### Updates
