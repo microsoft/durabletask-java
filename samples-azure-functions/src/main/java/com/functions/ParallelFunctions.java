@@ -33,8 +33,8 @@ public class ParallelFunctions {
         TaskOptions taskOptions = new TaskOptions(retryPolicy);
         List<Task<String>> tasks = new ArrayList<>();
         tasks.add(ctx.callActivity("Append", "Input1", taskOptions, String.class));
-//        tasks.add(ctx.callActivity("Append", "Input2", taskOptions, String.class));
-//        tasks.add(ctx.callActivity("Append", "Input3", taskOptions, String.class));
+        tasks.add(ctx.callActivity("Append", "Input2", taskOptions, String.class));
+        tasks.add(ctx.callActivity("Append", "Input3", taskOptions, String.class));
         return ctx.allOf(tasks).await();
     }
 
