@@ -970,6 +970,7 @@ final class TaskOrchestrationExecutor {
             private final TaskOrchestrationContext context;
             private final Instant firstAttempt;
             private final TaskFactory<V> taskFactory;
+            private Task<V> currentTask;
 
             private int attemptNumber;
             private FailureDetails lastFailure;
@@ -988,25 +989,42 @@ final class TaskOrchestrationExecutor {
                     TaskFactory<V> taskFactory,
                     @Nullable RetryPolicy retryPolicy,
                     @Nullable RetryHandler retryHandler) {
-                super(new CompletableFuture<>());
+                // make sure the future of this task will complete when it's currentTask complete.
+                //TODO: better way to implement this?
                 this.context = context;
-                this.taskFactory = taskFactory;
                 this.policy = retryPolicy;
                 this.handler = retryHandler;
                 this.firstAttempt = context.getCurrentInstant();
                 this.totalRetryTime = Duration.ZERO;
+                this.taskFactory = taskFactory;
+                // make sure the taskFactory#create method is called when create RetriableTask,
+                // so when use with anyOf/allOf the pendingActions is not empty when return to the sidecar.
+                this.currentTask = taskFactory.create();
+                // to make sure the RetriableTask future is same as currentTask,
+                // so they complete at the same time
+                setFuture(this.currentTask.future);
+            }
+
+            private void setFuture(CompletableFuture<V> future) {
+                this.future = future;
             }
 
             @Override
             public V await() {
                 Instant startTime = this.context.getCurrentInstant();
                 while (true) {
-                    Task<V> currentTask = this.taskFactory.create();
+                    // For first try, currentTask is not null, this will be skipped.
+                    if (this.currentTask == null) {
+                        this.currentTask = this.taskFactory.create();
+                        // to make sure the RetriableTask future is same as currentTask,
+                        // so they complete at the same time
+                        setFuture(this.currentTask.future);
+                    }
 
                     this.attemptNumber++;
 
                     try {
-                        return currentTask.await();
+                        return this.currentTask.await();
                     } catch (TaskFailedException ex) {
                         this.lastFailure = ex.getErrorDetails();
                         if (!this.shouldRetry()) {
@@ -1026,6 +1044,8 @@ final class TaskOrchestrationExecutor {
                     }
 
                     this.totalRetryTime  = Duration.between(startTime, this.context.getCurrentInstant());
+                    //empty currentTask.
+                    this.currentTask = null;
                 }
             }
 

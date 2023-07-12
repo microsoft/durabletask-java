@@ -31,7 +31,7 @@ import java.util.function.Supplier;
  * @param <V> the return type of the task
  */
 public abstract class Task<V> {
-    final CompletableFuture<V> future;
+    CompletableFuture<V> future;
 
     Task(CompletableFuture<V> future) {
         this.future = future;

@@ -29,12 +29,16 @@ public class EndToEndTests {
         post(hostHealthPingPath).then().statusCode(200);
     }
 
-    @Test
-    public void basicChain() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "StartOrchestration",
+            "StartParallelOrchestration"
+    })
+    public void generalFunctions(String functionName) throws InterruptedException {
         Set<String> continueStates = new HashSet<>();
         continueStates.add("Pending");
         continueStates.add("Running");
-        String startOrchestrationPath = "/api/StartOrchestration";
+        String startOrchestrationPath = "/api/" + functionName;
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
