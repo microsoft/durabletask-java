@@ -989,8 +989,6 @@ final class TaskOrchestrationExecutor {
                     TaskFactory<V> taskFactory,
                     @Nullable RetryPolicy retryPolicy,
                     @Nullable RetryHandler retryHandler) {
-                // make sure the future of this task will complete when it's currentTask complete.
-                //TODO: better way to implement this?
                 this.context = context;
                 this.policy = retryPolicy;
                 this.handler = retryHandler;
