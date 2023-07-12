@@ -376,9 +376,15 @@ final class TaskOrchestrationExecutor {
         private <V> Task<V> createAppropriateTask(TaskFactory<V> taskFactory, TaskOptions options) {
             // Retry policies and retry handlers will cause us to return a RetriableTask<V>
             if (options != null && options.hasRetryPolicy()) {
-                return new RetriableTask<V>(this, taskFactory, options.getRetryPolicy());
-            } if (options != null && options.hasRetryHandler()) {
-                return new RetriableTask<V>(this, taskFactory, options.getRetryHandler());
+                // invoke the factory create logic here, so actions can be added to
+                // pendingActions when call the callActivity/callSubOrchestrator.
+                Task<V> currentTask = taskFactory.create();
+                return new RetriableTask<V>(this, currentTask, options.getRetryPolicy());
+            } else if (options != null && options.hasRetryHandler()) {
+                // invoke the factory create logic here, so actions can be added to
+                // pendingActions when call the callActivity/callSubOrchestrator.
+                Task<V> currentTask = taskFactory.create();
+                return new RetriableTask<V>(this, currentTask, options.getRetryHandler());
             } else {
                 // Return a single vanilla task without any wrapper
                 return taskFactory.create();
@@ -940,44 +946,44 @@ final class TaskOrchestrationExecutor {
             private final RetryHandler handler;
             private final TaskOrchestrationContext context;
             private final Instant firstAttempt;
-            private final TaskFactory<V> taskFactory;
-
             private int attemptNumber;
             private FailureDetails lastFailure;
             private Duration totalRetryTime;
+            private final Task<V> currentTask;
 
-            public RetriableTask(TaskOrchestrationContext context, TaskFactory<V> taskFactory, RetryPolicy policy) {
-                this(context, taskFactory, policy, null);
+            public RetriableTask(TaskOrchestrationContext context, Task<V> currentTask, RetryPolicy policy) {
+                this(context, currentTask, policy, null);
             }
 
-            public RetriableTask(TaskOrchestrationContext context, TaskFactory<V> taskFactory, RetryHandler handler) {
-                this(context, taskFactory, null, handler);
+            public RetriableTask(TaskOrchestrationContext context, Task<V> currentTask, RetryHandler handler) {
+                this(context, currentTask, null, handler);
             }
 
             private RetriableTask(
                     TaskOrchestrationContext context,
-                    TaskFactory<V> taskFactory,
+                    Task<V> currentTask,
                     @Nullable RetryPolicy retryPolicy,
                     @Nullable RetryHandler retryHandler) {
-                super(new CompletableFuture<>());
+                // keep this future to be same as the currentTask's future, so when currentTask future complete,
+                // this Task will also complete. This is important to guarantee future returned by anyOf/allOf can be completed.
+                super(currentTask.future);
                 this.context = context;
-                this.taskFactory = taskFactory;
                 this.policy = retryPolicy;
                 this.handler = retryHandler;
                 this.firstAttempt = context.getCurrentInstant();
                 this.totalRetryTime = Duration.ZERO;
+                this.currentTask = currentTask;
             }
 
             @Override
             public V await() {
                 Instant startTime = this.context.getCurrentInstant();
                 while (true) {
-                    Task<V> currentTask = this.taskFactory.create();
 
                     this.attemptNumber++;
 
                     try {
-                        return currentTask.await();
+                        return this.currentTask.await();
                     } catch (TaskFailedException ex) {
                         this.lastFailure = ex.getErrorDetails();
                         if (!this.shouldRetry()) {
