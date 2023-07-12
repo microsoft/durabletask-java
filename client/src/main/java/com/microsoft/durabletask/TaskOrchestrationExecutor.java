@@ -946,10 +946,10 @@ final class TaskOrchestrationExecutor {
             private final RetryHandler handler;
             private final TaskOrchestrationContext context;
             private final Instant firstAttempt;
+            private final Task<V> currentTask;
             private int attemptNumber;
             private FailureDetails lastFailure;
             private Duration totalRetryTime;
-            private final Task<V> currentTask;
 
             public RetriableTask(TaskOrchestrationContext context, Task<V> currentTask, RetryPolicy policy) {
                 this(context, currentTask, policy, null);
