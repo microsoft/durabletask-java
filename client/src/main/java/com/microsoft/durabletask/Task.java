@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;

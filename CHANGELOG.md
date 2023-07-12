@@ -1,7 +1,10 @@
 ## v1.2.0
+
+### Updates
 * Add `thenAccept` and `thenApply` to `Task` interface ([#148](https://github.com/microsoft/durabletask-java/pull/148))
 * Support Suspend and Resume Client APIs ([#151](https://github.com/microsoft/durabletask-java/pull/151))
 * Support restartInstance and pass restartPostUri in HttpManagementPayload ([#108](https://github.com/microsoft/durabletask-java/issues/108))
+* Improve `TaskOrchestrationContext#continueAsNew` method so it doesn't require `return` statement right after it anymore ([#149](https://github.com/microsoft/durabletask-java/pull/149))
 
 ## v1.1.1
 

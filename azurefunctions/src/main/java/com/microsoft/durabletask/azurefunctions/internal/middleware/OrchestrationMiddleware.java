@@ -10,7 +10,8 @@ import com.microsoft.azure.functions.internal.spi.middleware.Middleware;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareChain;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareContext;
 import com.microsoft.durabletask.OrchestrationRunner;
-import com.microsoft.durabletask.OrchestratorBlockedException;
+import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
+import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 
 /**
  * Durable Function Orchestration Middleware
@@ -39,8 +40,13 @@ public class OrchestrationMiddleware implements Middleware {
                 // The OrchestratorBlockedEvent will be wrapped into InvocationTargetException by using reflection to
                 // invoke method. Thus get the cause to check if it's OrchestratorBlockedEvent.
                 Throwable cause = e.getCause();
-                if (cause instanceof OrchestratorBlockedException){
+                if (cause instanceof OrchestratorBlockedException) {
                     throw (OrchestratorBlockedException) cause;
+                }
+                // The ContinueAsNewInterruption will be wrapped into InvocationTargetException by using reflection to
+                // invoke method. Thus get the cause to check if it's ContinueAsNewInterruption.
+                if (cause instanceof ContinueAsNewInterruption) {
+                    throw (ContinueAsNewInterruption) cause;
                 }
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }

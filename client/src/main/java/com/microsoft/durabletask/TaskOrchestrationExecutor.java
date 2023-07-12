@@ -4,6 +4,8 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
+import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
+import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 
@@ -18,8 +20,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
-import java.util.function.Supplier;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 final class TaskOrchestrationExecutor {
 
@@ -51,6 +53,9 @@ final class TaskOrchestrationExecutor {
             completed = true;
         } catch (OrchestratorBlockedException orchestratorBlockedException) {
             logger.fine("The orchestrator has yielded and will await for new events.");
+        } catch (ContinueAsNewInterruption continueAsNewInterruption) {
+            logger.fine("The orchestrator has continued as new.");
+            context.complete(null);
         } catch (Exception e) {
             // The orchestrator threw an unhandled exception - fail it
             // TODO: What's the right way to log this?
@@ -289,6 +294,13 @@ final class TaskOrchestrationExecutor {
             this.continuedAsNew = true;
             this.continuedAsNewInput = input;
             this.preserveUnprocessedEvents = preserveUnprocessedEvents;
+
+            // The ContinueAsNewInterruption exception allows the orchestration to complete immediately and return back
+            // to the sidecar.
+            // We can send the current set of actions back to the worker and wait for new events to come in.
+            // This is *not* an exception - it's a normal part of orchestrator control flow.
+            throw new ContinueAsNewInterruption(
+                    "The orchestrator invoked continueAsNew. This Throwable should never be caught by user code.");
         }
 
         @Override
@@ -739,9 +751,7 @@ final class TaskOrchestrationExecutor {
             }
 
             if (this.continuedAsNew && this.preserveUnprocessedEvents) {
-                for (HistoryEvent e : this.unprocessedEvents) {
-                    builder.addCarryoverEvents(e);
-                }
+                addCarryoverEvents(builder);
             }
 
             if (!this.isReplaying) {
@@ -754,6 +764,21 @@ final class TaskOrchestrationExecutor {
                     .build();
             this.pendingActions.put(id, action);
             this.isComplete = true;
+        }
+
+        private void addCarryoverEvents(CompleteOrchestrationAction.Builder builder) {
+            // Add historyEvent in the unprocessedEvents buffer
+            // Add historyEvent in the new event list that haven't been added to the buffer.
+            // We don't check the event in the pass event list to avoid duplicated events.
+            Set<HistoryEvent> externalEvents = new HashSet<>(this.unprocessedEvents);
+            List<HistoryEvent> newEvents = this.historyEventPlayer.getNewEvents();
+
+            Set<HistoryEvent> filteredEvents = newEvents.stream()
+                    .filter(e -> e.getEventTypeCase() == HistoryEvent.EventTypeCase.EVENTRAISED)
+                    .collect(Collectors.toSet());
+
+            externalEvents.addAll(filteredEvents);
+            externalEvents.forEach(builder::addCarryoverEvents);
         }
         
         private boolean waitingForEvents() {
@@ -903,6 +928,10 @@ final class TaskOrchestrationExecutor {
                 HistoryEvent next = this.currentHistoryList.get(this.currentHistoryIndex++);
                 ContextImplTask.this.processEvent(next);
                 return true;
+            }
+
+            List<HistoryEvent> getNewEvents() {
+                return newEvents;
             }
         }
 
@@ -1090,6 +1119,10 @@ final class TaskOrchestrationExecutor {
                         try {
                             return this.future.get();
                         } catch (ExecutionException e) {
+                            // rethrow if it's ContinueAsNewInterruption
+                            if (e.getCause() instanceof ContinueAsNewInterruption) {
+                                throw (ContinueAsNewInterruption) e.getCause();
+                            }
                             this.handleException(e.getCause());
                         } catch (Exception e) {
                             this.handleException(e);
