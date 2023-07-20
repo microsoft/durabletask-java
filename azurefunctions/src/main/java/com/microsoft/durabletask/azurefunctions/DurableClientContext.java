@@ -100,7 +100,6 @@ public class DurableClientContext {
      * @see <a href="https://learn.microsoft.com/java/api/com.microsoft.azure.functions.httpresponsemessage">HttpResponseMessage</a>
      * contains HTTP API URLs that can be used to query the status of the orchestration, raise events to the orchestration, or
      * terminate the orchestration.
-     * </p>
      * @param request the HTTP request that triggered the current orchestration instance
      * @param instanceId the ID of the orchestration instance to check
      * @return an HTTP 202 response with a Location header and a payload containing instance control URLs
