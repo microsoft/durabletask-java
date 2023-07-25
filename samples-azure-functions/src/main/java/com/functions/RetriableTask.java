@@ -19,9 +19,11 @@ import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RetriableTask {
     private static final AtomicBoolean throwException = new AtomicBoolean(true);
+    private static final AtomicInteger exceptionCounter = new AtomicInteger(0);
     @FunctionName("RetriableOrchestration")
     public HttpResponseMessage retriableOrchestration(
             @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
@@ -49,6 +51,39 @@ public class RetriableTask {
             final ExecutionContext context) {
         if (throwException.get()) {
             throwException.compareAndSet(true, false);
+            throw new RuntimeException("Test for retry");
+        }
+        context.getLogger().info("Append: " + name);
+        return name + "-test";
+    }
+
+    @FunctionName("RetriableOrchestrationFail")
+    public HttpResponseMessage retriableOrchestrationFail(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        context.getLogger().info("Java HTTP trigger processed a request.");
+
+        DurableTaskClient client = durableContext.getClient();
+        String instanceId = client.scheduleNewOrchestrationInstance("RetriableTaskFail");
+        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    @FunctionName("RetriableTaskFail")
+    public String retriableTaskFail(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+        RetryPolicy retryPolicy = new RetryPolicy(2, Duration.ofSeconds(1));
+        TaskOptions taskOptions = new TaskOptions(retryPolicy);
+        return ctx.callActivity("AppendFail", "Test-Input", taskOptions, String.class).await();
+    }
+
+    @FunctionName("AppendFail")
+    public String appendFail(
+            @DurableActivityTrigger(name = "name") String name,
+            final ExecutionContext context) {
+        if (exceptionCounter.get() < 2) {
+            exceptionCounter.incrementAndGet();
             throw new RuntimeException("Test for retry");
         }
         context.getLogger().info("Append: " + name);

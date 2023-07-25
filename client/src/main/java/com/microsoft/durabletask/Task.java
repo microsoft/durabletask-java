@@ -101,9 +101,9 @@ public abstract class Task<V> {
      */
     public abstract Task<Void> thenAccept(Consumer<V> fn);
 
-    void notifyChildTaskCompletedSuccess(V result) {}
+    void handleChildSuccess(V result) {}
 
-    void notifyChildTaskCompletedExceptionally(Throwable ex, Task<V> outerTask) {}
+    void handleChildException(Throwable ex) {}
 
     void init() {}
 }

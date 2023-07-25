@@ -1010,27 +1010,14 @@ final class TaskOrchestrationExecutor {
             }
 
             @Override
-            void notifyChildTaskCompletedSuccess(V result) {
+            void handleChildSuccess(V result) {
                 this.complete(result);
             }
 
             @Override
-            void notifyChildTaskCompletedExceptionally(Throwable ex, Task<V> outerTask) {
+            void handleChildException(Throwable ex) {
                 if (ex instanceof TaskFailedException) {
                     tryRetry((TaskFailedException) ex);
-                }
-
-                // Complete the outer task accordingly.
-                if (this.isDone()) {
-                    try {
-                        V result = this.future.get();
-                        outerTask.future.complete(result);
-                    } catch (ExecutionException e) {
-                        Throwable cause = e.getCause();
-                        outerTask.future.completeExceptionally(cause);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Unexpected failure in the task execution", e);
-                    }
                 }
             }
 
@@ -1067,6 +1054,15 @@ final class TaskOrchestrationExecutor {
             @Override
             public V await() {
                 this.init();
+                try{
+                    this.getChildTask().await();
+                } catch (OrchestratorBlockedException ex) {
+                    throw ex;
+                } catch (Exception ignored) {
+                    // ignore the exception from previous child tasks.
+                    // Only needs to return result from the last child task, which is on next line.
+                }
+                // Always return the last child task result.
                 return this.getChildTask().await();
             }
 
@@ -1235,7 +1231,7 @@ final class TaskOrchestrationExecutor {
                 boolean result = this.future.complete(value);
                 if (parentTask != null) {
                     // notify parent task
-                    parentTask.notifyChildTaskCompletedSuccess(value);
+                    parentTask.handleChildSuccess(value);
                 }
                 return result;
             }
@@ -1245,13 +1241,11 @@ final class TaskOrchestrationExecutor {
             }
 
             public boolean completeExceptionally(Throwable ex) {
-                boolean result = false;
                 Task<V> parentTask = this.getParentTask();
+                boolean result = this.future.completeExceptionally(ex);
                 if (parentTask != null) {
                     // notify parent task
-                    parentTask.notifyChildTaskCompletedExceptionally(ex, this);
-                } else {
-                    result = this.future.completeExceptionally(ex);
+                    parentTask.handleChildException(ex);
                 }
                 return result;
             }
