@@ -31,26 +31,26 @@ import java.util.function.Function;
  */
 public abstract class Task<V> {
     final CompletableFuture<V> future;
-    private Task<V> ChildTask;
-    private Task<V> ParentTask;
+    private Task<V> childTask;
+    private Task<V> parentTask;
     Task(CompletableFuture<V> future) {
         this.future = future;
     }
 
     public void setChildTask(Task<V> childTask) {
-        ChildTask = childTask;
+        childTask = childTask;
     }
 
     public void setParentTask(Task<V> parentTask) {
-        ParentTask = parentTask;
+        parentTask = parentTask;
     }
 
     public Task<V> getChildTask() {
-        return ChildTask;
+        return childTask;
     }
 
     public Task<V> getParentTask() {
-        return ParentTask;
+        return parentTask;
     }
 
     /**
