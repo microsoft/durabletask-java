@@ -38,19 +38,19 @@ public abstract class Task<V> {
     }
 
     public void setChildTask(Task<V> childTask) {
-        childTask = childTask;
+        this.childTask = childTask;
     }
 
     public void setParentTask(Task<V> parentTask) {
-        parentTask = parentTask;
+        this.parentTask = parentTask;
     }
 
     public Task<V> getChildTask() {
-        return childTask;
+        return this.childTask;
     }
 
     public Task<V> getParentTask() {
-        return parentTask;
+        return this.parentTask;
     }
 
     /**
