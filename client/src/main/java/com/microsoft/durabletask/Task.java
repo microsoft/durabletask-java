@@ -7,7 +7,6 @@ import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * Represents an asynchronous operation in a durable orchestration.
@@ -32,9 +31,26 @@ import java.util.function.Supplier;
  */
 public abstract class Task<V> {
     final CompletableFuture<V> future;
-
+    private Task<V> ChildTask;
+    private Task<V> ParentTask;
     Task(CompletableFuture<V> future) {
         this.future = future;
+    }
+
+    public void setChildTask(Task<V> childTask) {
+        ChildTask = childTask;
+    }
+
+    public void setParentTask(Task<V> parentTask) {
+        ParentTask = parentTask;
+    }
+
+    public Task<V> getChildTask() {
+        return ChildTask;
+    }
+
+    public Task<V> getParentTask() {
+        return ParentTask;
     }
 
     /**
@@ -76,4 +92,10 @@ public abstract class Task<V> {
      * @return the new Task
      */
     public abstract Task<Void> thenAccept(Consumer<V> fn);
+
+    void notifyChildTaskCompletedSuccess(V result) {}
+
+    void notifyChildTaskCompletedExceptionally(Throwable ex) {}
+
+    void init() {}
 }

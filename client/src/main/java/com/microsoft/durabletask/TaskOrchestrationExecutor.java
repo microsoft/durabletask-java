@@ -185,39 +185,43 @@ final class TaskOrchestrationExecutor {
                     .map(t -> t.future)
                     .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
 
-            return new CompletableTask<>(CompletableFuture.allOf(futures)
-                    .thenApply(x -> {
-                        List<V> results = new ArrayList<>(futures.length);
+            Function<Void, List<V>> resultPath = x -> {
+                List<V> results = new ArrayList<>(futures.length);
 
-                        // All futures are expected to be completed at this point
-                        for (CompletableFuture<V> cf : futures) {
-                            try {
-                                results.add(cf.get());
-                            } catch (Exception ex) {
-                                results.add(null);
-                            }
-                        }
-                        return results;
-                    })
-                    .exceptionally(throwable -> {
-                        ArrayList<Exception> exceptions = new ArrayList<>(futures.length);
-                        for (CompletableFuture<V> cf : futures) {
-                            try {
-                                cf.get();
-                            } catch (ExecutionException ex) {
-                                exceptions.add((Exception) ex.getCause());
-                            } catch (Exception ex){
-                                exceptions.add(ex);
-                            }
-                        }
-                        throw new CompositeTaskFailedException(
-                                String.format(
-                                        "%d out of %d tasks failed with an exception. See the exceptions list for details.",
-                                        exceptions.size(),
-                                        futures.length),
-                                exceptions);
-                    })
-            );
+                // All futures are expected to be completed at this point
+                for (CompletableFuture<V> cf : futures) {
+                    try {
+                        results.add(cf.get());
+                    } catch (Exception ex) {
+                        results.add(null);
+                    }
+                }
+                return results;
+            };
+
+            Function<Throwable, ? extends List<V>> exceptionPath = throwable -> {
+                ArrayList<Exception> exceptions = new ArrayList<>(futures.length);
+                for (CompletableFuture<V> cf : futures) {
+                    try {
+                        cf.get();
+                    } catch (ExecutionException ex) {
+                        exceptions.add((Exception) ex.getCause());
+                    } catch (Exception ex) {
+                        exceptions.add(ex);
+                    }
+                }
+                throw new CompositeTaskFailedException(
+                        String.format(
+                                "%d out of %d tasks failed with an exception. See the exceptions list for details.",
+                                exceptions.size(),
+                                futures.length),
+                        exceptions);
+            };
+            CompletableFuture<List<V>> future = CompletableFuture.allOf(futures)
+                    .thenApply(resultPath)
+                    .exceptionally(exceptionPath);
+
+            return new CompoundTask<>(future, tasks);
         }
 
         @Override
@@ -971,9 +975,10 @@ final class TaskOrchestrationExecutor {
             private final Instant firstAttempt;
             private final TaskFactory<V> taskFactory;
 
-            private int attemptNumber;
             private FailureDetails lastFailure;
             private Duration totalRetryTime;
+            private Instant startTime;
+            private int attemptNumber;
 
             public RetriableTask(TaskOrchestrationContext context, TaskFactory<V> taskFactory, RetryPolicy policy) {
                 this(context, taskFactory, policy, null);
@@ -988,45 +993,68 @@ final class TaskOrchestrationExecutor {
                     TaskFactory<V> taskFactory,
                     @Nullable RetryPolicy retryPolicy,
                     @Nullable RetryHandler retryHandler) {
-                super(new CompletableFuture<>());
                 this.context = context;
                 this.taskFactory = taskFactory;
                 this.policy = retryPolicy;
                 this.handler = retryHandler;
                 this.firstAttempt = context.getCurrentInstant();
                 this.totalRetryTime = Duration.ZERO;
+                this.constructParentChildTask(taskFactory);
+            }
+
+            // Every RetriableTask will hava a CompletableTask as child.
+            private void constructParentChildTask(TaskFactory<V> taskFactory) {
+                Task<V> childTask = taskFactory.create();
+                this.setChildTask(childTask);
+                childTask.setParentTask(this);
+            }
+
+            @Override
+            void notifyChildTaskCompletedSuccess(V result) {
+                this.complete(result);
+            }
+
+            @Override
+            void notifyChildTaskCompletedExceptionally(Throwable ex) {
+                if (ex instanceof TaskFailedException) {
+                    tryRetry((TaskFailedException) ex);
+                }
+            }
+
+            @Override
+            void init() {
+                this.startTime = this.startTime == null ? this.context.getCurrentInstant() : this.startTime;
+                this.attemptNumber++;
+            }
+
+            public void tryRetry(TaskFailedException ex) {
+                this.lastFailure = ex.getErrorDetails();
+                if (!this.shouldRetry()) {
+                    this.completeExceptionally(ex);
+                    return;
+                }
+
+                // Overflow/runaway retry protection
+                if (this.attemptNumber == Integer.MAX_VALUE) {
+                    this.completeExceptionally(ex);
+                    return;
+                }
+
+                Duration delay = this.getNextDelay();
+                if (!delay.isZero() && !delay.isNegative()) {
+                    // Use a durable timer to create the delay between retries
+                    this.context.createTimer(delay).await();
+                }
+
+                this.totalRetryTime = Duration.between(this.startTime, this.context.getCurrentInstant());
+                this.constructParentChildTask(this.taskFactory);
+                this.await();
             }
 
             @Override
             public V await() {
-                Instant startTime = this.context.getCurrentInstant();
-                while (true) {
-                    Task<V> currentTask = this.taskFactory.create();
-
-                    this.attemptNumber++;
-
-                    try {
-                        return currentTask.await();
-                    } catch (TaskFailedException ex) {
-                        this.lastFailure = ex.getErrorDetails();
-                        if (!this.shouldRetry()) {
-                            throw ex;
-                        }
-
-                        // Overflow/runaway retry protection
-                        if (this.attemptNumber == Integer.MAX_VALUE) {
-                            throw ex;
-                        }
-                    }
-
-                    Duration delay = this.getNextDelay();
-                    if (!delay.isZero() && !delay.isNegative()) {
-                        // Use a durable timer to create the delay between retries
-                        this.context.createTimer(delay).await();
-                    }
-
-                    this.totalRetryTime  = Duration.between(startTime, this.context.getCurrentInstant());
-                }
+                this.init();
+                return this.getChildTask().await();
             }
 
             private boolean shouldRetry() {
@@ -1101,6 +1129,28 @@ final class TaskOrchestrationExecutor {
             }
         }
 
+        private class CompoundTask<V, U> extends CompletableTask<U> {
+
+            List<Task<V>> subTasks;
+
+            CompoundTask(CompletableFuture<U> future, List<Task<V>> subtasks) {
+                super(future);
+                this.subTasks = subtasks;
+            }
+
+            @Override
+            public U await() {
+                this.initSubTasks();
+                return super.await();
+            }
+
+            private void initSubTasks() {
+                for (Task<V> subTask : this.subTasks) {
+                    subTask.init();
+                }
+            }
+        }
+
         private class CompletableTask<V> extends Task<V> {
 
             public CompletableTask() {
@@ -1168,7 +1218,13 @@ final class TaskOrchestrationExecutor {
             }
 
             public boolean complete(V value) {
-                return this.future.complete(value);
+                Task<V> parentTask = this.getParentTask();
+                boolean result = this.future.complete(value);
+                if (parentTask != null) {
+                    // notify parent task
+                    parentTask.notifyChildTaskCompletedSuccess(value);
+                }
+                return result;
             }
 
             private boolean cancel() {
@@ -1176,7 +1232,13 @@ final class TaskOrchestrationExecutor {
             }
 
             public boolean completeExceptionally(Throwable ex) {
-                return this.future.completeExceptionally(ex);
+                Task<V> parentTask = this.getParentTask();
+                boolean result = this.future.completeExceptionally(ex);
+                if (parentTask != null) {
+                    // notify parent task
+                    parentTask.notifyChildTaskCompletedExceptionally(ex);
+                }
+                return result;
             }
         }
     }
