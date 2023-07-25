@@ -979,6 +979,8 @@ final class TaskOrchestrationExecutor {
             private Duration totalRetryTime;
             private Instant startTime;
             private int attemptNumber;
+            private Task<V> childTask;
+
 
             public RetriableTask(TaskOrchestrationContext context, TaskFactory<V> taskFactory, RetryPolicy policy) {
                 this(context, taskFactory, policy, null);
@@ -1004,9 +1006,17 @@ final class TaskOrchestrationExecutor {
 
             // Every RetriableTask will hava a CompletableTask as child.
             private void createChildTask(TaskFactory<V> taskFactory) {
-                Task<V> childTask = taskFactory.create();
+                CompletableTask<V> childTask = (CompletableTask<V>) taskFactory.create();
                 this.setChildTask(childTask);
                 childTask.setParentTask(this);
+            }
+
+            public void setChildTask(Task<V> childTask) {
+                this.childTask = childTask;
+            }
+
+            public Task<V> getChildTask() {
+                return this.childTask;
             }
 
             @Override
@@ -1054,6 +1064,14 @@ final class TaskOrchestrationExecutor {
             @Override
             public V await() {
                 this.init();
+                // when awaiting the first child task, we will continue iterating over the history until a result is found
+                // for that task. If the result is an exception, the child task will invoke "handleChildException" on this
+                // object, which awaits a timer, *re-sets the current child task to correspond to a retry of this task*,
+                // and then awaits that child.
+                // This logic continues until either the operation succeeds, or are our retry quota is met.
+                // At that point, we break the `await()` on the child task.
+                // Therefore, once we return from the following `await`,
+                // we just need to await again on the *current* child task to obtain the result of this task
                 try{
                     this.getChildTask().await();
                 } catch (OrchestratorBlockedException ex) {
@@ -1161,6 +1179,7 @@ final class TaskOrchestrationExecutor {
         }
 
         private class CompletableTask<V> extends Task<V> {
+            private Task<V> parentTask;
 
             public CompletableTask() {
                 this(new CompletableFuture<>());
@@ -1168,6 +1187,14 @@ final class TaskOrchestrationExecutor {
 
             CompletableTask(CompletableFuture<V> future) {
                 super(future);
+            }
+
+            public void setParentTask(Task<V> parentTask) {
+                this.parentTask = parentTask;
+            }
+
+            public Task<V> getParentTask() {
+                return this.parentTask;
             }
 
             @Override

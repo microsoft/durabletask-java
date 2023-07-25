@@ -31,26 +31,8 @@ import java.util.function.Function;
  */
 public abstract class Task<V> {
     final CompletableFuture<V> future;
-    private Task<V> childTask;
-    private Task<V> parentTask;
     Task(CompletableFuture<V> future) {
         this.future = future;
-    }
-
-    public void setChildTask(Task<V> childTask) {
-        this.childTask = childTask;
-    }
-
-    public void setParentTask(Task<V> parentTask) {
-        this.parentTask = parentTask;
-    }
-
-    public Task<V> getChildTask() {
-        return this.childTask;
-    }
-
-    public Task<V> getParentTask() {
-        return this.parentTask;
     }
 
     /**
