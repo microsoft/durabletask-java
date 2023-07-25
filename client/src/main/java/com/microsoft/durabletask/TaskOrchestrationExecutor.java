@@ -1026,9 +1026,7 @@ final class TaskOrchestrationExecutor {
 
             @Override
             void handleChildException(Throwable ex) {
-                if (ex instanceof TaskFailedException) {
-                    tryRetry((TaskFailedException) ex);
-                }
+                tryRetry((TaskFailedException) ex);
             }
 
             @Override
