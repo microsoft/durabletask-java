@@ -21,7 +21,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RetriableTask {
-    private static final AtomicBoolean exceptionThrew = new AtomicBoolean(false);
+    private static final AtomicBoolean throwException = new AtomicBoolean(true);
     @FunctionName("RetriableOrchestration")
     public HttpResponseMessage retriableOrchestration(
             @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
@@ -47,8 +47,8 @@ public class RetriableTask {
     public String append(
             @DurableActivityTrigger(name = "name") String name,
             final ExecutionContext context) {
-        if (!exceptionThrew.get()) {
-            exceptionThrew.compareAndSet(false, true);
+        if (throwException.get()) {
+            throwException.compareAndSet(true, false);
             throw new RuntimeException("Test for retry");
         }
         context.getLogger().info("Append: " + name);

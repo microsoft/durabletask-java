@@ -1015,9 +1015,22 @@ final class TaskOrchestrationExecutor {
             }
 
             @Override
-            void notifyChildTaskCompletedExceptionally(Throwable ex) {
+            void notifyChildTaskCompletedExceptionally(Throwable ex, Task<V> outerTask) {
                 if (ex instanceof TaskFailedException) {
                     tryRetry((TaskFailedException) ex);
+                }
+
+                // Complete the outer task accordingly.
+                if (this.isDone()) {
+                    try {
+                        V result = this.future.get();
+                        outerTask.future.complete(result);
+                    } catch (ExecutionException e) {
+                        Throwable cause = e.getCause();
+                        outerTask.future.completeExceptionally(cause);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Unexpected failure in the task execution", e);
+                    }
                 }
             }
 
@@ -1232,11 +1245,13 @@ final class TaskOrchestrationExecutor {
             }
 
             public boolean completeExceptionally(Throwable ex) {
+                boolean result = false;
                 Task<V> parentTask = this.getParentTask();
-                boolean result = this.future.completeExceptionally(ex);
                 if (parentTask != null) {
                     // notify parent task
-                    parentTask.notifyChildTaskCompletedExceptionally(ex);
+                    parentTask.notifyChildTaskCompletedExceptionally(ex, this);
+                } else {
+                    result = this.future.completeExceptionally(ex);
                 }
                 return result;
             }
