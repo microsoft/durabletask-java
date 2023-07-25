@@ -57,6 +57,16 @@ public class EndToEndTests {
     }
 
     @Test
+    public void retryTestFail() throws InterruptedException {
+        String startOrchestrationPath = "/api/RetriableOrchestrationFail";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean pass = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(10));
+        assertTrue(pass);
+    }
+
+    @Test
     public void continueAsNew() throws InterruptedException {
         String startOrchestrationPath = "api/ContinueAsNew";
         Response response = post(startOrchestrationPath);
