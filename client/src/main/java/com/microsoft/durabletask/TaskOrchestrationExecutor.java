@@ -999,11 +999,11 @@ final class TaskOrchestrationExecutor {
                 this.handler = retryHandler;
                 this.firstAttempt = context.getCurrentInstant();
                 this.totalRetryTime = Duration.ZERO;
-                this.constructParentChildTask(taskFactory);
+                this.createChildTask(taskFactory);
             }
 
             // Every RetriableTask will hava a CompletableTask as child.
-            private void constructParentChildTask(TaskFactory<V> taskFactory) {
+            private void createChildTask(TaskFactory<V> taskFactory) {
                 Task<V> childTask = taskFactory.create();
                 this.setChildTask(childTask);
                 childTask.setParentTask(this);
@@ -1047,7 +1047,7 @@ final class TaskOrchestrationExecutor {
                 }
 
                 this.totalRetryTime = Duration.between(this.startTime, this.context.getCurrentInstant());
-                this.constructParentChildTask(this.taskFactory);
+                this.createChildTask(this.taskFactory);
                 this.await();
             }
 
