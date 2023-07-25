@@ -1019,17 +1019,14 @@ final class TaskOrchestrationExecutor {
                 return this.childTask;
             }
 
-            @Override
             void handleChildSuccess(V result) {
                 this.complete(result);
             }
 
-            @Override
             void handleChildException(Throwable ex) {
                 tryRetry((TaskFailedException) ex);
             }
 
-            @Override
             void init() {
                 this.startTime = this.startTime == null ? this.context.getCurrentInstant() : this.startTime;
                 this.attemptNumber++;
@@ -1171,7 +1168,7 @@ final class TaskOrchestrationExecutor {
 
             private void initSubTasks() {
                 for (Task<V> subTask : this.subTasks) {
-                    subTask.init();
+                    if (subTask instanceof RetriableTask) ((RetriableTask<V>)subTask).init();
                 }
             }
         }
@@ -1254,9 +1251,9 @@ final class TaskOrchestrationExecutor {
             public boolean complete(V value) {
                 Task<V> parentTask = this.getParentTask();
                 boolean result = this.future.complete(value);
-                if (parentTask != null) {
+                if (parentTask instanceof RetriableTask) {
                     // notify parent task
-                    parentTask.handleChildSuccess(value);
+                    ((RetriableTask<V>) parentTask).handleChildSuccess(value);
                 }
                 return result;
             }
@@ -1268,9 +1265,9 @@ final class TaskOrchestrationExecutor {
             public boolean completeExceptionally(Throwable ex) {
                 Task<V> parentTask = this.getParentTask();
                 boolean result = this.future.completeExceptionally(ex);
-                if (parentTask != null) {
+                if (parentTask instanceof RetriableTask) {
                     // notify parent task
-                    parentTask.handleChildException(ex);
+                    ((RetriableTask<V>) parentTask).handleChildException(ex);
                 }
                 return result;
             }

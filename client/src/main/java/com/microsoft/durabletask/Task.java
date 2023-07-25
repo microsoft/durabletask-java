@@ -52,14 +52,6 @@ public abstract class Task<V> {
     }
 
     /**
-     * Returns {@code true} if the task was completed exceptionally.
-     * @return {@code true} if the task was completed exceptionally, otherwise {@code false}
-     */
-    public boolean isCompletedExceptionally() {
-        return this.future.isCompletedExceptionally();
-    }
-
-    /**
      * Blocks the orchestrator until this task to complete, and then returns its result.
      *
      * @return the result of the task
@@ -82,10 +74,4 @@ public abstract class Task<V> {
      * @return the new Task
      */
     public abstract Task<Void> thenAccept(Consumer<V> fn);
-
-    void handleChildSuccess(V result) {}
-
-    void handleChildException(Throwable ex) {}
-
-    void init() {}
 }
