@@ -23,7 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class RetriableTask {
     private static final AtomicBoolean throwException = new AtomicBoolean(true);
-    private static final AtomicInteger exceptionCounter = new AtomicInteger(0);
+    private static final AtomicInteger failedCounter = new AtomicInteger(0);
+    private static final AtomicInteger successCounter = new AtomicInteger(0);
     @FunctionName("RetriableOrchestration")
     public HttpResponseMessage retriableOrchestration(
             @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
@@ -96,15 +97,27 @@ public class RetriableTask {
             @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
         RetryPolicy retryPolicy = new RetryPolicy(3, Duration.ofSeconds(1));
         TaskOptions taskOptions = new TaskOptions(retryPolicy);
-        return ctx.callActivity("AppendFail", "Test-Input", taskOptions, String.class).await();
+        return ctx.callActivity("AppendSuccess", "Test-Input", taskOptions, String.class).await();
     }
 
     @FunctionName("AppendFail")
     public String appendFail(
             @DurableActivityTrigger(name = "name") String name,
             final ExecutionContext context) {
-        if (exceptionCounter.get() < 2) {
-            exceptionCounter.incrementAndGet();
+        if (failedCounter.get() < 2) {
+            failedCounter.incrementAndGet();
+            throw new RuntimeException("Test for retry");
+        }
+        context.getLogger().info("Append: " + name);
+        return name + "-test";
+    }
+
+    @FunctionName("AppendSuccess")
+    public String appendSuccess(
+            @DurableActivityTrigger(name = "name") String name,
+            final ExecutionContext context) {
+        if (successCounter.get() < 2) {
+            successCounter.incrementAndGet();
             throw new RuntimeException("Test for retry");
         }
         context.getLogger().info("Append: " + name);

@@ -240,7 +240,7 @@ final class TaskOrchestrationExecutor {
                         try {
                             return task.future.get();
                         } catch (ExecutionException | InterruptedException ignored) {
-                            // Upstream future already exception out, so this one will also exception out
+                            // Upstream CompletableFuture already exception out, so this CompletableFuture will also exception out
                             // no need to repeat throwing exception here.
                         }
                     }
