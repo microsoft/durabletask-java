@@ -1,3 +1,6 @@
+## v1.3.0
+* Refactor `RetriableTask` and add new `CompoundTask`, fixing Fan-out/Fan-in stuck when using `RetriableTask` ([#157](https://github.com/microsoft/durabletask-java/pull/157))
+
 ## v1.2.0
 
 ### Updates

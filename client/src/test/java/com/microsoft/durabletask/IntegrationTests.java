@@ -7,6 +7,7 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -1224,6 +1225,114 @@ public class IntegrationTests extends IntegrationTestBase {
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
             assertEquals(expectedEventCount, instance.readOutputAs(int.class));
+        }
+    }
+
+    @Test
+    void activityAllOf() throws IOException, TimeoutException {
+        final String orchestratorName = "ActivityAllOf";
+        final String activityName = "ToString";
+        final String retryActivityName = "RetryToString";
+        final int activityMiddle = 5;
+        final int activityCount = 10;
+        final AtomicBoolean throwException = new AtomicBoolean(true);
+        final RetryPolicy retryPolicy = new RetryPolicy(2, Duration.ofSeconds(5));
+        final TaskOptions taskOptions = new TaskOptions(retryPolicy);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    List<Task<String>> parallelTasks = IntStream.range(0, activityMiddle * 2)
+                            .mapToObj(i -> {
+                                if (i < activityMiddle) {
+                                    return ctx.callActivity(activityName, i, String.class);
+                                } else {
+                                    return ctx.callActivity(retryActivityName, i, taskOptions, String.class);
+                                }
+                            })
+                            .collect(Collectors.toList());
+
+                    // Wait for all tasks to complete, then sort and reverse the results
+                    List<String> results = ctx.allOf(parallelTasks).await();
+                    Collections.sort(results);
+                    Collections.reverse(results);
+                    ctx.complete(results);
+                })
+                .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
+                .addActivity(retryActivityName, ctx -> {
+                    if (throwException.get()) {
+                        throwException.compareAndSet(true, false);
+                        throw new RuntimeException("test retry");
+                    }
+                    return ctx.getInput(Object.class).toString();
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            List<?> output = instance.readOutputAs(List.class);
+            assertNotNull(output);
+            assertEquals(activityCount, output.size());
+            assertEquals(String.class, output.get(0).getClass());
+
+            // Expected: ["9", "8", "7", "6", "5", "4", "3", "2", "1", "0"]
+            for (int i = 0; i < activityCount; i++) {
+                String expected = String.valueOf(activityCount - i - 1);
+                assertEquals(expected, output.get(i).toString());
+            }
+        }
+    }
+
+    @Test
+    void activityAnyOf() throws IOException, TimeoutException {
+        final String orchestratorName = "ActivityAnyOf";
+        final String activityName = "ToString";
+        final String retryActivityName = "RetryToString";
+        final int activityMiddle = 5;
+        final int activityCount = 10;
+        final AtomicBoolean throwException = new AtomicBoolean(true);
+        final RetryPolicy retryPolicy = new RetryPolicy(2, Duration.ofSeconds(5));
+        final TaskOptions taskOptions = new TaskOptions(retryPolicy);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    List<Task<?>> parallelTasks = IntStream.range(0, activityMiddle * 2)
+                            .mapToObj(i -> {
+                                if (i < activityMiddle) {
+                                    return ctx.callActivity(activityName, i, String.class);
+                                } else {
+                                    return ctx.callActivity(retryActivityName, i, taskOptions, String.class);
+                                }
+                            })
+                            .collect(Collectors.toList());
+
+                    String results = (String) ctx.anyOf(parallelTasks).await().await();
+                    ctx.complete(results);
+                })
+                .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
+                .addActivity(retryActivityName, ctx -> {
+                    if (throwException.get()) {
+                        throwException.compareAndSet(true, false);
+                        throw new RuntimeException("test retry");
+                    }
+                    return ctx.getInput(Object.class).toString();
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            String output = instance.readOutputAs(String.class);
+            assertNotNull(output);
+            assertTrue(Integer.parseInt(output) >= 0 && Integer.parseInt(output) < activityCount);
         }
     }
 }

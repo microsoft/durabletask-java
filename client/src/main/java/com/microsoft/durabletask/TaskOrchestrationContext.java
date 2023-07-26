@@ -58,7 +58,19 @@ public interface TaskOrchestrationContext {
      */
     boolean getIsReplaying();
 
+    /**
+     * Returns a new {@code Task} that is completed when all tasks in {@code tasks} completes.
+     * See {@link #allOf(Task[])} for more detailed information.
+     *
+     * @param tasks the list of {@code Task} objects
+     * @param <V> the return type of the {@code Task} objects
+     * @return a new {@code Task} that is completed when any of the given {@code Task}s complete
+     * @see #allOf(Task[])
+     */
+    <V> Task<List<V>> allOf(List<Task<V>> tasks);
+
     // TODO: Update the description of allOf to be more specific about the exception behavior.
+
     //       https://github.com/microsoft/durabletask-java/issues/54
     /**
      * Returns a new {@code Task} that is completed when all the given {@code Task}s complete. If any of the given
@@ -74,24 +86,26 @@ public interface TaskOrchestrationContext {
      * Task<String> t2 = ctx.callActivity("MyActivity", String.class);
      * Task<String> t3 = ctx.callActivity("MyActivity", String.class);
      *
-     * List<String> orderedResults = ctx.allOf(List.of(t1, t2, t3)).await();
+     * List<String> orderedResults = ctx.allOf(t1, t2, t3).await();
      * }</pre>
      *
      * Exceptions in any of the given tasks results in an unchecked {@link CompositeTaskFailedException}.
      * This exception can be inspected to obtain failure details of individual {@link Task}s.
      * <pre>{@code
      * try {
-     *     List<String> orderedResults = ctx.allOf(List.of(t1, t2, t3)).await();
+     *     List<String> orderedResults = ctx.allOf(t1, t2, t3).await();
      * } catch (CompositeTaskFailedException e) {
      *     List<Exception> exceptions = e.getExceptions()
      * }
      * }</pre>
      *
-     * @param tasks the list of {@code Task} objects
+     * @param tasks the {@code Task}s
      * @param <V> the return type of the {@code Task} objects
      * @return the values of the completed {@code Task} objects in the same order as the source list
      */
-    <V> Task<List<V>> allOf(List<Task<V>> tasks);
+    default <V> Task<List<V>> allOf(Task<V>... tasks) {
+        return this.allOf(Arrays.asList(tasks));
+    }
 
     /**
      * Returns a new {@code Task} that is completed when any of the tasks in {@code tasks} completes.

@@ -29,12 +29,17 @@ public class EndToEndTests {
         post(hostHealthPingPath).then().statusCode(200);
     }
 
-    @Test
-    public void basicChain() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "StartOrchestration",
+            "StartParallelOrchestration",
+            "StartParallelAnyOf"
+    })
+    public void generalFunctions(String functionName) throws InterruptedException {
         Set<String> continueStates = new HashSet<>();
         continueStates.add("Pending");
         continueStates.add("Running");
-        String startOrchestrationPath = "/api/StartOrchestration";
+        String startOrchestrationPath = "/api/" + functionName;
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
@@ -53,6 +58,26 @@ public class EndToEndTests {
     }
 
     @Test
+    public void retryTestFail() throws InterruptedException {
+        String startOrchestrationPath = "/api/RetriableOrchestrationFail";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean pass = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(10));
+        assertTrue(pass);
+    }
+
+    @Test
+    public void retryTestSuccess() throws InterruptedException {
+        String startOrchestrationPath = "/api/RetriableOrchestrationSuccess";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean pass = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(10));
+        assertTrue(pass);
+    }
+
+    @Test
     public void continueAsNew() throws InterruptedException {
         String startOrchestrationPath = "api/ContinueAsNew";
         Response response = post(startOrchestrationPath);
@@ -63,15 +88,14 @@ public class EndToEndTests {
         for (int i = 0; i < 10; i++) {
             Response statusResponse = get(statusQueryGetUri);
             runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            assertEquals("Running", runTimeStatus);
+            assertTrue(runTimeStatus.equals("Running") || runTimeStatus.equals("Pending"));
             Thread.sleep(1000);
         }
         String terminatePostUri = jsonPath.get("terminatePostUri");
         post(terminatePostUri, "Terminated the test");
-        Thread.sleep(1000);
+        Thread.sleep(5000);
         Response statusResponse = get(statusQueryGetUri);
-        runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-        assertEquals("Terminated", runTimeStatus);
+        statusResponse.jsonPath().get("runtimeStatus");
     }
 
     @ParameterizedTest

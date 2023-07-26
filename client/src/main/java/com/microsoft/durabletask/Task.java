@@ -7,7 +7,6 @@ import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * Represents an asynchronous operation in a durable orchestration.
@@ -32,7 +31,6 @@ import java.util.function.Supplier;
  */
 public abstract class Task<V> {
     final CompletableFuture<V> future;
-
     Task(CompletableFuture<V> future) {
         this.future = future;
     }
