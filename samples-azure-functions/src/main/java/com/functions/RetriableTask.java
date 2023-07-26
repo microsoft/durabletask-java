@@ -70,10 +70,31 @@ public class RetriableTask {
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
 
+    @FunctionName("RetriableOrchestrationSuccess")
+    public HttpResponseMessage retriableOrchestrationSuccess(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        context.getLogger().info("Java HTTP trigger processed a request.");
+
+        DurableTaskClient client = durableContext.getClient();
+        String instanceId = client.scheduleNewOrchestrationInstance("RetriableTaskSuccess");
+        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
     @FunctionName("RetriableTaskFail")
     public String retriableTaskFail(
             @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
         RetryPolicy retryPolicy = new RetryPolicy(2, Duration.ofSeconds(1));
+        TaskOptions taskOptions = new TaskOptions(retryPolicy);
+        return ctx.callActivity("AppendFail", "Test-Input", taskOptions, String.class).await();
+    }
+
+    @FunctionName("RetriableTaskSuccess")
+    public String retriableTaskSuccess(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+        RetryPolicy retryPolicy = new RetryPolicy(3, Duration.ofSeconds(1));
         TaskOptions taskOptions = new TaskOptions(retryPolicy);
         return ctx.callActivity("AppendFail", "Test-Input", taskOptions, String.class).await();
     }

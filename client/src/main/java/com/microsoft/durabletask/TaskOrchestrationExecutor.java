@@ -1151,17 +1151,17 @@ final class TaskOrchestrationExecutor {
             }
         }
 
-        private class CompoundTask<V, U> extends CompletableTask<U> {
+        private class CompoundTask<V> extends CompletableTask<List<V>> {
 
             List<Task<V>> subTasks;
 
-            CompoundTask(CompletableFuture<U> future, List<Task<V>> subtasks) {
+            CompoundTask(CompletableFuture<List<V>> future, List<Task<V>> subtasks) {
                 super(future);
                 this.subTasks = subtasks;
             }
 
             @Override
-            public U await() {
+            public List<V> await() {
                 this.initSubTasks();
                 return super.await();
             }
