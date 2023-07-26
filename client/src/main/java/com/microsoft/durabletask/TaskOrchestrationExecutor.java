@@ -1010,7 +1010,7 @@ final class TaskOrchestrationExecutor {
                 this.createChildTask(taskFactory);
             }
 
-            // Every RetriableTask will hava a CompletableTask as child.
+            // Every RetriableTask will have a CompletableTask as a child task.
             private void createChildTask(TaskFactory<V> taskFactory) {
                 CompletableTask<V> childTask = (CompletableTask<V>) taskFactory.create();
                 this.setChildTask(childTask);
