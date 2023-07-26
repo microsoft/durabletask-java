@@ -221,36 +221,32 @@ final class TaskOrchestrationExecutor {
                     .thenApply(resultPath)
                     .exceptionally(exceptionPath);
 
-            return new CompoundTask<>(future, tasks);
+            return new CompoundTask<>(tasks, future);
         }
 
         @Override
-        public <V> Task<V> anyOf(List<Task<V>> tasks) {
+        public Task<Task<?>> anyOf(List<Task<?>> tasks) {
             Helpers.throwIfArgumentNull(tasks, "tasks");
 
-            CompletableFuture<V>[] futures = tasks.stream()
+            CompletableFuture<?>[] futures = tasks.stream()
                     .map(t -> t.future)
-                    .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
-            CompletableFuture<V> future = CompletableFuture.anyOf(futures).thenApply(x -> {
+                    .toArray((IntFunction<CompletableFuture<?>[]>) CompletableFuture[]::new);
+
+            CompletableFuture<Task<?>> future = CompletableFuture.anyOf(futures).thenApply(x -> {
                 // Return the first completed task in the list. Unlike the implementation in other languages,
                 // this might not necessarily be the first task that completed, so calling code shouldn't make
                 // assumptions about this. Note that changing this behavior later could be breaking.
-                for (Task<V> task : tasks) {
+                for (Task<?> task : tasks) {
                     if (task.isDone()) {
-                        try {
-                            return task.future.get();
-                        } catch (ExecutionException | InterruptedException ignored) {
-                            // Upstream CompletableFuture already exception out, so this CompletableFuture will also exception out
-                            // no need to repeat throwing exception here.
-                        }
+                        return task;
                     }
                 }
 
                 // Should never get here
-                return null;
+                return completedTask(null);
             });
 
-            return new CompoundTask<>(future, tasks);
+            return new CompoundTask(tasks, future);
         }
 
         @Override
@@ -1161,7 +1157,7 @@ final class TaskOrchestrationExecutor {
 
             List<Task<V>> subTasks;
 
-            CompoundTask(CompletableFuture<U> future, List<Task<V>> subtasks) {
+            CompoundTask(List<Task<V>> subtasks, CompletableFuture<U> future) {
                 super(future);
                 this.subTasks = subtasks;
             }

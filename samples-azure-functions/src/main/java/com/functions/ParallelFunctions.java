@@ -79,13 +79,14 @@ public class ParallelFunctions {
     }
 
     @FunctionName("ParallelAnyOf")
-    public String parallelAnyOf(
+    public Object parallelAnyOf(
             @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
         RetryPolicy retryPolicy = new RetryPolicy(2, Duration.ofSeconds(5));
         TaskOptions taskOptions = new TaskOptions(retryPolicy);
-        List<Task<String>> tasks = new ArrayList<>();
+        List<Task<?>> tasks = new ArrayList<>();
         tasks.add(ctx.callActivity("AppendHappy", "AnyOf1", taskOptions, String.class));
         tasks.add(ctx.callActivity("AppendHappy", "AnyOf2", String.class));
-        return ctx.anyOf(tasks).await();
+        tasks.add(ctx.callActivity("AppendHappy", 1, Integer.class));
+        return ctx.anyOf(tasks).await().await();
     }
 }

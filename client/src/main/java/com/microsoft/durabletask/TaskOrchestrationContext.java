@@ -115,7 +115,7 @@ public interface TaskOrchestrationContext {
      * @return a new {@code Task} that is completed when any of the given {@code Task}s complete
      * @see #anyOf(Task[])
      */
-    <V> Task<V> anyOf(List<Task<V>> tasks);
+    Task<Task<?>> anyOf(List<Task<?>> tasks);
 
     /**
      * Returns a new {@code Task} that is completed when any of the given {@code Task}s complete. The value of the
@@ -154,7 +154,7 @@ public interface TaskOrchestrationContext {
      * @param tasks the list of {@code Task} objects
      * @return a new {@code Task} that is completed when any of the given {@code Task}s complete
      */
-    default <V> Task<V> anyOf(Task<V>... tasks) {
+    default Task<Task<?>> anyOf(Task<?>... tasks) {
         return this.anyOf(Arrays.asList(tasks));
     }
 

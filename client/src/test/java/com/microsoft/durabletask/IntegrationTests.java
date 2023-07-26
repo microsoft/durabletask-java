@@ -1300,7 +1300,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
-                    List<Task<String>> parallelTasks = IntStream.range(0, activityMiddle * 2)
+                    List<Task<?>> parallelTasks = IntStream.range(0, activityMiddle * 2)
                             .mapToObj(i -> {
                                 if (i < activityMiddle) {
                                     return ctx.callActivity(activityName, i, String.class);
@@ -1310,7 +1310,7 @@ public class IntegrationTests extends IntegrationTestBase {
                             })
                             .collect(Collectors.toList());
 
-                    String results = ctx.anyOf(parallelTasks).await();
+                    String results = (String) ctx.anyOf(parallelTasks).await().await();
                     ctx.complete(results);
                 })
                 .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
