@@ -32,7 +32,8 @@ public class EndToEndTests {
     @ParameterizedTest
     @ValueSource(strings = {
             "StartOrchestration",
-            "StartParallelOrchestration"
+            "StartParallelOrchestration",
+            "StartParallelAnyOf"
     })
     public void generalFunctions(String functionName) throws InterruptedException {
         Set<String> continueStates = new HashSet<>();

@@ -225,26 +225,32 @@ final class TaskOrchestrationExecutor {
         }
 
         @Override
-        public Task<Task<?>> anyOf(List<Task<?>> tasks) {
+        public <V> Task<V> anyOf(List<Task<V>> tasks) {
             Helpers.throwIfArgumentNull(tasks, "tasks");
 
-            CompletableFuture<?>[] futures = tasks.stream()
+            CompletableFuture<V>[] futures = tasks.stream()
                     .map(t -> t.future)
-                    .toArray((IntFunction<CompletableFuture<?>[]>) CompletableFuture[]::new);
-
-            return new CompletableTask<>(CompletableFuture.anyOf(futures).thenApply(x -> {
+                    .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
+            CompletableFuture<V> future = CompletableFuture.anyOf(futures).thenApply(x -> {
                 // Return the first completed task in the list. Unlike the implementation in other languages,
                 // this might not necessarily be the first task that completed, so calling code shouldn't make
                 // assumptions about this. Note that changing this behavior later could be breaking.
-                for (Task<?> task : tasks) {
+                for (Task<V> task : tasks) {
                     if (task.isDone()) {
-                        return task;
+                        try {
+                            return task.future.get();
+                        } catch (ExecutionException | InterruptedException ignored) {
+                            // Upstream future already exception out, so this one will also exception out
+                            // no need to repeat throwing exception here.
+                        }
                     }
                 }
 
                 // Should never get here
-                return completedTask(null);
-            }));
+                return null;
+            });
+
+            return new CompoundTask<>(future, tasks);
         }
 
         @Override
@@ -1151,17 +1157,17 @@ final class TaskOrchestrationExecutor {
             }
         }
 
-        private class CompoundTask<V> extends CompletableTask<List<V>> {
+        private class CompoundTask<V, U> extends CompletableTask<U> {
 
             List<Task<V>> subTasks;
 
-            CompoundTask(CompletableFuture<List<V>> future, List<Task<V>> subtasks) {
+            CompoundTask(CompletableFuture<U> future, List<Task<V>> subtasks) {
                 super(future);
                 this.subTasks = subtasks;
             }
 
             @Override
-            public List<V> await() {
+            public U await() {
                 this.initSubTasks();
                 return super.await();
             }

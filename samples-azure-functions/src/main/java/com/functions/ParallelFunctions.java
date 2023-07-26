@@ -63,4 +63,29 @@ public class ParallelFunctions {
         context.getLogger().info("AppendSad: " + name);
         return name + "-test-sad";
     }
+
+
+    @FunctionName("StartParallelAnyOf")
+    public HttpResponseMessage startParallelAnyOf(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        context.getLogger().info("Java HTTP trigger processed a request.");
+
+        DurableTaskClient client = durableContext.getClient();
+        String instanceId = client.scheduleNewOrchestrationInstance("ParallelAnyOf");
+        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    @FunctionName("ParallelAnyOf")
+    public String parallelAnyOf(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+        RetryPolicy retryPolicy = new RetryPolicy(2, Duration.ofSeconds(5));
+        TaskOptions taskOptions = new TaskOptions(retryPolicy);
+        List<Task<String>> tasks = new ArrayList<>();
+        tasks.add(ctx.callActivity("AppendHappy", "AnyOf1", taskOptions, String.class));
+        tasks.add(ctx.callActivity("AppendHappy", "AnyOf2", String.class));
+        return ctx.anyOf(tasks).await();
+    }
 }
