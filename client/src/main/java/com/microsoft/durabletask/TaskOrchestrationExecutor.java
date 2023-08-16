@@ -587,12 +587,24 @@ final class TaskOrchestrationExecutor {
 
         private Task<Void> createTimer(Instant finalFireAt) {
             Duration remainingTime = Duration.between(this.currentInstant, finalFireAt);
-            while (remainingTime.compareTo(this.maximumTimerInterval) > 0) {
-                Instant nextFireAt = this.currentInstant.plus(this.maximumTimerInterval);
-                createInstantTimer(this.sequenceNumber++, nextFireAt).await();
-                remainingTime = Duration.between(this.currentInstant, finalFireAt);
+            if (remainingTime.compareTo(this.maximumTimerInterval) > 0) {
+                List<CompletableFuture<Void>> timers = new ArrayList<>();
+                Instant currentInstant = this.currentInstant;
+                while (remainingTime.compareTo(this.maximumTimerInterval) > 0) {
+                    Instant nextFireAt = currentInstant.plus(this.maximumTimerInterval);
+                    Task<Void> instantTimer = createInstantTimer(this.sequenceNumber++, nextFireAt);
+                    timers.add(instantTimer.future);
+                    currentInstant = nextFireAt;
+                    remainingTime = Duration.between(currentInstant, finalFireAt);
+                }
+                Task<Void> finalTimer = createInstantTimer(this.sequenceNumber++, finalFireAt);
+                timers.add(finalTimer.future);
+                CompletableFuture<Void> longTimer = CompletableFuture.allOf(timers.toArray(new CompletableFuture[timers.size()]));
+                return new CompletableTask<>(longTimer);
             }
-            return createInstantTimer(this.sequenceNumber++, finalFireAt);
+            else {
+                return createInstantTimer(this.sequenceNumber++, finalFireAt);
+            }
         }
 
         private Task<Void> createInstantTimer(int id, Instant fireAt) {

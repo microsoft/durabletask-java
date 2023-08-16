@@ -121,6 +121,45 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
+    void longTimerNonblocking() throws TimeoutException {
+        final String orchestratorName = "ActivityAnyOf";
+        final String externalEventActivityName = "externalEvent";
+        final String externalEventWinner = "The external event completed first";
+        final String timerEventWinner = "The timer event completed first";
+        final Duration timerDuration = Duration.ofSeconds(20);
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                Task<String> externalEvent = ctx.waitForExternalEvent(externalEventActivityName, String.class);
+                Task<Void> longTimer = ctx.createTimer(timerDuration);
+                Task<?> winnerEvent = ctx.anyOf(externalEvent, longTimer).await();
+                if (winnerEvent == externalEvent) {
+                    ctx.complete(externalEventWinner);
+                } else {
+                    ctx.complete(timerEventWinner);
+                }
+            }).setMaximumTimerInterval(Duration.ofSeconds(3)).buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            client.raiseEvent(instanceId, externalEventActivityName, "Hello world");
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            String output = instance.readOutputAs(String.class);
+            assertNotNull(output);
+            assertTrue(output.equals(externalEventWinner));
+
+            long createdTime = instance.getCreatedAt().getEpochSecond();
+            long completedTime = instance.getLastUpdatedAt().getEpochSecond();
+            // Timer did not block execution
+            assertTrue(completedTime - createdTime < 5);
+        }
+    }
+
+
+    @Test
     void longTimeStampTimer() throws TimeoutException {
         final String orchestratorName = "LongTimeStampTimer";
         final Duration delay = Duration.ofSeconds(7);
