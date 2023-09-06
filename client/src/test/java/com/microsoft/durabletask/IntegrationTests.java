@@ -158,6 +158,42 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
+    @Test
+    void longTimerNonblockingNoExternal() throws TimeoutException {
+        final String orchestratorName = "ActivityAnyOf";
+        final String externalEventActivityName = "externalEvent";
+        final String externalEventWinner = "The external event completed first";
+        final String timerEventWinner = "The timer event completed first";
+        final Duration timerDuration = Duration.ofSeconds(20);
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    Task<String> externalEvent = ctx.waitForExternalEvent(externalEventActivityName, String.class);
+                    Task<Void> longTimer = ctx.createTimer(timerDuration);
+                    Task<?> winnerEvent = ctx.anyOf(externalEvent, longTimer).await();
+                    if (winnerEvent == externalEvent) {
+                        ctx.complete(externalEventWinner);
+                    } else {
+                        ctx.complete(timerEventWinner);
+                    }
+                }).setMaximumTimerInterval(Duration.ofSeconds(3)).buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            String output = instance.readOutputAs(String.class);
+            assertNotNull(output);
+            assertTrue(output.equals(timerEventWinner));
+
+            long expectedCompletionSecond = instance.getCreatedAt().plus(timerDuration).getEpochSecond();
+            long actualCompletionSecond = instance.getLastUpdatedAt().getEpochSecond();
+            assertTrue(expectedCompletionSecond <= actualCompletionSecond);
+        }
+    }
+
 
     @Test
     void longTimeStampTimer() throws TimeoutException {
