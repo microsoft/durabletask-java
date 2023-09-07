@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -93,8 +94,10 @@ public class IntegrationTests extends IntegrationTestBase {
         final String orchestratorName = "LongTimer";
         final Duration delay = Duration.ofSeconds(7);
         AtomicInteger counter = new AtomicInteger();
+        AtomicReferenceArray<LocalDateTime> timestamps = new AtomicReferenceArray<>(4);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
+                    timestamps.set(counter.get(), LocalDateTime.now());
                     counter.incrementAndGet();
                     ctx.createTimer(delay).await();
                 })
@@ -117,8 +120,92 @@ public class IntegrationTests extends IntegrationTestBase {
             // Verify that the correct number of timers were created
             // This should yield 4 (first invocation + replay invocations for internal timers 3s + 3s + 1s)
             assertEquals(4, counter.get());
+
+            // Verify that each timer is the expected length
+            int[] secondsElapsed = new int[3];
+            for (int i = 0; i < timestamps.length() - 1; i++) {
+                secondsElapsed[i] = timestamps.get(i + 1).getSecond() - timestamps.get(i).getSecond();
+            }
+            assertEquals(secondsElapsed[0], 3);
+            assertEquals(secondsElapsed[1], 3);
+            assertEquals(secondsElapsed[2], 1);
         }
     }
+
+    @Test
+    void longTimerNonblocking() throws TimeoutException {
+        final String orchestratorName = "ActivityAnyOf";
+        final String externalEventActivityName = "externalEvent";
+        final String externalEventWinner = "The external event completed first";
+        final String timerEventWinner = "The timer event completed first";
+        final Duration timerDuration = Duration.ofSeconds(20);
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                Task<String> externalEvent = ctx.waitForExternalEvent(externalEventActivityName, String.class);
+                Task<Void> longTimer = ctx.createTimer(timerDuration);
+                Task<?> winnerEvent = ctx.anyOf(externalEvent, longTimer).await();
+                if (winnerEvent == externalEvent) {
+                    ctx.complete(externalEventWinner);
+                } else {
+                    ctx.complete(timerEventWinner);
+                }
+            }).setMaximumTimerInterval(Duration.ofSeconds(3)).buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            client.raiseEvent(instanceId, externalEventActivityName, "Hello world");
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            String output = instance.readOutputAs(String.class);
+            assertNotNull(output);
+            assertTrue(output.equals(externalEventWinner));
+
+            long createdTime = instance.getCreatedAt().getEpochSecond();
+            long completedTime = instance.getLastUpdatedAt().getEpochSecond();
+            // Timer did not block execution
+            assertTrue(completedTime - createdTime < 5);
+        }
+    }
+
+    @Test
+    void longTimerNonblockingNoExternal() throws TimeoutException {
+        final String orchestratorName = "ActivityAnyOf";
+        final String externalEventActivityName = "externalEvent";
+        final String externalEventWinner = "The external event completed first";
+        final String timerEventWinner = "The timer event completed first";
+        final Duration timerDuration = Duration.ofSeconds(20);
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    Task<String> externalEvent = ctx.waitForExternalEvent(externalEventActivityName, String.class);
+                    Task<Void> longTimer = ctx.createTimer(timerDuration);
+                    Task<?> winnerEvent = ctx.anyOf(externalEvent, longTimer).await();
+                    if (winnerEvent == externalEvent) {
+                        ctx.complete(externalEventWinner);
+                    } else {
+                        ctx.complete(timerEventWinner);
+                    }
+                }).setMaximumTimerInterval(Duration.ofSeconds(3)).buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            String output = instance.readOutputAs(String.class);
+            assertNotNull(output);
+            assertTrue(output.equals(timerEventWinner));
+
+            long expectedCompletionSecond = instance.getCreatedAt().plus(timerDuration).getEpochSecond();
+            long actualCompletionSecond = instance.getLastUpdatedAt().getEpochSecond();
+            assertTrue(expectedCompletionSecond <= actualCompletionSecond);
+        }
+    }
+
 
     @Test
     void longTimeStampTimer() throws TimeoutException {

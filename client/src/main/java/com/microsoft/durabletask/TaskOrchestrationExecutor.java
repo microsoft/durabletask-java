@@ -586,16 +586,11 @@ final class TaskOrchestrationExecutor {
         }
 
         private Task<Void> createTimer(Instant finalFireAt) {
-            Duration remainingTime = Duration.between(this.currentInstant, finalFireAt);
-            while (remainingTime.compareTo(this.maximumTimerInterval) > 0) {
-                Instant nextFireAt = this.currentInstant.plus(this.maximumTimerInterval);
-                createInstantTimer(this.sequenceNumber++, nextFireAt).await();
-                remainingTime = Duration.between(this.currentInstant, finalFireAt);
-            }
-            return createInstantTimer(this.sequenceNumber++, finalFireAt);
+            TimerTask timer = new TimerTask(finalFireAt);
+            return timer;
         }
 
-        private Task<Void> createInstantTimer(int id, Instant fireAt) {
+        private CompletableTask<Void> createInstantTimer(int id, Instant fireAt) {
             Timestamp ts = DataConverter.getTimestampFromInstant(fireAt);
             this.pendingActions.put(id, OrchestratorAction.newBuilder()
                     .setId(id)
@@ -941,6 +936,61 @@ final class TaskOrchestrationExecutor {
             }
         }
 
+        private class TimerTask extends CompletableTask<Void> {
+            private Instant finalFireAt;
+            CompletableTask<Void> task;
+
+            public TimerTask(Instant finalFireAt) {
+                super();
+                CompletableTask<Void> firstTimer = createTimerTask(finalFireAt);
+                CompletableFuture<Void> timerChain = createTimerChain(finalFireAt, firstTimer.future);
+                this.task = new CompletableTask<>(timerChain);
+                this.finalFireAt = finalFireAt;
+            }
+
+            // For a short timer (less than maximumTimerInterval), once the currentFuture completes, we must have reached finalFireAt,
+            // so we return and no more sub-timers are created. For a long timer (more than maximumTimerInterval), once a given
+            // currentFuture completes, we check if we have not yet reached finalFireAt. If that is the case, we create a new sub-timer
+            // task and make a recursive call on that new sub-timer task so that once it completes, another sub-timer task is created
+            // if necessary. Otherwise, we return and no more sub-timers are created.
+            private CompletableFuture<Void> createTimerChain(Instant finalFireAt, CompletableFuture<Void> currentFuture) {
+                return currentFuture.thenRun(() -> {
+                    if (currentInstant.compareTo(finalFireAt) > 0) {
+                        return;
+                    }
+                    Task<Void> nextTimer = createTimerTask(finalFireAt);
+
+                    createTimerChain(finalFireAt, nextTimer.future);
+                });
+            }
+
+            private CompletableTask<Void> createTimerTask(Instant finalFireAt) {
+                CompletableTask<Void> nextTimer;
+                Duration remainingTime = Duration.between(currentInstant, finalFireAt);
+                if (remainingTime.compareTo(maximumTimerInterval) > 0) {
+                    Instant nextFireAt = currentInstant.plus(maximumTimerInterval);
+                    nextTimer = createInstantTimer(sequenceNumber++, nextFireAt);
+                } else {
+                    nextTimer = createInstantTimer(sequenceNumber++, finalFireAt);
+                }
+                nextTimer.setParentTask(this);
+                return nextTimer;
+            }
+
+            private void handleSubTimerSuccess() {
+                // check if it is the last timer
+                if (currentInstant.compareTo(finalFireAt) >= 0) {
+                    this.complete(null);
+                }
+            }
+
+            @Override
+            public Void await() {
+                return this.task.await();
+            }
+
+        }
+
         private class ExternalEventTask<V> extends CompletableTask<V> {
             private final String eventName;
             private final Duration timeout;
@@ -1256,6 +1306,10 @@ final class TaskOrchestrationExecutor {
                 if (parentTask instanceof RetriableTask) {
                     // notify parent task
                     ((RetriableTask<V>) parentTask).handleChildSuccess(value);
+                }
+                if (parentTask instanceof TimerTask) {
+                    // notify parent task
+                    ((TimerTask) parentTask).handleSubTimerSuccess();
                 }
                 return result;
             }

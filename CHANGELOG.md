@@ -1,5 +1,6 @@
 ## v1.3.0
 * Refactor `RetriableTask` and add new `CompoundTask`, fixing Fan-out/Fan-in stuck when using `RetriableTask` ([#157](https://github.com/microsoft/durabletask-java/pull/157))
+* Refactor `createTimer` to be non-blocking ([#161](https://github.com/microsoft/durabletask-java/pull/161))
 
 ## v1.2.0
 
@@ -20,7 +21,6 @@
 * Fix the potential NPE issue of `DurableTaskClient#terminate` method ([#104](https://github.com/microsoft/durabletask-java/issues/104))
 * Add waitForCompletionOrCreateCheckStatusResponse client API ([#115](https://github.com/microsoft/durabletask-java/pull/115))
 * Support long timers by breaking up into smaller timers ([#114](https://github.com/microsoft/durabletask-java/issues/114))
-* Support restartInstance and pass restartPostUri in HttpManagementPayload ([#108](https://github.com/microsoft/durabletask-java/issues/108))
 
 ## v1.0.0
 
