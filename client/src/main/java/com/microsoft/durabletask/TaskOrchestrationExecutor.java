@@ -948,6 +948,11 @@ final class TaskOrchestrationExecutor {
                 this.finalFireAt = finalFireAt;
             }
 
+            // For a short timer (less than maximumTimerInterval), once the currentFuture completes, we must have reached finalFireAt,
+            // so we return and no more sub-timers are created. For a long timer (more than maximumTimerInterval), once a given
+            // currentFuture completes, we check if we have not yet reached finalFireAt. If that is the case, we create a new sub-timer
+            // task and make a recursive call on that new sub-timer task so that once it completes, another sub-timer task is created
+            // if necessary. Otherwise, we return and no more sub-timers are created.
             private CompletableFuture<Void> createTimerChain(Instant finalFireAt, CompletableFuture<Void> currentFuture) {
                 return currentFuture.thenRun(() -> {
                     if (currentInstant.compareTo(finalFireAt) > 0) {

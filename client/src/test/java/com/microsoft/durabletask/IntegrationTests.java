@@ -94,10 +94,10 @@ public class IntegrationTests extends IntegrationTestBase {
         final String orchestratorName = "LongTimer";
         final Duration delay = Duration.ofSeconds(7);
         AtomicInteger counter = new AtomicInteger();
-        AtomicReferenceArray<Long> timestamps = new AtomicReferenceArray<>(4);
+        AtomicReferenceArray<LocalDateTime> timestamps = new AtomicReferenceArray<>(4);
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
-                    timestamps.set(counter.get(), System.nanoTime());
+                    timestamps.set(counter.get(), LocalDateTime.now());
                     counter.incrementAndGet();
                     ctx.createTimer(delay).await();
                 })
@@ -122,13 +122,13 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(4, counter.get());
 
             // Verify that each timer is the expected length
-            double[] secondsElapsed = new double[3];
+            int[] secondsElapsed = new int[3];
             for (int i = 0; i < timestamps.length() - 1; i++) {
-                secondsElapsed[i] = (timestamps.get(i + 1) - timestamps.get(i)) / 1_000_000_000.0;
+                secondsElapsed[i] = timestamps.get(i + 1).getSecond() - timestamps.get(i).getSecond();
             }
-            assertTrue(secondsElapsed[0] >= 2.9 && secondsElapsed[0] <= 3.1);
-            assertTrue(secondsElapsed[1] >= 2.9 && secondsElapsed[1] <= 3.1);
-            assertTrue(secondsElapsed[2] >= 0.9 && secondsElapsed[2] <= 1.1);
+            assertEquals(secondsElapsed[0], 3);
+            assertEquals(secondsElapsed[1], 3);
+            assertEquals(secondsElapsed[2], 1);
         }
     }
 
