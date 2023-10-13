@@ -9,6 +9,7 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkItem.RequestCase;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
 
+import com.microsoft.durabletask.log.LoggerManager;
 import io.grpc.*;
 
 import java.time.Duration;
@@ -22,7 +23,7 @@ import java.util.logging.Logger;
  */
 public final class DurableTaskGrpcWorker implements AutoCloseable {
     private static final int DEFAULT_PORT = 4001;
-    private static final Logger logger = Logger.getLogger(DurableTaskGrpcWorker.class.getPackage().getName());
+    private static final Logger logger = LoggerManager.getLogger();
     private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();

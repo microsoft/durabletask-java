@@ -5,6 +5,7 @@ package com.microsoft.durabletask;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
+import com.microsoft.durabletask.log.LoggerManager;
 
 import java.time.Duration;
 import java.util.Base64;
@@ -18,7 +19,7 @@ import java.util.logging.Logger;
  * caller must provide orchestration state as serialized protobuf bytes.
  */
 public final class OrchestrationRunner {
-    private static final Logger logger = Logger.getLogger(OrchestrationRunner.class.getPackage().getName());
+    private static final Logger logger = LoggerManager.getLogger();
     private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
 
     private OrchestrationRunner() {
