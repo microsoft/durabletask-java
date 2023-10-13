@@ -1,3 +1,6 @@
+## placeholder
+* Update sdk loggin logics so all level logs are recored into kusto. ([#170](https://github.com/microsoft/durabletask-java/pull/170))
+
 ## v1.4.0
 
 ### Updates
