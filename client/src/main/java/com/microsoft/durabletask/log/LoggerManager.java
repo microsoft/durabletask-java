@@ -1,6 +1,5 @@
 package com.microsoft.durabletask.log;
 
-import java.util.Arrays;
 import java.util.logging.*;
 
 public class LoggerManager {
