@@ -12,6 +12,7 @@ import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
 import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
+import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 
 public class ParallelFunctions {
 
@@ -88,5 +89,38 @@ public class ParallelFunctions {
         tasks.add(ctx.callActivity("AppendHappy", "AnyOf2", String.class));
         tasks.add(ctx.callActivity("AppendHappy", 1, Integer.class));
         return ctx.anyOf(tasks).await().await();
+    }
+
+
+    @FunctionName("ParallelCatchException")
+    public List<String> parallelOrchestratorSad(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx,
+            ExecutionContext context) {
+        try {
+            List<Task<String>> tasks = new ArrayList<>();
+            RetryPolicy policy = new RetryPolicy(2, Duration.ofSeconds(1));
+            TaskOptions options = new TaskOptions(policy);
+            tasks.add(ctx.callActivity("AlwaysException", "Input1", options, String.class));
+            tasks.add(ctx.callActivity("AppendHappy", "Input2", options, String.class));
+            return ctx.allOf(tasks).await();
+        } catch (CompositeTaskFailedException e) {
+            // only catch this type of exception to ensure the expected type of exception is thrown out.
+            for (Exception exception : e.getExceptions()) {
+                if (exception instanceof TaskFailedException) {
+                    TaskFailedException taskFailedException = (TaskFailedException) exception;
+                    context.getLogger().info("Task: " + taskFailedException.getTaskName() +
+                            " Failed for cause: " + taskFailedException.getErrorDetails().getErrorMessage());
+                }
+            }
+        }
+        return null;
+    }
+
+    @FunctionName("AlwaysException")
+    public String alwaysException(
+            @DurableActivityTrigger(name = "name") String name,
+            final ExecutionContext context) {
+        context.getLogger().info("Throw Test AlwaysException: " + name);
+        throw new RuntimeException("Test AlwaysException");
     }
 }

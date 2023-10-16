@@ -180,7 +180,8 @@ final class TaskOrchestrationExecutor {
         @Override
         public <V> Task<List<V>> allOf(List<Task<V>> tasks) {
             Helpers.throwIfArgumentNull(tasks, "tasks");
-
+            // Mark all retrialbe task that they are inside a Compound task returned by allOf
+            markRetriableTask(tasks);
             CompletableFuture<V>[] futures = tasks.stream()
                     .map(t -> t.future)
                     .toArray((IntFunction<CompletableFuture<V>[]>) CompletableFuture[]::new);
@@ -222,6 +223,15 @@ final class TaskOrchestrationExecutor {
                     .exceptionally(exceptionPath);
 
             return new CompoundTask<>(tasks, future);
+        }
+
+        private <V> void markRetriableTask(List<Task<V>> tasks) {
+            for (Task<V> task : tasks) {
+                if (task instanceof RetriableTask) {
+                    RetriableTask<V> retriableTask = (RetriableTask<V>) task;
+                    retriableTask.markInCompoundTask();
+                }
+            }
         }
 
         @Override
@@ -1032,6 +1042,7 @@ final class TaskOrchestrationExecutor {
             private Instant startTime;
             private int attemptNumber;
             private Task<V> childTask;
+            private boolean isInCompoundTask;
 
 
             public RetriableTask(TaskOrchestrationContext context, TaskFactory<V> taskFactory, RetryPolicy policy) {
@@ -1124,11 +1135,16 @@ final class TaskOrchestrationExecutor {
                 } catch (OrchestratorBlockedException ex) {
                     throw ex;
                 } catch (Exception ignored) {
-                    // ignore the exception from previous child tasks.
-                    // Only needs to return result from the last child task, which is on next line.
+                    /**
+                     * If this RetriableTask is not configured as part of an allOf method (CompoundTask),
+                     * it throws an exception, marking the orchestration as failed. However, if this RetriableTask
+                     * is configured within an allOf method (CompoundTask), any exceptions are ignored.
+                     * This approach ensures that when awaiting the future of the allOf method,
+                     * it throws the CompositeTaskFailedException defined in its exceptionPath.
+                     */
+                    if (!this.isInCompoundTask) throw ignored;
                 }
-                // Always return the last child task result.
-                return this.getChildTask().await();
+                return null;
             }
 
             private boolean shouldRetry() {
@@ -1200,6 +1216,10 @@ final class TaskOrchestrationExecutor {
                 // If there's no declarative retry policy defined, then the custom code retry handler
                 // is responsible for implementing any delays between retry attempts.
                 return Duration.ZERO;
+            }
+
+            public void markInCompoundTask() {
+                this.isInCompoundTask = true;
             }
         }
 
