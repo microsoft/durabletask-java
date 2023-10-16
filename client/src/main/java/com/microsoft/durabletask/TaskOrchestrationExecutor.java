@@ -1131,7 +1131,7 @@ final class TaskOrchestrationExecutor {
                 // Therefore, once we return from the following `await`,
                 // we just need to await again on the *current* child task to obtain the result of this task
                 try{
-                    this.getChildTask().await();
+                    return this.getChildTask().await();
                 } catch (OrchestratorBlockedException ex) {
                     throw ex;
                 } catch (Exception exception) {
