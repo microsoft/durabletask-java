@@ -1134,7 +1134,7 @@ final class TaskOrchestrationExecutor {
                     this.getChildTask().await();
                 } catch (OrchestratorBlockedException ex) {
                     throw ex;
-                } catch (Exception ignored) {
+                } catch (Exception exception) {
                     /**
                      * If this RetriableTask is not configured as part of an allOf method (CompoundTask),
                      * it throws an exception, marking the orchestration as failed. However, if this RetriableTask
@@ -1142,7 +1142,7 @@ final class TaskOrchestrationExecutor {
                      * This approach ensures that when awaiting the future of the allOf method,
                      * it throws the CompositeTaskFailedException defined in its exceptionPath.
                      */
-                    if (!this.isInCompoundTask) throw ignored;
+                    if (!this.isInCompoundTask) throw exception;
                 }
                 return null;
             }
