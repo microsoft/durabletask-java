@@ -104,7 +104,7 @@ public class ParallelFunctions {
     }
 
     @FunctionName("ParallelCatchException")
-    public List<String> parallelOrchestratorSad(
+    public List<String> parallelCatchException(
             @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx,
             ExecutionContext context) {
         try {
