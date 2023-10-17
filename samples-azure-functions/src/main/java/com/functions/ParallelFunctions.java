@@ -12,7 +12,6 @@ import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
 import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
-import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 
 public class ParallelFunctions {
 
@@ -91,6 +90,18 @@ public class ParallelFunctions {
         return ctx.anyOf(tasks).await().await();
     }
 
+    @FunctionName("StartParallelCatchException")
+    public HttpResponseMessage startParallelCatchException(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        context.getLogger().info("Java HTTP trigger processed a request.");
+
+        DurableTaskClient client = durableContext.getClient();
+        String instanceId = client.scheduleNewOrchestrationInstance("ParallelCatchException");
+        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
 
     @FunctionName("ParallelCatchException")
     public List<String> parallelOrchestratorSad(

@@ -34,7 +34,7 @@ public class EndToEndTests {
             "StartOrchestration",
             "StartParallelOrchestration",
             "StartParallelAnyOf",
-            "ParallelCatchException"
+            "StartParallelCatchException"
     })
     public void generalFunctions(String functionName) throws InterruptedException {
         Set<String> continueStates = new HashSet<>();
