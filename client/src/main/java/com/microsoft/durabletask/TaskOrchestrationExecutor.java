@@ -1122,23 +1122,31 @@ final class TaskOrchestrationExecutor {
             @Override
             public V await() {
                 this.init();
-                // when awaiting the first child task, we will continue iterating over the history until a result is found
-                // for that task. If the result is an exception, the child task will invoke "handleChildException" on this
-                // object, which awaits a timer, *re-sets the current child task to correspond to a retry of this task*,
-                // and then awaits that child.
-                // This logic continues until either the operation succeeds, or are our retry quota is met.
-                // At that point, we break the `await()` on the child task.
-                // Therefore, once we return from the following `await`,
-                // we just need to await again on the *current* child task to obtain the result of this task
+                /**
+                 * when awaiting the first child task, we will continue iterating over the history until a result is found
+                 * for that task. If the result is an exception, the child task will invoke "handleChildException" on this
+                 * object, which awaits a timer, *re-sets the current child task to correspond to a retry of this task*,
+                 * and then awaits that child.
+                 * This logic continues until either the operation succeeds, or are our retry quota is met.
+                 * At that point, we break the `await()` on the child task.
+                 * Therefore, once we return from the following `await`,
+                 * we just need to await again on the *current* child task to obtain the result of this task
+                 */
                 try{
                     this.getChildTask().await();
                 } catch (OrchestratorBlockedException ex) {
                     throw ex;
                 } catch (Exception ignore) {
                     // ignore the exception from previous child tasks.
-                    // Only needs to return result from the last child task, which is on next line.
+                    // Only needs to return result from the last child task, which is on next try-catch block.
                 }
-
+                /**
+                 * Need to have two try-catch block, the first one we ignore the exception from the previous child task
+                 * Once completed the future, method stack frame will pop out till `this.getChildTask().await();`
+                 * in the first try-catch block. The child task now is previous child task we are awaiting on, for any exception
+                 * throw by previous child task we should ignore, we only care about the last child task which is in next
+                 * try-catch block.
+                 */
                 try {
                     // Always return the last child task result.
                     return this.getChildTask().await();
