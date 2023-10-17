@@ -1131,9 +1131,17 @@ final class TaskOrchestrationExecutor {
                 // Therefore, once we return from the following `await`,
                 // we just need to await again on the *current* child task to obtain the result of this task
                 try{
-                    return this.getChildTask().await();
+                    this.getChildTask().await();
                 } catch (OrchestratorBlockedException ex) {
                     throw ex;
+                } catch (Exception ignore) {
+                    // ignore the exception from previous child tasks.
+                    // Only needs to return result from the last child task, which is on next line.
+                }
+
+                try {
+                    // Always return the last child task result.
+                    return this.getChildTask().await();
                 } catch (Exception exception) {
                     /**
                      * If this RetriableTask is not configured as part of an allOf method (CompoundTask),
