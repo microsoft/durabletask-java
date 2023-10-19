@@ -1274,6 +1274,8 @@ final class TaskOrchestrationExecutor {
             private boolean processNextEvent() {
                 try {
                     return ContextImplTask.this.processNextEvent();
+                } catch (OrchestratorBlockedException | ContinueAsNewInterruption exception) {
+                    throw exception;
                 } catch (Exception e) {
                     // ignore
                     /**
