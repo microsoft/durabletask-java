@@ -1375,6 +1375,68 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
+    void activityAllOfException() throws IOException, TimeoutException {
+        final String orchestratorName = "ActivityAllOf";
+        final String activityName = "ToString";
+        final String retryActivityName = "RetryToStringException";
+        final String result = "test fail";
+        final int activityMiddle = 5;
+        final RetryPolicy retryPolicy = new RetryPolicy(2, Duration.ofSeconds(5));
+        final TaskOptions taskOptions = new TaskOptions(retryPolicy);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    List<Task<String>> parallelTasks = IntStream.range(0, activityMiddle * 2)
+                            .mapToObj(i -> {
+                                if (i < activityMiddle) {
+                                    return ctx.callActivity(activityName, i, String.class);
+                                } else {
+                                    return ctx.callActivity(retryActivityName, i, taskOptions, String.class);
+                                }
+                            })
+                            .collect(Collectors.toList());
+
+                    // Wait for all tasks to complete, then sort and reverse the results
+                    try {
+                        List<String> results = null;
+                        results = ctx.allOf(parallelTasks).await();
+                        Collections.sort(results);
+                        Collections.reverse(results);
+                        ctx.complete(results);
+                    } catch (CompositeTaskFailedException e) {
+                        // only catch this type of exception to ensure the expected type of exception is thrown out.
+                        for (Exception exception : e.getExceptions()) {
+                            if (exception instanceof TaskFailedException) {
+                                TaskFailedException taskFailedException = (TaskFailedException) exception;
+                                System.out.println("Task: " + taskFailedException.getTaskName() +
+                                        " Failed for cause: " + taskFailedException.getErrorDetails().getErrorMessage());
+                            }
+                        }
+                    }
+                    ctx.complete(result);
+                })
+                .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
+                .addActivity(retryActivityName, ctx -> {
+                    // only throw exception
+                    throw new RuntimeException("test retry");
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            String output = instance.readOutputAs(String.class);
+            assertNotNull(output);
+            assertEquals(String.class, output.getClass());
+            assertEquals(result, output);
+        }
+    }
+
+    @Test
     void activityAnyOf() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityAnyOf";
         final String activityName = "ToString";
