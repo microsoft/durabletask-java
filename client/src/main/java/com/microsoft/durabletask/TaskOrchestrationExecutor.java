@@ -1279,10 +1279,8 @@ final class TaskOrchestrationExecutor {
                 } catch (Exception e) {
                     // ignore
                     /**
-                     * the idea is that for any exception thrown here it should be handled
-                     * in the do-while loop, the same exception should also be obtained when calling
-                     * {code#future.get()} in the do-while loop, and it will be handled correctly
-                     * in the catch block in the do-while loop.
+                     * We ignore the exception. Any Durable Task exceptions thrown here can be obtained when calling
+                     * {code#future.get()} in the implementation of 'await'. We defer to that loop to handle the exception.
                      */
                 }
                 // Any exception happen we return true so that we will enter to the do-while block for the last time.
