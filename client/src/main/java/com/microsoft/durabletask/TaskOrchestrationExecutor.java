@@ -1261,7 +1261,7 @@ final class TaskOrchestrationExecutor {
                             this.handleException(e);
                         }
                     }
-                } while (ContextImplTask.this.processNextEvent());
+                } while (processNextEvent());
 
                 // There's no more history left to replay and the current task is still not completed. This is normal.
                 // The OrchestratorBlockedException exception allows us to yield the current thread back to the executor so
@@ -1269,6 +1269,22 @@ final class TaskOrchestrationExecutor {
                 // This is *not* an exception - it's a normal part of orchestrator control flow.
                 throw new OrchestratorBlockedException(
                         "The orchestrator is blocked and waiting for new inputs. This Throwable should never be caught by user code.");
+            }
+
+            private boolean processNextEvent() {
+                try {
+                    return ContextImplTask.this.processNextEvent();
+                } catch (OrchestratorBlockedException | ContinueAsNewInterruption exception) {
+                    throw exception;
+                } catch (Exception e) {
+                    // ignore
+                    /**
+                     * We ignore the exception. Any Durable Task exceptions thrown here can be obtained when calling
+                     * {code#future.get()} in the implementation of 'await'. We defer to that loop to handle the exception.
+                     */
+                }
+                // Any exception happen we return true so that we will enter to the do-while block for the last time.
+                return true;
             }
 
             @Override

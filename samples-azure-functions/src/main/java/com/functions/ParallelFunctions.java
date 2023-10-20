@@ -89,4 +89,49 @@ public class ParallelFunctions {
         tasks.add(ctx.callActivity("AppendHappy", 1, Integer.class));
         return ctx.anyOf(tasks).await().await();
     }
+
+    @FunctionName("StartParallelCatchException")
+    public HttpResponseMessage startParallelCatchException(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        context.getLogger().info("Java HTTP trigger processed a request.");
+
+        DurableTaskClient client = durableContext.getClient();
+        String instanceId = client.scheduleNewOrchestrationInstance("ParallelCatchException");
+        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    @FunctionName("ParallelCatchException")
+    public List<String> parallelCatchException(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx,
+            ExecutionContext context) {
+        try {
+            List<Task<String>> tasks = new ArrayList<>();
+            RetryPolicy policy = new RetryPolicy(2, Duration.ofSeconds(1));
+            TaskOptions options = new TaskOptions(policy);
+            tasks.add(ctx.callActivity("AlwaysException", "Input1", options, String.class));
+            tasks.add(ctx.callActivity("AppendHappy", "Input2", options, String.class));
+            return ctx.allOf(tasks).await();
+        } catch (CompositeTaskFailedException e) {
+            // only catch this type of exception to ensure the expected type of exception is thrown out.
+            for (Exception exception : e.getExceptions()) {
+                if (exception instanceof TaskFailedException) {
+                    TaskFailedException taskFailedException = (TaskFailedException) exception;
+                    context.getLogger().info("Task: " + taskFailedException.getTaskName() +
+                            " Failed for cause: " + taskFailedException.getErrorDetails().getErrorMessage());
+                }
+            }
+        }
+        return null;
+    }
+
+    @FunctionName("AlwaysException")
+    public String alwaysException(
+            @DurableActivityTrigger(name = "name") String name,
+            final ExecutionContext context) {
+        context.getLogger().info("Throw Test AlwaysException: " + name);
+        throw new RuntimeException("Test AlwaysException");
+    }
 }

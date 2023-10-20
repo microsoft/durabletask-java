@@ -1,3 +1,7 @@
+## placeholder
+* Fix exception type issue when using `RetriableTask` in fan in/out pattern ([#174](https://github.com/microsoft/durabletask-java/pull/174))
+
+
 ## v1.4.0
 
 ### Updates
