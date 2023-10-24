@@ -8,6 +8,7 @@ import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
 import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
+import com.microsoft.durabletask.util.UUIDGenerator;
 
 import javax.annotation.Nullable;
 import java.time.Duration;
@@ -80,6 +81,7 @@ final class TaskOrchestrationExecutor {
         private boolean isComplete;
         private boolean isSuspended;
         private boolean isReplaying = true;
+        private int newUUIDCounter;
 
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
         private final LinkedHashMap<Integer, OrchestratorAction> pendingActions = new LinkedHashMap<>();
@@ -294,6 +296,7 @@ final class TaskOrchestrationExecutor {
             return this.createAppropriateTask(taskFactory, options);
         }
 
+        @Override
         public void continueAsNew(Object input, boolean preserveUnprocessedEvents) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
 
@@ -307,6 +310,20 @@ final class TaskOrchestrationExecutor {
             // This is *not* an exception - it's a normal part of orchestrator control flow.
             throw new ContinueAsNewInterruption(
                     "The orchestrator invoked continueAsNew. This Throwable should never be caught by user code.");
+        }
+
+        @Override
+        public UUID newUUID() {
+            final int version = 5;
+            final String hashV5 = "SHA-1";
+            final String dnsNameSpace = "9e952958-5e33-4daf-827f-2fa12937b875";
+            final String name = new StringBuilder(this.instanceId)
+                    .append("-")
+                    .append(this.currentInstant)
+                    .append("-")
+                    .append(this.newUUIDCounter).toString();
+            this.newUUIDCounter++;
+            return UUIDGenerator.generate(version, hashV5, UUID.fromString(dnsNameSpace), name);
         }
 
         @Override
@@ -358,11 +375,8 @@ final class TaskOrchestrationExecutor {
                 createSubOrchestrationActionBuilder.setInput(StringValue.of(serializedInput));
             }
 
-            // TODO:replace this with a deterministic GUID generation so that it's safe for replay,
-            //  please find potential bug here https://github.com/microsoft/durabletask-dotnet/issues/9
-
             if (instanceId == null) {
-                instanceId = UUID.randomUUID().toString();
+                instanceId = this.newUUID().toString();
             }
             createSubOrchestrationActionBuilder.setInstanceId(instanceId);
 

@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Used by orchestrators to perform actions such as scheduling tasks, durable timers, waiting for external events,
@@ -299,6 +300,20 @@ public interface TaskOrchestrationContext {
      */
     default void continueAsNew(Object input){
         this.continueAsNew(input, true);
+    }
+
+    /**
+     * Create a new UUID that is safe for replay within an orchestration or operation.
+     * <p>
+     * The default implementation of this method creates a name-based UUID
+     * using the algorithm from RFC 4122 §4.3. The name input used to generate
+     * this value is a combination of the orchestration instance ID and an
+     * internally managed sequence number.
+     *</p>
+     * @return a deterministic UUID
+     */
+    default UUID newUUID() {
+        throw new RuntimeException("No implementation found.");
     }
 
     /**

@@ -1484,4 +1484,50 @@ public class IntegrationTests extends IntegrationTestBase {
             assertTrue(Integer.parseInt(output) >= 0 && Integer.parseInt(output) < activityCount);
         }
     }
+
+    @Test
+    public void newUUIDTest() {
+        String orchestratorName = "test-new-uuid";
+        String echoActivityName = "Echo";
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    // Test 1: Ensure two consequiteively created GUIDs are not unique
+                    UUID currentUUID0 = ctx.newUUID();
+                    UUID currentUUID1 = ctx.newUUID();
+                    if (currentUUID0.equals(currentUUID1)) {
+                        ctx.complete(false);
+                    }
+
+                    // Test 2: Ensure that the same GUID values are created on each replay
+                    UUID originalUUID1 = ctx.callActivity(echoActivityName, currentUUID1, UUID.class).await();
+                    if (!currentUUID1.equals(originalUUID1)) {
+                        ctx.complete(false);
+                    }
+
+                    // Test 3: Ensure that the same UUID values are created on each replay even after an await
+                    UUID currentUUID2 = ctx.newUUID();
+                    UUID originalUUID2 = ctx.callActivity(echoActivityName, currentUUID2, UUID.class).await();
+                    if (!currentUUID2.equals(originalUUID2)) {
+                        ctx.complete(false);
+                    }
+
+                    // Test 4: Finish confirming that every generated UUID is unique
+                    if (currentUUID1.equals(currentUUID2)) ctx.complete(false);
+                    else ctx.complete(true);
+                })
+                .addActivity(echoActivityName, ctx -> ctx.getInput(UUID.class))
+                .buildAndStart();
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+
+        try(worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertTrue(instance.readOutputAs(boolean.class));
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
 }
