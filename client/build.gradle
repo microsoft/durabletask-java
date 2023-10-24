@@ -11,9 +11,9 @@ group 'com.microsoft'
 version = '1.4.0'
 archivesBaseName = 'durabletask-client'
 
-def grpcVersion = '1.46.0'
+def grpcVersion = '1.59.0'
 def protocVersion = '3.12.0'
-def jacksonVersion = '2.12.3'
+def jacksonVersion = '2.15.3'
 // When build on local, you need to set this value to your local jdk11 directory.
 // Java11 is used to compile and run all the tests.
 // Example for Windows:  C:/Program Files/Java/openjdk-11.0.12_7/
