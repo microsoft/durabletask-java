@@ -146,38 +146,6 @@ public class DurableClientContext {
             throw new IllegalArgumentException("Failed to encode the instance ID: " + instanceId, ex);
         }
 
-        String instanceStatusURL = baseUrl + "/runtime/webhooks/durabletask/instances/" + encodedInstanceId;
-
-        // Construct the response as an HTTP 202 with a JSON object payload
-        return request.createResponseBuilder(HttpStatus.ACCEPTED)
-                .header("Location", instanceStatusURL + "?" + this.requiredQueryStringParameters)
-                .header("Content-Type", "application/json")
-                .body(new HttpCreateCheckStatusResponse(
-                        instanceId,
-                        instanceStatusURL,
-                        this.requiredQueryStringParameters))
-                .build();
-            }
-
-    private static class HttpCreateCheckStatusResponse {
-        // These fields are serialized to JSON
-        public final String id;
-        public final String purgeHistoryDeleteUri;
-        public final String sendEventPostUri;
-        public final String statusQueryGetUri;
-        public final String terminatePostUri;
-        public final String rewindPostUri;
-
-        public HttpCreateCheckStatusResponse(
-                String instanceId,
-                String instanceStatusURL,
-                String requiredQueryStringParameters) {
-            this.id = instanceId;
-            this.purgeHistoryDeleteUri = instanceStatusURL + "?" + requiredQueryStringParameters;
-            this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}?" + requiredQueryStringParameters;
-            this.statusQueryGetUri = instanceStatusURL + "?" + requiredQueryStringParameters;
-            this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
-            this.rewindPostUri = instanceStatusURL + "/rewind?reason={text}&" + requiredQueryStringParameters;
-        }
+        return baseUrl + "/runtime/webhooks/durabletask/instances/" + encodedInstanceId;
     }
 }

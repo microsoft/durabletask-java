@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("e2e")
 public class EndToEndTests {
+
     private static final String hostHealthPingUrl = "/admin/host/ping";
     private static final String startOrchestrationUrl = "/api/StartOrchestration";
     private static final String startApprovalWorkflowUrl = "/api/ApprovalWorkflowOrchestration";
@@ -30,8 +31,7 @@ public class EndToEndTests {
     @Order(1)
     @Test
     public void setupHost() {
-        String hostHealthPingPath = "/admin/host/ping";
-        post(hostHealthPingPath).then().statusCode(200);
+        post(hostHealthPingUrl).then().statusCode(200);
     }
 
     @ParameterizedTest
@@ -81,15 +81,6 @@ public class EndToEndTests {
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
         boolean pass = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(10));
         assertTrue(pass);
-        String runtimeStatus = null;
-        for (int i = 0; i < 15; i++) {
-            Response statusResponse = get(statusQueryGetUri);
-            runtimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            if (!"Completed".equals(runtimeStatus)) {
-                Thread.sleep(1000);
-            } else break;
-        }
-        assertEquals("Completed", runtimeStatus);
     }
 
     @Test
@@ -287,4 +278,3 @@ public class EndToEndTests {
         post(resetApprovalUrl);
     }
 }
-
