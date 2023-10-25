@@ -22,11 +22,16 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("e2e")
 public class EndToEndTests {
 
+    private static final String hostHealthPingUrl = "/admin/host/ping";
+    private static final String startOrchestrationUrl = "/api/StartOrchestration";
+    private static final String startApprovalWorkflowUrl = "/api/ApprovalWorkflowOrchestration";
+    private static final String rewindInstanceFunctionUrl = "/api/RewindInstance";
+    private static final String resetApprovalUrl = "/api/ResetApprovalFlag";
+
     @Order(1)
     @Test
     public void setupHost() {
-        String hostHealthPingPath = "/admin/host/ping";
-        post(hostHealthPingPath).then().statusCode(200);
+        post(hostHealthPingUrl).then().statusCode(200);
     }
 
     @ParameterizedTest
@@ -201,5 +206,75 @@ public class EndToEndTests {
             runningTime = Instant.now();
         }
         return false;
+    }
+
+    @Order(2)
+    @Test
+    public void testRewindInstanceJavaAPI() throws InterruptedException {
+        Response response = post(startApprovalWorkflowUrl);
+        JsonPath startOrchestrationResponseJson = response.jsonPath();
+
+        // Wait for the ApprovalWorkflowOrchestration to fail
+        Thread.sleep(3000);
+
+        String instanceId = startOrchestrationResponseJson.get("id");
+        String statusQueryGetUri = startOrchestrationResponseJson.get("statusQueryGetUri");
+        Response statusResponse = get(statusQueryGetUri);
+        String runtimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+        assertEquals("Failed", runtimeStatus);
+
+        // Rewind the instance using Java API
+        String rewindInstanceUrl = rewindInstanceFunctionUrl + "?instanceId=" + instanceId;
+        response = post(rewindInstanceUrl);
+        assertEquals("Failed orchestration instance is scheduled for rewind.", response.toString());
+
+        // Wait for orchestration to rewind and complete
+        Thread.sleep(3000);
+
+        for (int i = 0; i < 5; i++) {
+            statusResponse = get(statusQueryGetUri);
+            runtimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            if (!"Completed".equals(runtimeStatus)) {
+                Thread.sleep(1000);
+            } else break;
+        }
+        assertEquals("Completed", runtimeStatus);
+
+        // Reset approval for other test cases
+        post(resetApprovalUrl);
+    }
+
+    @Order(3)
+    @Test
+    public void testRewindInstanceHttpAPI() throws InterruptedException {
+        Response response = post(startApprovalWorkflowUrl);
+        JsonPath startOrchestrationResponseJson = response.jsonPath();
+
+        // Wait for the ApprovalWorkflowOrchestration to fail
+        Thread.sleep(3000);
+
+        String statusQueryGetUri = startOrchestrationResponseJson.get("statusQueryGetUri");
+        Response statusResponse = get(statusQueryGetUri);
+        String runtimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+        assertEquals("Failed", runtimeStatus);
+
+        // Rewind the instance using Http API
+        String rewindPostUri = startOrchestrationResponseJson.get("rewindPostUri");
+        post(rewindPostUri);
+
+        // Wait for orchestration to rewind and complete
+        Thread.sleep(3000);
+
+        for (int i = 0; i < 5; i++) {
+            statusResponse = get(statusQueryGetUri);
+            runtimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            if (!"Completed".equals(runtimeStatus)) {
+                Thread.sleep(1000);
+            } else break;
+        }
+        assertEquals("Completed", runtimeStatus);
+
+        // Reset approval for other test cases
+        post(resetApprovalUrl);
     }
 }

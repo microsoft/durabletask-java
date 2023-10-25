@@ -321,6 +321,16 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
         }
     }
 
+    @Override
+    public void rewindInstance(String instanceId, @Nullable String reason) {
+        RewindInstanceRequest.Builder rewindInstanceRequestBuilder = RewindInstanceRequest.newBuilder();
+        rewindInstanceRequestBuilder.setInstanceId(instanceId);
+        if (reason != null) {
+            rewindInstanceRequestBuilder.setReason(StringValue.of(reason));
+        }
+        this.sidecarClient.rewindInstance(rewindInstanceRequestBuilder.build());
+    }
+
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
         return new PurgeResult(response.getDeletedInstanceCount());
     }

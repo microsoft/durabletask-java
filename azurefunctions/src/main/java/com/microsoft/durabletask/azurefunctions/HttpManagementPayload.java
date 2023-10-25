@@ -18,6 +18,7 @@ public class HttpManagementPayload {
     private final String terminatePostUri;
     private final String resumePostUri;
     private final String suspendPostUri;
+    public final String rewindPostUri;
 
     /**
      * Creates a {@link HttpManagementPayload} to manage orchestration instances
@@ -38,6 +39,7 @@ public class HttpManagementPayload {
         this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
         this.resumePostUri = instanceStatusURL + "/resume?reason={text}&" + requiredQueryStringParameters;
         this.suspendPostUri = instanceStatusURL + "/suspend?reason={text}&" + requiredQueryStringParameters;
+        this.rewindPostUri = instanceStatusURL + "/rewind?reason={text}&" + requiredQueryStringParameters;
     }
 
     /**
