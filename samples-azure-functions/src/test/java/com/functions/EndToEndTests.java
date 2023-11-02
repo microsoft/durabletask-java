@@ -28,6 +28,28 @@ public class EndToEndTests {
     private static final String rewindInstanceFunctionUrl = "/api/RewindInstance";
     private static final String resetApprovalUrl = "/api/ResetApprovalFlag";
 
+    private static boolean pollingCheck(String statusQueryGetUri,
+                                 String expectedState,
+                                 Set<String> continueStates,
+                                 Duration timeout) throws InterruptedException {
+        String runTimeStatus = null;
+        Instant begin = Instant.now();
+        Instant runningTime = Instant.now();
+        while (Duration.between(begin, runningTime).compareTo(timeout) <= 0) {
+            Response statusResponse = get(statusQueryGetUri);
+            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
+            if (expectedState.equals(runTimeStatus)) {
+                return true;
+            }
+            if (continueStates != null && !continueStates.contains(runTimeStatus)) {
+                return false;
+            }
+            Thread.sleep(1000);
+            runningTime = Instant.now();
+        }
+        return false;
+    }
+
     @Order(1)
     @Test
     public void setupHost() {
@@ -186,28 +208,6 @@ public class EndToEndTests {
         assertTrue(completed);
     }
 
-    private boolean pollingCheck(String statusQueryGetUri,
-                                 String expectedState,
-                                 Set<String> continueStates,
-                                 Duration timeout) throws InterruptedException {
-        String runTimeStatus = null;
-        Instant begin = Instant.now();
-        Instant runningTime = Instant.now();
-        while (Duration.between(begin, runningTime).compareTo(timeout) <= 0) {
-            Response statusResponse = get(statusQueryGetUri);
-            runTimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            if (expectedState.equals(runTimeStatus)) {
-                return true;
-            }
-            if (continueStates != null && !continueStates.contains(runTimeStatus)) {
-                return false;
-            }
-            Thread.sleep(1000);
-            runningTime = Instant.now();
-        }
-        return false;
-    }
-
     @Order(2)
     @Test
     public void testRewindInstanceJavaAPI() throws InterruptedException {
@@ -231,14 +231,9 @@ public class EndToEndTests {
         // Wait for orchestration to rewind and complete
         Thread.sleep(3000);
 
-        for (int i = 0; i < 5; i++) {
-            statusResponse = get(statusQueryGetUri);
-            runtimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            if (!"Completed".equals(runtimeStatus)) {
-                Thread.sleep(1000);
-            } else break;
-        }
-        assertEquals("Completed", runtimeStatus);
+        //verify completed successfully
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(5));
+        assertTrue(completed);
 
         // Reset approval for other test cases
         post(resetApprovalUrl);
@@ -260,19 +255,11 @@ public class EndToEndTests {
 
         // Rewind the instance using Http API
         String rewindPostUri = startOrchestrationResponseJson.get("rewindPostUri");
-        post(rewindPostUri);
+        post(rewindPostUri, "endtoend-test");
 
-        // Wait for orchestration to rewind and complete
-        Thread.sleep(3000);
-
-        for (int i = 0; i < 5; i++) {
-            statusResponse = get(statusQueryGetUri);
-            runtimeStatus = statusResponse.jsonPath().get("runtimeStatus");
-            if (!"Completed".equals(runtimeStatus)) {
-                Thread.sleep(1000);
-            } else break;
-        }
-        assertEquals("Completed", runtimeStatus);
+        //verify completed successfully
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(5));
+        assertTrue(completed);
 
         // Reset approval for other test cases
         post(resetApprovalUrl);
