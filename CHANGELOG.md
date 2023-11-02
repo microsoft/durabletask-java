@@ -1,6 +1,7 @@
-## placeholder
+## v1.5.0
 * Fix exception type issue when using `RetriableTask` in fan in/out pattern ([#174](https://github.com/microsoft/durabletask-java/pull/174))
-* Add implementation to generate name-based deterministic UUID ([#175](https://github.com/microsoft/durabletask-java/pull/175))
+* Add implementation to generate name-based deterministic UUID ([#176](https://github.com/microsoft/durabletask-java/pull/176))
+* Update dependencies to resolve CVEs ([#177](https://github.com/microsoft/durabletask-java/pull/177))
 
 
 ## v1.4.0
