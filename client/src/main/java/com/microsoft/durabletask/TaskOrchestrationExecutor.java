@@ -787,12 +787,17 @@ final class TaskOrchestrationExecutor {
             // We don't check the event in the pass event list to avoid duplicated events.
             Set<HistoryEvent> externalEvents = new HashSet<>(this.unprocessedEvents);
             List<HistoryEvent> newEvents = this.historyEventPlayer.getNewEvents();
+            int currentHistoryIndex = this.historyEventPlayer.getCurrentHistoryIndex();
 
-            Set<HistoryEvent> filteredEvents = newEvents.stream()
-                    .filter(e -> e.getEventTypeCase() == HistoryEvent.EventTypeCase.EVENTRAISED)
-                    .collect(Collectors.toSet());
+            // Only add events that haven't been processed to the carryOverEvents
+            // currentHistoryIndex will point to the first unprocessed event
+            for (int i = currentHistoryIndex; i < newEvents.size(); i++) {
+                HistoryEvent historyEvent = newEvents.get(i);
+                if (historyEvent.getEventTypeCase() == HistoryEvent.EventTypeCase.EVENTRAISED) {
+                    externalEvents.add(historyEvent);
+                }
+            }
 
-            externalEvents.addAll(filteredEvents);
             externalEvents.forEach(builder::addCarryoverEvents);
         }
         
@@ -946,7 +951,11 @@ final class TaskOrchestrationExecutor {
             }
 
             List<HistoryEvent> getNewEvents() {
-                return newEvents;
+                return this.newEvents;
+            }
+
+            int getCurrentHistoryIndex() {
+                return this.currentHistoryIndex;
             }
         }
 

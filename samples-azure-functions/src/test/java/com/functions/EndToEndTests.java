@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.get;
 import static io.restassured.RestAssured.post;
@@ -97,6 +98,37 @@ public class EndToEndTests {
         Thread.sleep(5000);
         Response statusResponse = get(statusQueryGetUri);
         statusResponse.jsonPath().get("runtimeStatus");
+    }
+
+    @Test
+    public void continueAsNewExternalEvent() throws InterruptedException {
+        String startOrchestrationPath = "api/ContinueAsNewExternalEvent";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+
+        // send external event, it will cause the continue-as-new.
+        String sendEventPostUri = jsonPath.get("sendEventPostUri");
+        sendEventPostUri = sendEventPostUri.replace("{eventName}", "event");
+
+        // empty request body
+        RestAssured
+                .given()
+                .contentType(ContentType.JSON) // Set the request content type
+                .body("{}")
+                .post(sendEventPostUri)
+                .then()
+                .statusCode(202);
+
+        //wait 5 seconds for the continue-as-new to start new orchestration
+        TimeUnit.SECONDS.sleep(5);
+
+        response = post(startOrchestrationPath);
+        jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        // polling 20 seconds
+        // assert that the orchestration completed as expected, not enter an infinite loop
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(20));
+        assertTrue(completed);
     }
 
     @ParameterizedTest
