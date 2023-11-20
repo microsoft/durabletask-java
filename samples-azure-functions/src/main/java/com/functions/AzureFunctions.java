@@ -1,5 +1,6 @@
 package com.functions;
 
+import com.functions.model.Person;
 import com.microsoft.azure.functions.annotation.*;
 import com.microsoft.azure.functions.*;
 import java.util.*;
@@ -54,5 +55,26 @@ public class AzureFunctions {
             final ExecutionContext context) {
         context.getLogger().info("Capitalizing: " + name);
         return name.toUpperCase();
+    }
+
+    @FunctionName("DeserializeErrorHttp")
+    public HttpResponseMessage deserializeErrorHttp(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        context.getLogger().info("Java HTTP trigger processed a request.");
+
+        DurableTaskClient client = durableContext.getClient();
+        String instanceId = client.scheduleNewOrchestrationInstance("DeserializeErrorOrchestrator");
+        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    @FunctionName("DeserializeErrorOrchestrator")
+    public String deserializeErrorOrchestrator(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+        // cause deserialize error
+        Person result = ctx.callActivity("Capitalize", "Austin", Person.class).await();
+        return result.getName();
     }
 }
