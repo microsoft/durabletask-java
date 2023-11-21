@@ -8,8 +8,6 @@ group 'com.microsoft'
 version = '1.5.0'
 archivesBaseName = 'durabletask-azure-functions'
 
-def protocVersion = '3.12.0'
-
 repositories {
     maven {
         url "https://oss.sonatype.org/content/repositories/snapshots/"
@@ -19,7 +17,6 @@ repositories {
 dependencies {
     api project(':client')
     implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '3.0.0'
-    implementation "com.google.protobuf:protobuf-java:${protocVersion}"
     compileOnly "com.microsoft.azure.functions:azure-functions-java-spi:1.0.0"
 }
 
