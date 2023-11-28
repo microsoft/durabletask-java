@@ -137,7 +137,7 @@ jobs:
         continue-on-error: true
 
       - name: Setup azure functions runtime
-        run: endtoendtests/e2e-test-setup.ps1 -DockerfilePath endtoendtests/Dockerfile
+        run: samples-azure-functions/e2e-test-setup.ps1 -DockerfilePath samples-azure-functions/Dockerfile
         shell: pwsh
 
       - name: Sample Tests with Gradle
