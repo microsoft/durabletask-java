@@ -31,15 +31,6 @@ targetCompatibility = '1.8'
 
 compileJava.options.encoding = 'UTF-8'
 
-task endToEndTest(type: Test) {
-    useJUnitPlatform {
-        includeTags 'e2e'
-    }
-    dependsOn build
-    testLogging.showStandardStreams = true
-}
-
-
 azurefunctions {
     resourceGroup = 'java-functions-group'
     appName = 'azure-functions-sample'
