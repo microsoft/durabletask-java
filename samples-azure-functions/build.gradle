@@ -31,6 +31,14 @@ targetCompatibility = '1.8'
 
 compileJava.options.encoding = 'UTF-8'
 
+task sampleTest(type: Test) {
+    useJUnitPlatform {
+        includeTags 'sampleTest'
+    }
+    dependsOn build
+    testLogging.showStandardStreams = true
+}
+
 azurefunctions {
     resourceGroup = 'java-functions-group'
     appName = 'azure-functions-sample'
