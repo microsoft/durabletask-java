@@ -47,7 +47,7 @@ public class EndToEndTests {
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
-        boolean pass = pollingCheck(statusQueryGetUri, "Failed", continueStates, Duration.ofSeconds(20));
+        boolean pass = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(20));
         assertTrue(pass);
     }
 
