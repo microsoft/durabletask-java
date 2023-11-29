@@ -216,7 +216,7 @@ public class EndToEndTests {
     }
 
     @Test
-    public void generalFunctions() throws InterruptedException {
+    public void orchestrationPOJO() throws InterruptedException {
         Set<String> continueStates = new HashSet<>();
         String startOrchestrationPath = "/api/StartOrchestrationPOJO";
         Response response = post(startOrchestrationPath);
@@ -226,7 +226,7 @@ public class EndToEndTests {
         assertTrue(pass);
         Response statusResponse = get(statusQueryGetUri);
         String outputName = statusResponse.jsonPath().get("output.name");
-        assertEquals("TESTNAMES", outputName);
+        assertEquals("TESTNAME", outputName);
     }
 
     private boolean pollingCheck(String statusQueryGetUri,
