@@ -18,9 +18,11 @@ import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.get;
 import static io.restassured.RestAssured.post;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("e2e")
+@Tag("sampleTest")
 public class EndToEndTests {
 
     @Order(1)

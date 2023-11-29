@@ -4,3 +4,5 @@ include ":client"
 include ":azurefunctions"
 include ":samples"
 include ":samples-azure-functions"
+include 'endtoendtests'
+
