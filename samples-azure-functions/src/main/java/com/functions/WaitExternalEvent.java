@@ -14,6 +14,7 @@ import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
 
+import java.time.Duration;
 import java.util.Optional;
 
 public class WaitExternalEvent {
@@ -25,18 +26,23 @@ public class WaitExternalEvent {
         context.getLogger().info("Java HTTP trigger processed a request.");
 
         DurableTaskClient client = durableContext.getClient();
-        String instanceId = client.scheduleNewOrchestrationInstance("ExternalEventActivity");
+        String instanceId = client.scheduleNewOrchestrationInstance("ExternalEventOrchestrator");
         context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
 
-    @FunctionName("ExternalEventActivity")
-    public void externalEventActivity(@DurableOrchestrationTrigger(name = "runtimeState") TaskOrchestrationContext ctx)
+    @FunctionName("ExternalEventOrchestrator")
+    public void externalEventOrchestrator(@DurableOrchestrationTrigger(name = "runtimeState") TaskOrchestrationContext ctx)
     {
         System.out.println("Waiting external event...");
         Task<String> event = ctx.waitForExternalEvent("event", String.class);
-        Task<?> result = ctx.anyOf(event).await();
-        Object input = result.await();
-        System.out.println(input);
+        Task<Void> timer = ctx.createTimer(Duration.ofSeconds(10));
+        Task<?> winner = ctx.anyOf(event, timer).await();
+        if (winner == event) {
+            String eventResult = event.await();
+            ctx.complete(eventResult);
+        } else {
+            ctx.complete("time out");
+        }
     }
 }

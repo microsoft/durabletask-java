@@ -26,15 +26,15 @@ public class SubOrchestrator {
         context.getLogger().info("Java HTTP trigger processed a request.");
 
         DurableTaskClient client = durableContext.getClient();
-        String instanceId = client.scheduleNewOrchestrationInstance("CompletedErrorOrchestrator");
+        String instanceId = client.scheduleNewOrchestrationInstance("RootOrchestrator");
         context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
 
-    @FunctionName("Orchestrator")
-    public String orchestrator(
+    @FunctionName("RootOrchestrator")
+    public String rootOrchestrator(
             @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
-        return ctx.callSubOrchestrator("CompletedErrorSubOrchestrator", "Austin", String.class).await();
+        return ctx.callSubOrchestrator("SubOrchestrator", "Austin", String.class).await();
     }
 
     @FunctionName("SubOrchestrator")
