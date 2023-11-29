@@ -43,31 +43,4 @@ public class SubOrchestrator {
         String input = ctx.getInput(String.class);
         return ctx.callSubOrchestrator("Capitalize", input, String.class).await();
     }
-
-    @FunctionName("SubCompletedErrorHttp")
-    public HttpResponseMessage subCompletedErrorHttp(
-            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
-            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            final ExecutionContext context) {
-        context.getLogger().info("Java HTTP trigger processed a request.");
-
-        DurableTaskClient client = durableContext.getClient();
-        String instanceId = client.scheduleNewOrchestrationInstance("CompletedErrorOrchestrator");
-        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
-        return durableContext.createCheckStatusResponse(request, instanceId);
-    }
-
-    @FunctionName("CompletedErrorOrchestrator")
-    public String completedErrorOrchestrator(
-            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
-        // cause deserialize issue
-        Person result = ctx.callSubOrchestrator("CompletedErrorSubOrchestrator", "Austin", Person.class).await();
-        return result.getName();
-    }
-
-    @FunctionName("CompletedErrorSubOrchestrator")
-    public String completedErrorSubOrchestrator(
-            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
-        return "test";
-    }
 }

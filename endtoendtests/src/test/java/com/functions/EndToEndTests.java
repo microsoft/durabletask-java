@@ -215,6 +215,53 @@ public class EndToEndTests {
         assertTrue(completed);
     }
 
+    @Test
+    public void externalEventDeserializeFail() throws InterruptedException {
+        String startOrchestrationPath = "api/ExternalEventHttp";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String sendEventPostUri = jsonPath.get("sendEventPostUri");
+        sendEventPostUri = sendEventPostUri.replace("{eventName}", "event");
+
+        String requestBody = "{\"value\":\"Test\"}";
+        RestAssured
+            .given()
+            .contentType(ContentType.JSON) // Set the request content type
+            .body(requestBody) // Set the request body
+            .post(sendEventPostUri)
+            .then()
+            .statusCode(202);
+        // assert orchestration status
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(10));
+        assertTrue(completed);
+
+        // assert exception message
+        Response resp = get(statusQueryGetUri);
+        String errorMessage = resp.jsonPath().get("output");
+        assertTrue(errorMessage.contains("Failed to deserialize the JSON text to java.lang.String"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "DeserializeErrorHttp",
+        "SubCompletedErrorHttp"
+    })
+    public void DeserializeFail(String functionName) throws InterruptedException {
+        String startOrchestrationPath = "api/" + functionName;
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        // assert orchestration status
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(10));
+        assertTrue(completed);
+
+        // assert exception message
+        Response resp = get(statusQueryGetUri);
+        String errorMessage = resp.jsonPath().get("output");
+        assertTrue(errorMessage.contains("Failed to deserialize the JSON text"));
+    }
+
     private boolean pollingCheck(String statusQueryGetUri,
                                  String expectedState,
                                  Set<String> continueStates,

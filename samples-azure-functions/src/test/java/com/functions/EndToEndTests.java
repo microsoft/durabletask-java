@@ -215,6 +215,20 @@ public class EndToEndTests {
         assertTrue(completed);
     }
 
+    @Test
+    public void generalFunctions() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        String startOrchestrationPath = "/api/StartOrchestrationPOJO";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean pass = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(20));
+        assertTrue(pass);
+        Response statusResponse = get(statusQueryGetUri);
+        String outputName = statusResponse.jsonPath().get("output.name");
+        assertEquals("TESTNAME", outputName);
+    }
+
     private boolean pollingCheck(String statusQueryGetUri,
                                  String expectedState,
                                  Set<String> continueStates,
