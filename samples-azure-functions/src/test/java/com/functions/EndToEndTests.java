@@ -34,10 +34,10 @@ public class EndToEndTests {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "StartOrchestration",
-            "StartParallelOrchestration",
-            "StartParallelAnyOf",
-            "StartParallelCatchException"
+        "StartOrchestration",
+        "StartParallelOrchestration",
+        "StartParallelAnyOf",
+        "StartParallelCatchException"
     })
     public void generalFunctions(String functionName) throws InterruptedException {
         Set<String> continueStates = new HashSet<>();
@@ -114,12 +114,12 @@ public class EndToEndTests {
 
         // empty request body
         RestAssured
-                .given()
-                .contentType(ContentType.JSON) // Set the request content type
-                .body("{}")
-                .post(sendEventPostUri)
-                .then()
-                .statusCode(202);
+            .given()
+            .contentType(ContentType.JSON) // Set the request content type
+            .body("{}")
+            .post(sendEventPostUri)
+            .then()
+            .statusCode(202);
 
         //wait 5 seconds for the continue-as-new to start new orchestration
         TimeUnit.SECONDS.sleep(5);
@@ -198,12 +198,12 @@ public class EndToEndTests {
 
         String requestBody = "{\"value\":\"Test\"}";
         RestAssured
-                .given()
-                .contentType(ContentType.JSON) // Set the request content type
-                .body(requestBody) // Set the request body
-                .post(sendEventPostUri)
-                .then()
-                .statusCode(202);
+            .given()
+            .contentType(ContentType.JSON) // Set the request content type
+            .body(requestBody) // Set the request body
+            .post(sendEventPostUri)
+            .then()
+            .statusCode(202);
 
         boolean suspendAfterEventSent = pollingCheck(statusQueryGetUri, "Suspended", null, Duration.ofSeconds(5));
         assertTrue(suspendAfterEventSent);
@@ -213,6 +213,20 @@ public class EndToEndTests {
 
         boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(5));
         assertTrue(completed);
+    }
+
+    @Test
+    public void orchestrationPOJO() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        String startOrchestrationPath = "/api/StartOrchestrationPOJO";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean pass = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(20));
+        assertTrue(pass);
+        Response statusResponse = get(statusQueryGetUri);
+        String outputName = statusResponse.jsonPath().get("output.name");
+        assertEquals("TESTNAME", outputName);
     }
 
     private boolean pollingCheck(String statusQueryGetUri,
