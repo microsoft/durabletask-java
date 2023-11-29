@@ -226,7 +226,7 @@ public class EndToEndTests {
         assertTrue(pass);
         Response statusResponse = get(statusQueryGetUri);
         String outputName = statusResponse.jsonPath().get("output.name");
-        assertEquals("TESTNAME", outputName);
+        assertEquals("TESTNAMES", outputName);
     }
 
     private boolean pollingCheck(String statusQueryGetUri,
