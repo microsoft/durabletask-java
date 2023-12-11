@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
+import com.microsoft.durabletask.client.InstanceIdReuseAction;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
@@ -86,6 +87,17 @@ final class DurableTaskGrpcClient extends DurableTaskClient {
 
         CreateInstanceRequest.Builder builder = CreateInstanceRequest.newBuilder();
         builder.setName(orchestratorName);
+
+        // build orchestration ID reuse policy
+        OrchestrationIdReusePolicy.Builder reuseIdPolicyBuilder = OrchestrationIdReusePolicy.newBuilder();
+        // if options.getInstanceIdReuseAction() is null, default value will be ERROR
+        if (options.getInstanceIdReuseAction() != null) {
+            reuseIdPolicyBuilder.setAction(InstanceIdReuseAction.toProtobuf(options.getInstanceIdReuseAction()));
+        }
+        for (OrchestrationRuntimeStatus targetStatus : options.getTargetStatuses()) {
+            reuseIdPolicyBuilder.addOperationStatus(OrchestrationRuntimeStatus.toProtobuf(targetStatus));
+        }
+        builder.setOrchestrationIdReusePolicy(reuseIdPolicyBuilder);
 
         String instanceId = options.getInstanceId();
         if (instanceId == null) {
