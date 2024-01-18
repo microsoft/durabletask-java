@@ -158,6 +158,14 @@ public final class NewOrchestrationInstanceOptions {
      * You can customize the orchestration ID reuse policy by setting the {@code targetStatuses}
      * and {@code instanceIdReuseAction}.
      *
+     * <ul>
+     *   <li>{@code InstanceIdReuseAction.ERROR}: Throws an error if an orchestration with the same instance ID already exists.</li>
+     *   <li>{@code InstanceIdReuseAction.IGNORE}: Returns directly if an orchestration with the same instance ID already exists
+     *       and is in the specified target statuses.</li>
+     *   <li>{@code InstanceIdReuseAction.Terminate}: Terminates the existing orchestration instance with the same instance ID
+     *       if it is in the specified target statuses, and creates a new instance with the same instance ID.</li>
+     * </ul>
+     *
      * <p>
      * For example, the following options will terminate an existing orchestration instance with the same instance ID
      * if it's in RUNNING, FAILED, or COMPLETED runtime status:
