@@ -80,6 +80,7 @@ test {
         // Skip tests tagged as "integration" since those are slower
         // and require external dependencies.
         excludeTags "integration"
+        excludeTags "integration-go"
     }
 }
 
@@ -90,6 +91,16 @@ test {
 task integrationTest(type: Test) {
     useJUnitPlatform {
         includeTags 'integration'
+    }
+    dependsOn build
+    shouldRunAfter test
+    testLogging.showStandardStreams = true
+}
+
+// integration-go runs against sidecar durabletask-go
+task integrationGoTest(type: Test) {
+    useJUnitPlatform {
+        includeTags 'integration-go'
     }
     dependsOn build
     shouldRunAfter test
