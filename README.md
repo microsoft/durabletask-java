@@ -99,6 +99,15 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
+## Local development
+One thing to note in the local setup:
+
+Replace the variable at https://github.com/microsoft/durabletask-java/blob/b3e2d3ab9dfc07495f830d90b00d7fac35009ea0/client/build.gradle#L20 
+with your local `$JAVA_HOME`, the version needs to be equal or higher than Java11 for example:
+```groovy
+def PATH_TO_TEST_JAVA_RUNTIME = "C:/Program Files/Java/openjdk-11.0.12_7/"
+```
+
 ## Trademarks
 
 This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
