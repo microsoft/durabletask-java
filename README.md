@@ -7,6 +7,7 @@ This repo contains the Java SDK for the Durable Task Framework as well as classe
 
 ### Simple, fault-tolerant sequences
 
+
 ```java
 // *** Simple, fault-tolerant, sequential orchestration ***
 String result = "";
