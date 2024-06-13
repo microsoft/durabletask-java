@@ -57,6 +57,15 @@ jobs:
     - name: Integration Tests with Gradle
       run: ./gradlew integrationTest
 
+    - name: Stop Durable Task Sidecar
+      run: docker stop durabletask-sidecar
+
+    - name: Initialize Durable Task GO
+      run: docker run --name durabletask-go -p 4001:4001 -d kaibocai/durabletask-go:latest
+
+    - name: Integration GO Tests with Gradle
+      run: ./gradlew integrationGoTest
+
     - name: Archive test report
       uses: actions/upload-artifact@v2
       with:
