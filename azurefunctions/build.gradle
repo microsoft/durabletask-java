@@ -76,9 +76,10 @@ publishing {
     }
 }
 
-signing {
-    sign publishing.publications.mavenJava
-}
+// TODO: manual signing temporarily disabled, in favor of 1ES signing utils
+//signing {
+//    sign publishing.publications.mavenJava
+//}
 
 java {
     withSourcesJar()
