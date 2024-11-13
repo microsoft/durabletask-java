@@ -67,13 +67,13 @@ jobs:
       run: ./gradlew integrationGoTest
 
     - name: Archive test report
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Integration test report
         path: client/build/reports/tests/integrationTest
 
     - name: Upload JAR output
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Package
         path: client/build/libs
