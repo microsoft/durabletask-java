@@ -1,24 +1,45 @@
-## placeholder
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## v1.6.0 (unreleased)
+
+### New
+
+* Support orchestration id reuse policy ([#188](https://github.com/microsoft/durabletask-java/pull/188))
+
+### Updates
+
 * Fix infinite loop when use continueasnew after wait external event ([#183](https://github.com/microsoft/durabletask-java/pull/183))
 * Fix the issue "Deserialize Exception got swallowed when use anyOf with external event." ([#185](https://github.com/microsoft/durabletask-java/pull/185))
 
 ## v1.5.0
+
+### Updates
+
 * Fix exception type issue when using `RetriableTask` in fan in/out pattern ([#174](https://github.com/microsoft/durabletask-java/pull/174))
 * Add implementation to generate name-based deterministic UUID ([#176](https://github.com/microsoft/durabletask-java/pull/176))
 * Update dependencies to resolve CVEs ([#177](https://github.com/microsoft/durabletask-java/pull/177))
 
-
 ## v1.4.0
 
 ### Updates
+
 * Refactor `createTimer` to be non-blocking ([#161](https://github.com/microsoft/durabletask-java/pull/161))
 
 ## v1.3.0
+
+### Updates
+
 * Refactor `RetriableTask` and add new `CompoundTask`, fixing Fan-out/Fan-in stuck when using `RetriableTask` ([#157](https://github.com/microsoft/durabletask-java/pull/157))
 
 ## v1.2.0
 
 ### Updates
+
 * Add `thenAccept` and `thenApply` to `Task` interface ([#148](https://github.com/microsoft/durabletask-java/pull/148))
 * Support Suspend and Resume Client APIs ([#151](https://github.com/microsoft/durabletask-java/pull/151))
 * Support restartInstance and pass restartPostUri in HttpManagementPayload ([#108](https://github.com/microsoft/durabletask-java/issues/108))
@@ -27,11 +48,13 @@
 ## v1.1.1
 
 ### Updates
+
 * Fix exception occurring when invoking the `TaskOrchestrationContext#continueAsNew` method ([#118](https://github.com/microsoft/durabletask-java/issues/118))
 
 ## v1.1.0
 
 ### Updates
+
 * Fix the potential NPE issue of `DurableTaskClient#terminate` method ([#104](https://github.com/microsoft/durabletask-java/issues/104))
 * Add waitForCompletionOrCreateCheckStatusResponse client API ([#115](https://github.com/microsoft/durabletask-java/pull/115))
 * Support long timers by breaking up into smaller timers ([#114](https://github.com/microsoft/durabletask-java/issues/114))
