@@ -57,14 +57,23 @@ jobs:
     - name: Integration Tests with Gradle
       run: ./gradlew integrationTest
 
+    - name: Stop Durable Task Sidecar
+      run: docker stop durabletask-sidecar
+
+    - name: Initialize Durable Task GO
+      run: docker run --name durabletask-go -p 4001:4001 -d kaibocai/durabletask-go:latest
+
+    - name: Integration GO Tests with Gradle
+      run: ./gradlew integrationGoTest
+
     - name: Archive test report
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Integration test report
         path: client/build/reports/tests/integrationTest
 
     - name: Upload JAR output
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Package
         path: client/build/libs
@@ -105,7 +114,7 @@ jobs:
           arguments: endToEndTest
 
       - name: Archive test report
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Integration test report
           path: client/build/reports/tests/endToEndTest
@@ -146,7 +155,7 @@ jobs:
           arguments: sampleTest
 
       - name: Archive test report
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Integration test report
           path: client/build/reports/tests/endToEndTest
