@@ -140,6 +140,7 @@ public final class OrchestrationRunner {
                 .setInstanceId(orchestratorRequest.getInstanceId())
                 .addAllActions(taskOrchestratorResult.getActions())
                 .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
+                .setCompletionToken(null)
                 .build();
         return response.toByteArray();
     }
