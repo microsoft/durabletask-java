@@ -85,7 +85,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
 
       - name: Publish to local
-        run: ./gradlew publishToMavenLocal -x sign
+        run: ./gradlew publishToMavenLocal
 
       - name: Build azure functions sample
         run: ./gradlew azureFunctionsPackage
@@ -124,7 +124,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
 
       - name: Publish to local
-        run: ./gradlew publishToMavenLocal -x sign
+        run: ./gradlew publishToMavenLocal
 
       - name: Build azure functions sample
         run: ./gradlew azureFunctionsPackage
