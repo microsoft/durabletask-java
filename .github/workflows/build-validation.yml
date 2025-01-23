@@ -58,13 +58,13 @@ jobs:
       run: ./gradlew integrationTest
 
     - name: Archive test report
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Integration test report
         path: client/build/reports/tests/integrationTest
 
     - name: Upload JAR output
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Package
         path: client/build/libs
@@ -105,7 +105,7 @@ jobs:
           arguments: endToEndTest
 
       - name: Archive test report
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Integration test report
           path: client/build/reports/tests/endToEndTest
@@ -146,7 +146,7 @@ jobs:
           arguments: sampleTest
 
       - name: Archive test report
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Integration test report
           path: client/build/reports/tests/endToEndTest
