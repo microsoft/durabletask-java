@@ -51,29 +51,12 @@ compileTestJava {
     options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
 }
 
-task updateProtoSubmodule {
-    description 'Updates the durabletask-protobuf submodule to latest main branch'
-    group 'Protocol Buffers'
-    
-    doLast {
-        exec {
-            workingDir '../submodules/durabletask-protobuf'
-            commandLine 'git', 'fetch', 'origin', 'main'
-        }
-        exec {
-            workingDir '../submodules/durabletask-protobuf'
-            commandLine 'git', 'checkout', 'origin/main'
-        }
-    }
-}
-
 protobuf {
     protoc { artifact = "com.google.protobuf:protoc:${protocVersion}" }
     plugins {
         grpc { artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}" }
     }
     generateProtoTasks {
-        all()*.dependsOn updateProtoSubmodule
         all()*.plugins { grpc {} }
     }
 }
@@ -81,7 +64,7 @@ protobuf {
 sourceSets {
     main {
         proto {
-            srcDir '../submodules/durabletask-protobuf/protos'
+            srcDir '../internal/durabletask-protobuf/protos'
         }
         java {
             srcDirs 'build/generated/source/proto/main/grpc'
