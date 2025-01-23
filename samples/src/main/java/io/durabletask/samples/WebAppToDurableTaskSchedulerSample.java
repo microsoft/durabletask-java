@@ -10,7 +10,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,10 +52,10 @@ class DurableTaskProperties {
  */
 @SpringBootApplication
 @EnableConfigurationProperties(DurableTaskProperties.class)
-public class SpringDurableTaskSample {
+public class WebAppToDurableTaskSchedulerSample {
 
     public static void main(String[] args) {
-        ConfigurableApplicationContext context = SpringApplication.run(SpringDurableTaskSample.class, args);
+        ConfigurableApplicationContext context = SpringApplication.run(WebAppToDurableTaskSchedulerSample.class, args);
     
         // Get the worker bean and start it
         DurableTaskGrpcWorker worker = context.getBean(DurableTaskGrpcWorker.class);
@@ -254,13 +256,14 @@ public class SpringDurableTaskSample {
     }
 }
 
+
 /**
  * REST Controller for handling order-related operations.
  */
 @RestController
 @RequestMapping("/api/orders")
 class OrderController {
-    
+
     private final DurableTaskClient client;
 
     public OrderController(DurableTaskClient client) {
@@ -273,7 +276,7 @@ class OrderController {
             "ProcessOrderOrchestration", 
             orderJson
         );
-        
+
         // Wait for the orchestration to complete with a timeout
         OrchestrationMetadata metadata = client.waitForInstanceCompletion(
             instanceId, 

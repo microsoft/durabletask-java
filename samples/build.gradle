@@ -10,7 +10,7 @@ def grpcVersion = '1.59.0'
 archivesBaseName = 'durabletask-samples'
 
 application {
-    mainClass = 'io.durabletask.samples.SpringDurableTaskSample'
+    mainClass = 'io.durabletask.samples.WebAppToDurableTaskSchedulerSample'
 }
 
 dependencies {
