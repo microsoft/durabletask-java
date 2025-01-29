@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-package com.microsoft.durabletask;
+package com.microsoft.durabletask.azuremanaged;
 
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.credential.AccessToken;
@@ -32,4 +32,4 @@ public final class AccessTokenCache {
 
         return cachedToken;
     }
-}
+} 
