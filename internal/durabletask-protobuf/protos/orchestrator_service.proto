@@ -171,6 +171,51 @@ message ExecutionResumedEvent {
     google.protobuf.StringValue input = 1;
 }
 
+message EntityOperationSignaledEvent {
+    string requestId = 1;
+    string operation = 2;
+    google.protobuf.Timestamp scheduledTime = 3;
+    google.protobuf.StringValue input = 4;
+    google.protobuf.StringValue targetInstanceId = 5; // used only within histories, null in messages
+}
+
+message EntityOperationCalledEvent {
+    string requestId = 1;
+    string operation = 2;
+    google.protobuf.Timestamp scheduledTime = 3;
+    google.protobuf.StringValue input = 4;
+    google.protobuf.StringValue parentInstanceId = 5;  // used only within messages, null in histories
+    google.protobuf.StringValue parentExecutionId = 6;  // used only within messages, null in histories
+    google.protobuf.StringValue targetInstanceId = 7; // used only within histories, null in messages
+}
+
+message EntityLockRequestedEvent {
+    string criticalSectionId = 1;  
+    repeated string lockSet = 2;
+    int32 position = 3;
+    google.protobuf.StringValue parentInstanceId = 4; // used only within messages, null in histories 
+}
+
+message EntityOperationCompletedEvent {
+    string requestId = 1;
+    google.protobuf.StringValue output = 2;
+}
+
+message EntityOperationFailedEvent {
+    string requestId = 1;
+    TaskFailureDetails failureDetails = 2;
+}
+
+message EntityUnlockSentEvent {
+    string criticalSectionId = 1;
+    google.protobuf.StringValue parentInstanceId = 2;  // used only within messages, null in histories 
+    google.protobuf.StringValue targetInstanceId = 3;  // used only within histories, null in messages
+}
+
+message EntityLockGrantedEvent {
+    string criticalSectionId = 1;
+}
+ 
 message HistoryEvent {
     int32 eventId = 1;
     google.protobuf.Timestamp timestamp = 2;
@@ -195,6 +240,13 @@ message HistoryEvent {
         ContinueAsNewEvent continueAsNew = 20;
         ExecutionSuspendedEvent executionSuspended = 21;
         ExecutionResumedEvent executionResumed = 22;
+        EntityOperationSignaledEvent entityOperationSignaled = 23;
+        EntityOperationCalledEvent entityOperationCalled = 24;
+        EntityOperationCompletedEvent entityOperationCompleted = 25; 
+        EntityOperationFailedEvent entityOperationFailed = 26; 
+        EntityLockRequestedEvent entityLockRequested = 27;
+        EntityLockGrantedEvent entityLockGranted = 28;
+        EntityUnlockSentEvent entityUnlockSent = 29;
     }
 }
 
@@ -495,6 +547,13 @@ message EntityBatchResult {
     TaskFailureDetails failureDetails = 4;
 }
 
+message EntityRequest {
+    string instanceId = 1;
+    string executionId = 2;
+    google.protobuf.StringValue entityState = 3; // null if entity does not exist
+    repeated HistoryEvent operationRequests = 4;
+}
+
 message OperationRequest {
     string operation = 1;
     string requestId = 2;
@@ -602,14 +661,16 @@ service TaskHubSidecarService {
 message GetWorkItemsRequest {
     int32 maxConcurrentOrchestrationWorkItems = 1;
     int32 maxConcurrentActivityWorkItems = 2;
+    int32 maxConcurrentEntityWorkItems = 3;
 }
 
 message WorkItem {
     oneof request {
         OrchestratorRequest orchestratorRequest = 1;
         ActivityRequest activityRequest = 2;
-        EntityBatchRequest entityRequest = 3;
+        EntityBatchRequest entityRequest = 3; // (older) used by orchestration services implementations
         HealthPing healthPing = 4;
+        EntityRequest entityRequestV2 = 5; // (newer) used by backend service implementations
     }
     string completionToken = 10;
 }
