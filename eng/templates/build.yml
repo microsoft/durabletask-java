@@ -1,0 +1,48 @@
+jobs:
+    - job: Build
+
+      templateContext:
+          outputs:
+              - output: pipelineArtifact
+                path: $(build.artifactStagingDirectory)
+                artifact: drop
+                sbomBuildDropPath: $(System.DefaultWorkingDirectory)
+                sbomPackageName: 'Durable Task / Durable Functions Java SBOM'
+
+      steps:
+        - checkout: self
+          submodules: true
+
+        - task: Gradle@3
+          inputs:
+            # Specifies the working directory to run the Gradle build. The task uses the repository root directory if the working directory is not specified.
+            workingDirectory: ''
+            # Specifies the gradlew wrapper's location within the repository that will be used for the build.
+            gradleWrapperFile: 'gradlew'
+            # Sets the GRADLE_OPTS environment variable, which is used to send command-line arguments to start the JVM. The xmx flag specifies the maximum memory available to the JVM.
+            gradleOptions: '-Xmx3072m'
+            javaHomeOption: 'JDKVersion'
+            jdkVersionOption: 1.11
+            jdkArchitectureOption: 'x64'
+            publishJUnitResults: false
+            tasks: clean assemble
+          displayName: Assemble durabletask-client and durabletask-azure-functions
+
+        # TODO: add 1ES-level signing
+        - task: Gradle@3
+          inputs:
+            workingDirectory: ''
+            gradleWrapperFile: 'gradlew'
+            gradleOptions: '-Xmx3072m'
+            javaHomeOption: 'JDKVersion'
+            jdkVersionOption: 1.11
+            jdkArchitectureOption: 'x64'
+            tasks: publish
+          displayName: Publish durabletask-client and durabletask-azure-functions
+
+        - task: CopyFiles@2
+          displayName: 'Copy publish file to Artifact Staging Directory'
+          inputs:
+            SourceFolder: $(System.DefaultWorkingDirectory)/repo/com/microsoft
+            Contents: '**/*.*'
+            TargetFolder: $(Build.ArtifactStagingDirectory)
