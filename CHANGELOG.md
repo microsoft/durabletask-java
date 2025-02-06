@@ -1,6 +1,8 @@
 ## placeholder
+* Remove unused dependency `protobuf-java` to resolve CVEs ([#180](https://github.com/microsoft/durabletask-java/pull/180))
 * Fix infinite loop when use continueasnew after wait external event ([#183](https://github.com/microsoft/durabletask-java/pull/183))
 * Fix the issue "Deserialize Exception got swallowed when use anyOf with external event." ([#185](https://github.com/microsoft/durabletask-java/pull/185))
+
 
 ## v1.5.0
 * Fix exception type issue when using `RetriableTask` in fan in/out pattern ([#174](https://github.com/microsoft/durabletask-java/pull/174))
