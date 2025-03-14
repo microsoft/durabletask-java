@@ -4,6 +4,12 @@ package io.durabletask.samples;
 
 import com.azure.core.credential.AccessToken;
 import com.microsoft.durabletask.*;
+import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientExtensions;
+import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientOptions;
+import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerExtensions;
+import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerOptions;
+import com.microsoft.durabletask.shared.azuremanaged.AccessTokenCache;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -17,22 +23,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.beans.factory.annotation.Value;
 import java.time.Duration;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.CallOptions;
-import io.grpc.ChannelCredentials;
-import io.grpc.TlsChannelCredentials;
-import io.grpc.InsecureChannelCredentials;
-import com.azure.core.credential.TokenCredential;
-import com.azure.core.credential.TokenRequestContext;
 import java.util.Objects;
 import com.azure.identity.DefaultAzureCredentialBuilder;
-import reactor.core.publisher.Mono;
+import com.azure.core.credential.TokenCredential;
+import com.azure.core.credential.TokenRequestContext;
 
 @ConfigurationProperties(prefix = "durable.task")
 @lombok.Data
@@ -84,74 +79,21 @@ public class WebAppToDurableTaskSchedulerSample {
             );
         }
 
-        @Bean(name = "workerChannel")
-        public Channel workerGrpcChannel(
-                DurableTaskProperties properties,
-                AccessTokenCache tokenCache) {
-            return createChannel(properties, tokenCache);
-        }
-
-        @Bean(name = "clientChannel")
-        public Channel clientGrpcChannel(
-                DurableTaskProperties properties,
-                AccessTokenCache tokenCache) {
-            return createChannel(properties, tokenCache);
-        }
-
-        private Channel createChannel(DurableTaskProperties properties, AccessTokenCache tokenCache) {
-            Objects.requireNonNull(properties.getHubName(), "taskHubName must not be null");
-            
-            // Normalize the endpoint URL and add DNS scheme for gRPC name resolution
-            String endpoint = "dns:///" + properties.getEndpoint();
-
-            // Create metadata interceptor to add task hub name and auth token
-            ClientInterceptor metadataInterceptor = new ClientInterceptor() {
-                @Override
-                public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-                        MethodDescriptor<ReqT, RespT> method,
-                        CallOptions callOptions,
-                        Channel next) {
-                    return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-                            next.newCall(method, callOptions)) {
-                        @Override
-                        public void start(ClientCall.Listener<RespT> responseListener, Metadata headers) {
-                            headers.put(
-                                Metadata.Key.of("taskhub", Metadata.ASCII_STRING_MARSHALLER),
-                                properties.getHubName()
-                            );
-                            
-                            // Add authorization token if credentials are configured
-                            if (tokenCache != null) {
-                                String token = tokenCache.getToken().getToken();
-                                headers.put(
-                                    Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
-                                    "Bearer " + token
-                                );
-                            }
-                            
-                            super.start(responseListener, headers);
-                        }
-                    };
-                }
-            };
-            
-            // Build the channel with appropriate security settings
-            ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget(endpoint)
-                .intercept(metadataInterceptor);
-                
-            if (!properties.isAllowInsecure()) {
-                builder.useTransportSecurity();
-            } else {
-                builder.usePlaintext();
-            }
-
-            return builder.build();
-        }
-
         @Bean(destroyMethod = "stop")
-        public DurableTaskGrpcWorker durableTaskWorker(@Qualifier("workerChannel") Channel grpcChannel) {
-            DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder()
-                .grpcChannel(grpcChannel);
+        public DurableTaskGrpcWorker durableTaskWorker(
+                DurableTaskProperties properties,
+                TokenCredential tokenCredential) {
+            
+            // Create worker options
+            DurableTaskSchedulerWorkerOptions options = new DurableTaskSchedulerWorkerOptions()
+                .setEndpoint(properties.getEndpoint())
+                .setTaskHubName(properties.getHubName())
+                .setResourceId(properties.getResourceId())
+                .setAllowInsecure(properties.isAllowInsecure())
+                .setTokenCredential(tokenCredential);
+            
+            // Create worker builder
+            DurableTaskGrpcWorkerBuilder builder = DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(options);
             
             // Add orchestrations
             builder.addOrchestration(new TaskOrchestrationFactory() {
@@ -240,10 +182,20 @@ public class WebAppToDurableTaskSchedulerSample {
         }
 
         @Bean
-        public DurableTaskClient durableTaskClient(@Qualifier("clientChannel") Channel grpcChannel) {
-            return new DurableTaskGrpcClientBuilder()
-                .grpcChannel(grpcChannel)
-                .build();
+        public DurableTaskClient durableTaskClient(
+                DurableTaskProperties properties,
+                TokenCredential tokenCredential) {
+            
+            // Create client options
+            DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
+                .setEndpoint(properties.getEndpoint())
+                .setTaskHubName(properties.getHubName())
+                .setResourceId(properties.getResourceId())
+                .setAllowInsecure(properties.isAllowInsecure())
+                .setTokenCredential(tokenCredential);
+            
+            // Create and return the client
+            return DurableTaskSchedulerClientExtensions.createClient(options);
         }
     }
 
