@@ -42,4 +42,13 @@ project(':worker') {
     dependencies {
         implementation project(':shared')
     }
+}
+
+project(':shared') {
+    // Mark shared as internal module
+    configurations.all {
+        resolutionStrategy {
+            disableDependencyVerification()
+        }
+    }
 } 

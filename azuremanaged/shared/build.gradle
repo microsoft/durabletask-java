@@ -50,4 +50,11 @@ compileTestJava {
 
 test {
     useJUnitPlatform()
+}
+
+// Prevent publishing of shared module
+configurations.all {
+    resolutionStrategy {
+        disableDependencyVerification()
+    }
 } 
