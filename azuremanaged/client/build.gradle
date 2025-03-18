@@ -6,27 +6,61 @@
  * user guide available at https://docs.gradle.org/4.4.1/userguide/tutorial_java_projects.html
  */
 
-// Apply the java plugin to add support for Java
-apply plugin: 'java'
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.google.protobuf' version '0.8.16'
+    id 'idea'
+}
 
-// Apply the application plugin to add support for building an application
-apply plugin: 'application'
+group 'com.microsoft'
+version = '1.5.0'
+archivesBaseName = 'durabletask-azuremanaged-client'
 
-// In this section you declare where to find the dependencies of your project
+def grpcVersion = '1.59.0'
+def protocVersion = '3.12.0'
+def jacksonVersion = '2.15.3'
+def azureCoreVersion = '1.45.0'
+def azureIdentityVersion = '1.11.1'
+
 repositories {
-    // Use jcenter for resolving your dependencies.
-    // You can declare any Maven/Ivy/file repository here.
+    mavenCentral()
     jcenter()
 }
 
 dependencies {
-    // This dependency is found on compile classpath of this component and consumers.
-    compile 'com.google.guava:guava:23.0'
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
 
-    // Use JUnit test framework
-    testCompile 'junit:junit:4.12'
+    compileOnly "org.apache.tomcat:annotations-api:6.0.53"
+
+    implementation "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-annotations:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
+    
+    implementation "com.azure:azure-core:${azureCoreVersion}"
+    implementation "com.azure:azure-identity:${azureIdentityVersion}"
+
+    testImplementation(platform('org.junit:junit-bom:5.7.2'))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+}
+
+compileJava {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+compileTestJava {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+test {
+    useJUnitPlatform()
 }
 
 // Define the main class for the application
-mainClassName = 'App'
+mainClassName = 'com.microsoft.durabletask.azuremanaged.client.AzureManagedClient'
 

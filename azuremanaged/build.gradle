@@ -1,0 +1,45 @@
+plugins {
+    id 'java'
+    id 'idea'
+}
+
+allprojects {
+    group = 'com.microsoft'
+    version = '1.5.0'
+
+    repositories {
+        mavenCentral()
+        jcenter()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'idea'
+
+    compileJava {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    compileTestJava {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(':client') {
+    dependencies {
+        implementation project(':shared')
+    }
+}
+
+project(':worker') {
+    dependencies {
+        implementation project(':shared')
+    }
+} 

@@ -1,0 +1,5 @@
+rootProject.name = 'durabletask-azuremanaged'
+
+include 'client'
+include 'worker'
+include 'shared' 
