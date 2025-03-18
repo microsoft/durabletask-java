@@ -30,6 +30,7 @@ repositories {
 }
 
 dependencies {
+    implementation project(':shared')
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
@@ -54,8 +55,10 @@ compileJava {
 }
 
 compileTestJava {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    options.fork = true
+    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
 }
 
 test {
