@@ -8,7 +8,6 @@
 
 plugins {
     id 'java'
-    id 'application'
     id 'com.google.protobuf' version '0.8.16'
     id 'idea'
 }
@@ -60,7 +59,4 @@ compileTestJava {
 test {
     useJUnitPlatform()
 }
-
-// Define the main class for the application
-mainClassName = 'com.microsoft.durabletask.azuremanaged.client.AzureManagedClient'
 
