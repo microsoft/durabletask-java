@@ -10,6 +10,8 @@ plugins {
     id 'java'
     id 'com.google.protobuf' version '0.8.16'
     id 'idea'
+    id 'maven-publish'
+    id 'signing'
 }
 
 group 'com.microsoft'
@@ -58,5 +60,57 @@ compileTestJava {
 
 test {
     useJUnitPlatform()
+}
+
+publishing {
+    repositories {
+        maven {
+            url "file://$project.rootDir/repo"
+        }
+    }
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = archivesBaseName
+            pom {
+                name = 'Durable Task Azure Managed Worker SDK for Java'
+                description = 'This package contains classes and interfaces for building Durable Task workers in Java using Azure Managed mode.'
+                url = "https://github.com/microsoft/durabletask-java/tree/main/azuremanaged/worker"
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url = "https://opensource.org/licenses/MIT"
+                        distribution = "repo"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "Microsoft"
+                        name = "Microsoft Corporation"
+                    }
+                }
+                scm {
+                    connection = "scm:git:https://github.com/microsoft/durabletask-java"
+                    developerConnection = "scm:git:git@github.com:microsoft/durabletask-java"
+                    url = "https://github.com/microsoft/durabletask-java/tree/main/azuremanaged/worker"
+                }
+                withXml {
+                    project.configurations.compileOnly.allDependencies.each { dependency ->
+                        asNode().dependencies[0].appendNode("dependency").with {
+                            it.appendNode("groupId", dependency.group)
+                            it.appendNode("artifactId", dependency.name)
+                            it.appendNode("version", dependency.version)
+                            it.appendNode("scope", "provided")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar()
 }
 
