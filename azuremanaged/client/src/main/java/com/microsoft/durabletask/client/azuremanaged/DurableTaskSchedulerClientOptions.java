@@ -20,6 +20,8 @@ import io.grpc.stub.MetadataUtils;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Duration;
 import java.util.Objects;
+import java.net.URL;
+import java.net.MalformedURLException;
 
 /**
  * Options for configuring the Durable Task Scheduler.
@@ -61,9 +63,6 @@ public class DurableTaskSchedulerClientOptions {
      */
     static DurableTaskSchedulerClientOptions fromConnectionString(DurableTaskSchedulerConnectionString connectionString, @Nullable TokenCredential credential) {
         // TODO: Parse different credential types from connection string
-        if (credential == null) {
-            credential = new DefaultAzureCredentialBuilder().build();
-        }
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
         options.setEndpointAddress(connectionString.getEndpoint());
         options.setTaskHubName(connectionString.getTaskHubName());
@@ -203,13 +202,27 @@ public class DurableTaskSchedulerClientOptions {
     }
 
     private static Channel createGrpcChannel() {
-        TokenRequestContext context = new TokenRequestContext();
-        context.addScopes(new String[] { this.resourceId + "/.default" });
-        AccessTokenCache tokenCache = new AccessTokenCache(this.credential, context, this.tokenRefreshMargin);
+        // Create token cache only if credential is not null
+        AccessTokenCache tokenCache = null;
+        if (credential != null) {
+            TokenRequestContext context = new TokenRequestContext();
+            context.addScopes(new String[] { this.resourceId + "/.default" });
+            tokenCache = new AccessTokenCache(this.credential, context, this.tokenRefreshMargin);
+        }
 
-        // Normalize the endpoint URL and add DNS scheme for gRPC name resolution
-        String endpoint = "dns:///" + this.endpointAddress;
-
+        // Parse and normalize the endpoint URL
+        String endpoint = endpointAddress;
+        // Add https:// prefix if no protocol is specified
+        if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
+            endpoint = "https://" + endpoint;
+        }
+        
+        URL url = new URL(endpoint);
+        String authority = url.getHost();
+        if (url.getPort() != -1) {
+            authority += ":" + url.getPort();
+        }
+        
         // Create metadata interceptor to add task hub name and auth token
         ClientInterceptor metadataInterceptor = new ClientInterceptor() {
             @Override
@@ -223,7 +236,7 @@ public class DurableTaskSchedulerClientOptions {
                     public void start(ClientCall.Listener<RespT> responseListener, Metadata headers) {
                         headers.put(
                             Metadata.Key.of("taskhub", Metadata.ASCII_STRING_MARSHALLER),
-                            this.taskHubName
+                            taskHubName
                         );
                         
                         // Add authorization token if credentials are configured
@@ -242,10 +255,10 @@ public class DurableTaskSchedulerClientOptions {
         };
         
         // Build the channel with appropriate security settings
-        ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget(endpoint)
+        ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget(authority)
             .intercept(metadataInterceptor);
             
-        if (!options.isAllowInsecure()) {
+        if (!endpoint.startsWith("https://")) {
             builder.useTransportSecurity();
         } else {
             builder.usePlaintext();
