@@ -4,9 +4,8 @@ package io.durabletask.samples;
 
 import com.azure.core.credential.TokenCredential;
 import com.microsoft.durabletask.*;
-
-import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientExtensions;
-import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerExtensions;
+import com.microsoft.durabletask.azuremanaged.client.DurableTaskSchedulerClientExtensions;
+import com.microsoft.durabletask.azuremanaged.worker.DurableTaskSchedulerWorkerExtensions;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.*;
@@ -65,53 +64,85 @@ public class WebAppToDurableTaskSchedulerSample {
                 properties.getTaskHubName(),
                 tokenCredential);
 
-            // Add orchestrations
-            workerBuilder.addOrchestration("ProcessOrderOrchestration", ctx -> {
-                // Get the order input as JSON string
-                String orderJson = ctx.getInput(String.class);
+            // Add orchestrations using the factory pattern
+            workerBuilder.addOrchestration(new TaskOrchestrationFactory() {
+                @Override
+                public String getName() { return "ProcessOrderOrchestration"; }
 
-                // Process the order through multiple activities
-                boolean isValid = ctx.callActivity("ValidateOrder", orderJson, Boolean.class).await();
-                if (!isValid) {
-                    ctx.complete("{\"status\": \"FAILED\", \"message\": \"Order validation failed\"}");
-                    return;
+                @Override
+                public TaskOrchestration create() {
+                    return ctx -> {
+                        // Get the order input as JSON string
+                        String orderJson = ctx.getInput(String.class);
+
+                        // Process the order through multiple activities
+                        boolean isValid = ctx.callActivity("ValidateOrder", orderJson, Boolean.class).await();
+                        if (!isValid) {
+                            ctx.complete("{\"status\": \"FAILED\", \"message\": \"Order validation failed\"}");
+                            return;
+                        }
+
+                        // Process payment
+                        String paymentResult = ctx.callActivity("ProcessPayment", orderJson, String.class).await();
+                        if (!paymentResult.contains("\"success\":true")) {
+                            ctx.complete("{\"status\": \"FAILED\", \"message\": \"Payment processing failed\"}");
+                            return;
+                        }
+
+                        // Ship order
+                        String shipmentResult = ctx.callActivity("ShipOrder", orderJson, String.class).await();
+                        
+                        // Return the final result
+                        ctx.complete("{\"status\": \"SUCCESS\", " +
+                                   "\"payment\": " + paymentResult + ", " +
+                                   "\"shipment\": " + shipmentResult + "}");
+                    };
                 }
+            });
 
-                // Process payment
-                String paymentResult = ctx.callActivity("ProcessPayment", orderJson, String.class).await();
-                if (!paymentResult.contains("\"success\":true")) {
-                    ctx.complete("{\"status\": \"FAILED\", \"message\": \"Payment processing failed\"}");
-                    return;
+            // Add activities using the factory pattern
+            workerBuilder.addActivity(new TaskActivityFactory() {
+                @Override
+                public String getName() { return "ValidateOrder"; }
+
+                @Override
+                public TaskActivity create() {
+                    return ctx -> {
+                        String orderJson = ctx.getInput(String.class);
+                        // Simple validation - check if order contains amount and it's greater than 0
+                        return orderJson.contains("\"amount\"") && !orderJson.contains("\"amount\":0");
+                    };
                 }
-
-                // Ship order
-                String shipmentResult = ctx.callActivity("ShipOrder", orderJson, String.class).await();
-                
-                // Return the final result
-                ctx.complete("{\"status\": \"SUCCESS\", " +
-                           "\"payment\": " + paymentResult + ", " +
-                           "\"shipment\": " + shipmentResult + "}");
             });
 
-            // Add activity implementations
-            workerBuilder.addActivity("ValidateOrder", ctx -> {
-                String orderJson = ctx.getInput(String.class);
-                // Simple validation - check if order contains amount and it's greater than 0
-                return orderJson.contains("\"amount\"") && !orderJson.contains("\"amount\":0");
+            workerBuilder.addActivity(new TaskActivityFactory() {
+                @Override
+                public String getName() { return "ProcessPayment"; }
+
+                @Override
+                public TaskActivity create() {
+                    return ctx -> {
+                        String orderJson = ctx.getInput(String.class);
+                        // Simulate payment processing
+                        sleep(1000); // Simulate processing time
+                        return "{\"success\":true, \"transactionId\":\"TXN" + System.currentTimeMillis() + "\"}";
+                    };
+                }
             });
 
-            workerBuilder.addActivity("ProcessPayment", ctx -> {
-                String orderJson = ctx.getInput(String.class);
-                // Simulate payment processing
-                sleep(1000); // Simulate processing time
-                return "{\"success\":true, \"transactionId\":\"TXN" + System.currentTimeMillis() + "\"}";
-            });
+            workerBuilder.addActivity(new TaskActivityFactory() {
+                @Override
+                public String getName() { return "ShipOrder"; }
 
-            workerBuilder.addActivity("ShipOrder", ctx -> {
-                String orderJson = ctx.getInput(String.class);
-                // Simulate shipping process
-                sleep(1000); // Simulate processing time
-                return "{\"trackingNumber\":\"TRACK" + System.currentTimeMillis() + "\"}";
+                @Override
+                public TaskActivity create() {
+                    return ctx -> {
+                        String orderJson = ctx.getInput(String.class);
+                        // Simulate shipping process
+                        sleep(1000); // Simulate processing time
+                        return "{\"trackingNumber\":\"TRACK" + System.currentTimeMillis() + "\"}";
+                    };
+                }
             });
 
             return workerBuilder.build();
