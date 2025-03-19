@@ -4,7 +4,9 @@
 package com.microsoft.durabletask.worker.azuremanaged;
 
 import com.azure.core.credential.TokenCredential;
+import com.azure.core.credential.TokenRequestContext;
 import com.microsoft.durabletask.shared.azuremanaged.DurableTaskSchedulerConnectionString;
+import com.microsoft.durabletask.shared.azuremanaged.AccessTokenCache;
 import io.grpc.Channel;
 import io.grpc.ChannelCredentials;
 import io.grpc.Grpc;
@@ -17,7 +19,6 @@ import io.grpc.MethodDescriptor;
 import io.grpc.CallOptions;
 import io.grpc.ForwardingClientCall;
 
-import jakarta.validation.constraints.NotBlank;
 import java.time.Duration;
 import java.util.Objects;
 import java.net.URL;
@@ -28,10 +29,7 @@ import javax.annotation.Nullable;
  * Options for configuring the Durable Task Scheduler worker.
  */
 public class DurableTaskSchedulerWorkerOptions {
-    @NotBlank(message = "Endpoint address is required")
     private String endpointAddress = "";
-
-    @NotBlank(message = "Task hub name is required")
     private String taskHubName = "";
 
     private TokenCredential credential;
@@ -53,7 +51,7 @@ public class DurableTaskSchedulerWorkerOptions {
      * @return A new DurableTaskSchedulerWorkerOptions object.
      */
     public static DurableTaskSchedulerWorkerOptions fromConnectionString(String connectionString, @Nullable TokenCredential credential) {
-        DurableTaskSchedulerConnectionString parsedConnectionString = DurableTaskSchedulerConnectionString.parse(connectionString);
+        DurableTaskSchedulerConnectionString parsedConnectionString = new DurableTaskSchedulerConnectionString(connectionString);
         return fromConnectionString(parsedConnectionString, credential);
     }
 
@@ -207,9 +205,8 @@ public class DurableTaskSchedulerWorkerOptions {
      * Creates a gRPC channel using the configured options.
      * 
      * @return A configured gRPC channel.
-     * @throws MalformedURLException If the endpoint address is invalid.
      */
-    public Channel createGrpcChannel() throws MalformedURLException {
+    public Channel createGrpcChannel() {
         // Create token cache only if credential is not null
         AccessTokenCache tokenCache = null;
         if (credential != null) {
@@ -225,13 +222,19 @@ public class DurableTaskSchedulerWorkerOptions {
             endpoint = "https://" + endpoint;
         }
         
-        URL url = new URL(endpoint);
+        URL url;
+        try {
+             url = new URL(endpoint);
+        } catch (MalformedURLException e) {
+            throw new IllegalArgumentException("Invalid endpoint URL: " + endpoint);
+        }
         String authority = url.getHost();
         if (url.getPort() != -1) {
             authority += ":" + url.getPort();
         }
         
         // Create metadata interceptor to add task hub name and auth token
+        AccessTokenCache finalTokenCache = tokenCache;
         ClientInterceptor metadataInterceptor = new ClientInterceptor() {
             @Override
             public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
@@ -248,8 +251,8 @@ public class DurableTaskSchedulerWorkerOptions {
                         );
                         
                         // Add authorization token if credentials are configured
-                        if (tokenCache != null) {
-                            String token = tokenCache.getToken().getToken();
+                        if (finalTokenCache != null) {
+                            String token = finalTokenCache.getToken().getToken();
                             headers.put(
                                 Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
                                 "Bearer " + token

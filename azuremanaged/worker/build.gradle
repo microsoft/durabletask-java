@@ -23,28 +23,21 @@ def protocVersion = '3.12.0'
 def jacksonVersion = '2.15.3'
 def azureCoreVersion = '1.45.0'
 def azureIdentityVersion = '1.11.1'
+def durabletaskClientVersion = '1.5.0'
 // When build on local, you need to set this value to your local jdk11 directory.
 // Java11 is used to compile and run all the tests.
 def PATH_TO_TEST_JAVA_RUNTIME = System.env.JDK_11 ?: System.getProperty("java.home")
 
 repositories {
     mavenCentral()
-    jcenter()
 }
 
 dependencies {
     implementation project(':azuremanaged:shared')
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "com.microsoft:durabletask-client:${durabletaskClientVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
-
-    compileOnly "org.apache.tomcat:annotations-api:6.0.53"
-
-    implementation "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}"
-    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
-    implementation "com.fasterxml.jackson.core:jackson-annotations:${jacksonVersion}"
-    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
-    
     implementation "com.azure:azure-core:${azureCoreVersion}"
     implementation "com.azure:azure-identity:${azureIdentityVersion}"
 

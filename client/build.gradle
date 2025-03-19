@@ -30,12 +30,6 @@ dependencies {
 
     compileOnly "org.apache.tomcat:annotations-api:6.0.53"
 
-    // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-core
-    implementation "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}"
-    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
-    implementation "com.fasterxml.jackson.core:jackson-annotations:${jacksonVersion}"
-    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
-    
     // Azure dependencies for authentication
     implementation "com.azure:azure-core:${azureCoreVersion}"
     implementation "com.azure:azure-identity:${azureIdentityVersion}"

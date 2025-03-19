@@ -4,33 +4,21 @@
 package com.microsoft.durabletask.client.azuremanaged;
 
 import com.azure.core.credential.TokenCredential;
-import com.azure.identity.DefaultAzureCredential;
-import com.azure.identity.ManagedIdentityCredential;
-import com.azure.identity.WorkloadIdentityCredential;
-import com.azure.identity.WorkloadIdentityCredentialOptions;
-import com.azure.identity.EnvironmentCredential;
-import com.azure.identity.AzureCliCredential;
-import com.azure.identity.AzurePowerShellCredential;
+import com.azure.core.credential.TokenRequestContext;
 import com.microsoft.durabletask.shared.azuremanaged.DurableTaskSchedulerConnectionString;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import io.grpc.Metadata;
-import io.grpc.stub.MetadataUtils;
-
-import jakarta.validation.constraints.NotBlank;
+import com.microsoft.durabletask.shared.azuremanaged.AccessTokenCache;
+import io.grpc.*;
+import javax.annotation.Nullable;
+import java.net.MalformedURLException;
 import java.time.Duration;
 import java.util.Objects;
 import java.net.URL;
-import java.net.MalformedURLException;
 
 /**
  * Options for configuring the Durable Task Scheduler.
  */
 public class DurableTaskSchedulerClientOptions {
-    @NotBlank(message = "Endpoint address is required")
     private String endpointAddress = "";
-
-    @NotBlank(message = "Task hub name is required")
     private String taskHubName = "";
 
     private TokenCredential credential;
@@ -48,10 +36,11 @@ public class DurableTaskSchedulerClientOptions {
      * Creates a new instance of DurableTaskSchedulerClientOptions from a connection string.
      * 
      * @param connectionString The connection string to parse.
+     * @param credential The credential to use for authentication. It is nullable for anonymous access.
      * @return A new DurableTaskSchedulerClientOptions object.
      */
     public static DurableTaskSchedulerClientOptions fromConnectionString(String connectionString, @Nullable TokenCredential credential) {
-        DurableTaskSchedulerConnectionString parsedConnectionString = DurableTaskSchedulerConnectionString.parse(connectionString);
+        DurableTaskSchedulerConnectionString parsedConnectionString = new DurableTaskSchedulerConnectionString(connectionString);
         return fromConnectionString(parsedConnectionString, credential);
     }
 
@@ -201,6 +190,11 @@ public class DurableTaskSchedulerClientOptions {
         Objects.requireNonNull(taskHubName, "taskHubName must not be null");
     }
 
+    /**
+     * Creates a gRPC channel using the configured options.
+     * 
+     * @return A configured gRPC channel for communication with the Durable Task service.
+     */
     public Channel createGrpcChannel() {
         // Create token cache only if credential is not null
         AccessTokenCache tokenCache = null;
@@ -217,13 +211,20 @@ public class DurableTaskSchedulerClientOptions {
             endpoint = "https://" + endpoint;
         }
         
-        URL url = new URL(endpoint);
+        URL url;
+        try {
+            url = new URL(endpoint);
+        } catch (MalformedURLException e) {
+            throw new IllegalArgumentException("Invalid endpoint URL: " + endpoint);
+        }
+
         String authority = url.getHost();
         if (url.getPort() != -1) {
             authority += ":" + url.getPort();
         }
         
         // Create metadata interceptor to add task hub name and auth token
+        AccessTokenCache finalTokenCache = tokenCache;
         ClientInterceptor metadataInterceptor = new ClientInterceptor() {
             @Override
             public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
@@ -240,8 +241,8 @@ public class DurableTaskSchedulerClientOptions {
                         );
                         
                         // Add authorization token if credentials are configured
-                        if (tokenCache != null) {
-                            String token = tokenCache.getToken().getToken();
+                        if (finalTokenCache != null) {
+                            String token = finalTokenCache.getToken().getToken();
                             headers.put(
                                 Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
                                 "Bearer " + token
@@ -255,7 +256,7 @@ public class DurableTaskSchedulerClientOptions {
         };
         
         ChannelCredentials credentials;
-        if (!this.allowInsecure) {
+        if (!this.allowInsecureCredentials) {
             credentials = io.grpc.TlsChannelCredentials.create();
         } else {
             credentials = InsecureChannelCredentials.create();

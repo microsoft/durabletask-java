@@ -4,11 +4,9 @@ package io.durabletask.samples;
 
 import com.azure.core.credential.TokenCredential;
 import com.microsoft.durabletask.*;
-import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientExtensions;
-import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientOptions;
-import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerExtensions;
-import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerOptions;
 
+import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientExtensions;
+import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerExtensions;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.*;
@@ -125,10 +123,10 @@ public class WebAppToDurableTaskSchedulerSample {
                 TokenCredential tokenCredential) {
             
             // Create client using Azure-managed extensions
-            return DurableTaskSchedulerClientExtensions.createClient(
+            return DurableTaskSchedulerClientExtensions.createClientBuilder(
                 properties.getEndpoint(),
                 properties.getTaskHubName(),
-                tokenCredential);
+                tokenCredential).build();
         }
     }
 
