@@ -5,19 +5,38 @@ package com.microsoft.durabletask.worker.azuremanaged;
 
 import com.azure.core.credential.TokenCredential;
 import com.microsoft.durabletask.shared.azuremanaged.DurableTaskSchedulerConnectionString;
+import io.grpc.Channel;
+import io.grpc.ChannelCredentials;
+import io.grpc.Grpc;
+import io.grpc.InsecureChannelCredentials;
+import io.grpc.TlsChannelCredentials;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientCall;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.CallOptions;
+import io.grpc.ForwardingClientCall;
 
+import jakarta.validation.constraints.NotBlank;
 import java.time.Duration;
 import java.util.Objects;
+import java.net.URL;
+import java.net.MalformedURLException;
+import javax.annotation.Nullable;
 
 /**
- * Configuration options for connecting to Azure-managed Durable Task Scheduler as a worker.
+ * Options for configuring the Durable Task Scheduler worker.
  */
 public class DurableTaskSchedulerWorkerOptions {
-    private String endpoint;
-    private String taskHubName;
+    @NotBlank(message = "Endpoint address is required")
+    private String endpointAddress = "";
+
+    @NotBlank(message = "Task hub name is required")
+    private String taskHubName = "";
+
+    private TokenCredential credential;
     private String resourceId = "https://durabletask.io";
-    private boolean allowInsecure = false;
-    private TokenCredential tokenCredential;
+    private boolean allowInsecureCredentials = false;
     private Duration tokenRefreshMargin = Duration.ofMinutes(5);
 
     /**
@@ -30,37 +49,47 @@ public class DurableTaskSchedulerWorkerOptions {
      * Creates a new instance of DurableTaskSchedulerWorkerOptions from a connection string.
      * 
      * @param connectionString The connection string to parse.
+     * @param credential The token credential for authentication, or null to use connection string credentials.
      * @return A new DurableTaskSchedulerWorkerOptions object.
      */
-    public static DurableTaskSchedulerWorkerOptions fromConnectionString(String connectionString) {
+    public static DurableTaskSchedulerWorkerOptions fromConnectionString(String connectionString, @Nullable TokenCredential credential) {
         DurableTaskSchedulerConnectionString parsedConnectionString = DurableTaskSchedulerConnectionString.parse(connectionString);
-        
+        return fromConnectionString(parsedConnectionString, credential);
+    }
+
+    /**
+     * Creates a new instance of DurableTaskSchedulerWorkerOptions from a parsed connection string.
+     * 
+     * @param connectionString The parsed connection string.
+     * @param credential The token credential for authentication, or null to use connection string credentials.
+     * @return A new DurableTaskSchedulerWorkerOptions object.
+     */
+    static DurableTaskSchedulerWorkerOptions fromConnectionString(DurableTaskSchedulerConnectionString connectionString, @Nullable TokenCredential credential) {
         DurableTaskSchedulerWorkerOptions options = new DurableTaskSchedulerWorkerOptions();
-        options.setEndpoint(parsedConnectionString.getEndpoint());
-        options.setTaskHubName(parsedConnectionString.getTaskHubName());
-        options.setResourceId(parsedConnectionString.getResourceId());
-        options.setAllowInsecure(parsedConnectionString.isAllowInsecure());
-        
+        options.setEndpointAddress(connectionString.getEndpoint());
+        options.setTaskHubName(connectionString.getTaskHubName());
+        options.setCredential(credential);
+        options.setAllowInsecureCredentials(credential == null);
         return options;
     }
 
     /**
-     * Gets the endpoint URL.
+     * Gets the endpoint address.
      * 
-     * @return The endpoint URL.
+     * @return The endpoint address.
      */
-    public String getEndpoint() {
-        return endpoint;
+    public String getEndpointAddress() {
+        return endpointAddress;
     }
 
     /**
-     * Sets the endpoint URL.
+     * Sets the endpoint address.
      * 
-     * @param endpoint The endpoint URL.
+     * @param endpointAddress The endpoint address.
      * @return This options object.
      */
-    public DurableTaskSchedulerWorkerOptions setEndpoint(String endpoint) {
-        this.endpoint = endpoint;
+    public DurableTaskSchedulerWorkerOptions setEndpointAddress(String endpointAddress) {
+        this.endpointAddress = endpointAddress;
         return this;
     }
 
@@ -85,7 +114,27 @@ public class DurableTaskSchedulerWorkerOptions {
     }
 
     /**
-     * Gets the resource ID for authentication.
+     * Gets the credential used for authentication.
+     * 
+     * @return The credential.
+     */
+    public TokenCredential getCredential() {
+        return credential;
+    }
+
+    /**
+     * Sets the credential used for authentication.
+     * 
+     * @param credential The credential.
+     * @return This options object.
+     */
+    public DurableTaskSchedulerWorkerOptions setCredential(TokenCredential credential) {
+        this.credential = credential;
+        return this;
+    }
+
+    /**
+     * Gets the resource ID.
      * 
      * @return The resource ID.
      */
@@ -94,7 +143,7 @@ public class DurableTaskSchedulerWorkerOptions {
     }
 
     /**
-     * Sets the resource ID for authentication.
+     * Sets the resource ID.
      * 
      * @param resourceId The resource ID.
      * @return This options object.
@@ -105,42 +154,22 @@ public class DurableTaskSchedulerWorkerOptions {
     }
 
     /**
-     * Gets whether insecure connections are allowed.
+     * Gets whether insecure credentials are allowed.
      * 
-     * @return True if insecure connections are allowed, false otherwise.
+     * @return True if insecure credentials are allowed.
      */
-    public boolean isAllowInsecure() {
-        return allowInsecure;
+    public boolean isAllowInsecureCredentials() {
+        return allowInsecureCredentials;
     }
 
     /**
-     * Sets whether insecure connections are allowed.
+     * Sets whether insecure credentials are allowed.
      * 
-     * @param allowInsecure True to allow insecure connections, false otherwise.
+     * @param allowInsecureCredentials True to allow insecure credentials.
      * @return This options object.
      */
-    public DurableTaskSchedulerWorkerOptions setAllowInsecure(boolean allowInsecure) {
-        this.allowInsecure = allowInsecure;
-        return this;
-    }
-
-    /**
-     * Gets the token credential for authentication.
-     * 
-     * @return The token credential.
-     */
-    public TokenCredential getTokenCredential() {
-        return tokenCredential;
-    }
-
-    /**
-     * Sets the token credential for authentication.
-     * 
-     * @param tokenCredential The token credential.
-     * @return This options object.
-     */
-    public DurableTaskSchedulerWorkerOptions setTokenCredential(TokenCredential tokenCredential) {
-        this.tokenCredential = tokenCredential;
+    public DurableTaskSchedulerWorkerOptions setAllowInsecureCredentials(boolean allowInsecureCredentials) {
+        this.allowInsecureCredentials = allowInsecureCredentials;
         return this;
     }
 
@@ -170,7 +199,80 @@ public class DurableTaskSchedulerWorkerOptions {
      * @throws IllegalArgumentException If the options are not properly configured.
      */
     public void validate() {
-        Objects.requireNonNull(endpoint, "endpoint must not be null");
+        Objects.requireNonNull(endpointAddress, "endpointAddress must not be null");
         Objects.requireNonNull(taskHubName, "taskHubName must not be null");
+    }
+
+    /**
+     * Creates a gRPC channel using the configured options.
+     * 
+     * @return A configured gRPC channel.
+     * @throws MalformedURLException If the endpoint address is invalid.
+     */
+    public Channel createGrpcChannel() throws MalformedURLException {
+        // Create token cache only if credential is not null
+        AccessTokenCache tokenCache = null;
+        if (credential != null) {
+            TokenRequestContext context = new TokenRequestContext();
+            context.addScopes(new String[] { this.resourceId + "/.default" });
+            tokenCache = new AccessTokenCache(this.credential, context, this.tokenRefreshMargin);
+        }
+
+        // Parse and normalize the endpoint URL
+        String endpoint = endpointAddress;
+        // Add https:// prefix if no protocol is specified
+        if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
+            endpoint = "https://" + endpoint;
+        }
+        
+        URL url = new URL(endpoint);
+        String authority = url.getHost();
+        if (url.getPort() != -1) {
+            authority += ":" + url.getPort();
+        }
+        
+        // Create metadata interceptor to add task hub name and auth token
+        ClientInterceptor metadataInterceptor = new ClientInterceptor() {
+            @Override
+            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                    MethodDescriptor<ReqT, RespT> method,
+                    CallOptions callOptions,
+                    Channel next) {
+                return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
+                        next.newCall(method, callOptions)) {
+                    @Override
+                    public void start(ClientCall.Listener<RespT> responseListener, Metadata headers) {
+                        headers.put(
+                            Metadata.Key.of("taskhub", Metadata.ASCII_STRING_MARSHALLER),
+                            taskHubName
+                        );
+                        
+                        // Add authorization token if credentials are configured
+                        if (tokenCache != null) {
+                            String token = tokenCache.getToken().getToken();
+                            headers.put(
+                                Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
+                                "Bearer " + token
+                            );
+                        }
+                        
+                        super.start(responseListener, headers);
+                    }
+                };
+            }
+        };
+
+        // Configure channel credentials based on endpoint protocol
+        ChannelCredentials credentials;
+        if (endpoint.toLowerCase().startsWith("https://")) {
+            credentials = TlsChannelCredentials.create();
+        } else {
+            credentials = InsecureChannelCredentials.create();
+        }
+
+        // Create channel with credentials
+        return Grpc.newChannelBuilder(authority, credentials)
+                .intercept(metadataInterceptor)
+                .build();
     }
 } 
