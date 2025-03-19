@@ -4,8 +4,6 @@ plugins {
     id 'idea'
 }
 
-group 'com.microsoft'
-version = '1.5.0'
 archivesBaseName = 'durabletask-azuremanaged-shared'
 
 def grpcVersion = '1.59.0'

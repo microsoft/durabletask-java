@@ -14,8 +14,6 @@ plugins {
     id 'signing'
 }
 
-group 'com.microsoft'
-version = '1.5.0'
 archivesBaseName = 'durabletask-azuremanaged-worker'
 
 def grpcVersion = '1.59.0'
