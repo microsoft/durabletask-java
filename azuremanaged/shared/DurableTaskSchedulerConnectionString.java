@@ -3,69 +3,109 @@
 
 package com.microsoft.durabletask.shared.azuremanaged;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Parses and manages connection strings for Azure-managed Durable Task Scheduler.
- * This class is used by both client and worker components.
+ * Represents the constituent parts of a connection string for a Durable Task Scheduler service.
  */
 public class DurableTaskSchedulerConnectionString {
-    private final String endpoint;
-    private final String taskHubName;
-    private final String resourceId;
-    private final boolean allowInsecure;
+    private final Map<String, String> properties;
 
     /**
-     * Creates a new instance of DurableTaskSchedulerConnectionString.
+     * Initializes a new instance of the DurableTaskSchedulerConnectionString class.
      * 
-     * @param endpoint The endpoint URL of the Durable Task Scheduler service.
-     * @param taskHubName The name of the task hub.
-     * @param resourceId The Azure resource ID for authentication.
-     * @param allowInsecure Whether to allow insecure connections.
+     * @param connectionString A connection string for a Durable Task Scheduler service.
+     * @throws IllegalArgumentException If the connection string is invalid or missing required properties.
      */
-    public DurableTaskSchedulerConnectionString(
-            String endpoint,
-            String taskHubName,
-            String resourceId,
-            boolean allowInsecure) {
-        this.endpoint = Objects.requireNonNull(endpoint, "endpoint must not be null");
-        this.taskHubName = Objects.requireNonNull(taskHubName, "taskHubName must not be null");
-        this.resourceId = resourceId != null ? resourceId : "https://durabletask.io";
-        this.allowInsecure = allowInsecure;
-    }
-
-    /**
-     * Parses a connection string into a DurableTaskSchedulerConnectionString object.
-     * 
-     * @param connectionString The connection string to parse.
-     * @return A new DurableTaskSchedulerConnectionString object.
-     * @throws IllegalArgumentException If the connection string is invalid.
-     */
-    public static DurableTaskSchedulerConnectionString parse(String connectionString) {
+    public DurableTaskSchedulerConnectionString(String connectionString) {
         if (connectionString == null || connectionString.isEmpty()) {
             throw new IllegalArgumentException("connectionString must not be null or empty");
         }
+        this.properties = parseConnectionString(connectionString);
+    }
 
-        Map<String, String> properties = parseConnectionString(connectionString);
-        
-        String endpoint = properties.get("Endpoint");
-        if (endpoint == null || endpoint.isEmpty()) {
-            throw new IllegalArgumentException("The connection string must contain an Endpoint property");
+    /**
+     * Gets the authentication method specified in the connection string.
+     * 
+     * @return The authentication method.
+     */
+    public String getAuthentication() {
+        return getRequiredValue("Authentication");
+    }
+
+    /**
+     * Gets the managed identity or workload identity client ID specified in the connection string.
+     * 
+     * @return The client ID, or null if not specified.
+     */
+    public String getClientId() {
+        return getValue("ClientID");
+    }
+
+    /**
+     * Gets the "AdditionallyAllowedTenants" property, optionally used by Workload Identity.
+     * Multiple values can be separated by a comma.
+     * 
+     * @return List of allowed tenants, or null if not specified.
+     */
+    public List<String> getAdditionallyAllowedTenants() {
+        String value = getValue("AdditionallyAllowedTenants");
+        if (value == null || value.isEmpty()) {
+            return null;
         }
+        return Arrays.asList(value.split(","));
+    }
 
-        String taskHubName = properties.get("TaskHubName");
-        if (taskHubName == null || taskHubName.isEmpty()) {
-            throw new IllegalArgumentException("The connection string must contain a TaskHubName property");
+    /**
+     * Gets the "TenantId" property, optionally used by Workload Identity.
+     * 
+     * @return The tenant ID, or null if not specified.
+     */
+    public String getTenantId() {
+        return getValue("TenantId");
+    }
+
+    /**
+     * Gets the "TokenFilePath" property, optionally used by Workload Identity.
+     * 
+     * @return The token file path, or null if not specified.
+     */
+    public String getTokenFilePath() {
+        return getValue("TokenFilePath");
+    }
+
+    /**
+     * Gets the endpoint specified in the connection string.
+     * 
+     * @return The endpoint URL.
+     */
+    public String getEndpoint() {
+        return getRequiredValue("Endpoint");
+    }
+
+    /**
+     * Gets the task hub name specified in the connection string.
+     * 
+     * @return The task hub name.
+     */
+    public String getTaskHubName() {
+        return getRequiredValue("TaskHub");
+    }
+
+    private String getValue(String name) {
+        return properties.get(name);
+    }
+
+    private String getRequiredValue(String name) {
+        String value = getValue(name);
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException("The connection string must contain a " + name + " property");
         }
-
-        String resourceId = properties.get("ResourceId");
-        
-        String allowInsecureStr = properties.get("AllowInsecure");
-        boolean allowInsecure = "true".equalsIgnoreCase(allowInsecureStr);
-
-        return new DurableTaskSchedulerConnectionString(endpoint, taskHubName, resourceId, allowInsecure);
+        return value;
     }
 
     private static Map<String, String> parseConnectionString(String connectionString) {
@@ -82,41 +122,5 @@ public class DurableTaskSchedulerConnectionString {
         }
         
         return properties;
-    }
-
-    /**
-     * Gets the endpoint URL.
-     * 
-     * @return The endpoint URL.
-     */
-    public String getEndpoint() {
-        return endpoint;
-    }
-
-    /**
-     * Gets the task hub name.
-     * 
-     * @return The task hub name.
-     */
-    public String getTaskHubName() {
-        return taskHubName;
-    }
-
-    /**
-     * Gets the resource ID for authentication.
-     * 
-     * @return The resource ID.
-     */
-    public String getResourceId() {
-        return resourceId;
-    }
-
-    /**
-     * Gets whether insecure connections are allowed.
-     * 
-     * @return True if insecure connections are allowed, false otherwise.
-     */
-    public boolean isAllowInsecure() {
-        return allowInsecure;
     }
 } 
