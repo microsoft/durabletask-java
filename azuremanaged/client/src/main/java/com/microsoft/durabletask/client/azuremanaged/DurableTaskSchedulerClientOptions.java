@@ -254,16 +254,16 @@ public class DurableTaskSchedulerClientOptions {
             }
         };
         
-        // Build the channel with appropriate security settings
-        ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget(authority)
-            .intercept(metadataInterceptor);
-            
-        if (!endpoint.startsWith("https://")) {
-            builder.useTransportSecurity();
+        ChannelCredentials credentials;
+        if (!this.allowInsecure) {
+            credentials = io.grpc.TlsChannelCredentials.create();
         } else {
-            builder.usePlaintext();
+            credentials = InsecureChannelCredentials.create();
         }
 
-        return builder.build();
+        // Create channel with credentials
+        return Grpc.newChannelBuilder(authority, credentials)
+                .intercept(metadataInterceptor)
+                .build();
     }
 }
