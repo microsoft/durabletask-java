@@ -4,8 +4,8 @@ package io.durabletask.samples;
 
 import com.azure.core.credential.TokenCredential;
 import com.microsoft.durabletask.*;
-import com.microsoft.durabletask.azuremanaged.client.DurableTaskSchedulerClientExtensions;
-import com.microsoft.durabletask.azuremanaged.worker.DurableTaskSchedulerWorkerExtensions;
+import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientExtensions;
+import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerExtensions;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +39,7 @@ public class WebAppToDurableTaskSchedulerSample {
 
     public static void main(String[] args) {
         ConfigurableApplicationContext context = SpringApplication.run(WebAppToDurableTaskSchedulerSample.class, args);
-    
+
         // Get the worker bean and start it
         DurableTaskGrpcWorker worker = context.getBean(DurableTaskGrpcWorker.class);
         worker.start();
@@ -57,7 +57,7 @@ public class WebAppToDurableTaskSchedulerSample {
         public DurableTaskGrpcWorker durableTaskWorker(
                 DurableTaskProperties properties,
                 TokenCredential tokenCredential) {
-            
+
             // Create worker using Azure-managed extensions
             DurableTaskGrpcWorkerBuilder workerBuilder = DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(
                 properties.getEndpoint(),
@@ -91,7 +91,7 @@ public class WebAppToDurableTaskSchedulerSample {
 
                         // Ship order
                         String shipmentResult = ctx.callActivity("ShipOrder", orderJson, String.class).await();
-                        
+
                         // Return the final result
                         ctx.complete("{\"status\": \"SUCCESS\", " +
                                    "\"payment\": " + paymentResult + ", " +
@@ -152,7 +152,7 @@ public class WebAppToDurableTaskSchedulerSample {
         public DurableTaskClient durableTaskClient(
                 DurableTaskProperties properties,
                 TokenCredential tokenCredential) {
-            
+
             // Create client using Azure-managed extensions
             return DurableTaskSchedulerClientExtensions.createClientBuilder(
                 properties.getEndpoint(),
@@ -186,14 +186,14 @@ class OrderController {
     @PostMapping
     public String createOrder(@RequestBody String orderJson) throws Exception {
         String instanceId = client.scheduleNewOrchestrationInstance(
-            "ProcessOrderOrchestration", 
+            "ProcessOrderOrchestration",
             orderJson
         );
 
         // Wait for the orchestration to complete with a timeout
         OrchestrationMetadata metadata = client.waitForInstanceCompletion(
-            instanceId, 
-            Duration.ofSeconds(30), 
+            instanceId,
+            Duration.ofSeconds(30),
             true
         );
 
@@ -212,4 +212,4 @@ class OrderController {
         }
         return metadata.readOutputAs(String.class);
     }
-} 
+}
