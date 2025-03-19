@@ -24,32 +24,84 @@ import java.util.Objects;
  * Extension methods for creating DurableTaskClient instances that connect to Azure-managed Durable Task Scheduler.
  */
 public class DurableTaskSchedulerClientExtensions {
-
     /**
-     * Creates a DurableTaskClient that connects to Azure-managed Durable Task Scheduler.
+     * Creates a DurableTaskClient that connects to Azure-managed Durable Task Scheduler using a connection string.
      * 
-     * @param options The options for connecting to Azure-managed Durable Task Scheduler.
+     * @param connectionString The connection string for connecting to Azure-managed Durable Task Scheduler.
+     * @param tokenCredential The token credential for connecting to Azure-managed Durable Task Scheduler.
      * @return A new DurableTaskClient instance.
      */
-    public static DurableTaskClient createClient(DurableTaskSchedulerClientOptions options) {
-        Objects.requireNonNull(options, "options must not be null");
-        options.validate();
+    public static DurableTaskClient createClient(String connectionString, @Nullable TokenCredential tokenCredential) {
+        Objects.requireNonNull(connectionString, "connectionString must not be null");
+        DurableTaskSchedulerClientOptions options = DurableTaskSchedulerClientOptions.fromConnectionString(connectionString, tokenCredential);
+        Channel grpcChannel = options.createGrpcChannel();
 
-        // Create the access token cache if credentials are provided
-        AccessTokenCache tokenCache = null;
-        TokenCredential credential = options.getTokenCredential();
-        if (credential != null) {
-            TokenRequestContext context = new TokenRequestContext();
-            context.addScopes(new String[] { options.getResourceId() + "/.default" });
-            tokenCache = new AccessTokenCache(credential, context, options.getTokenRefreshMargin());
-        }
-
-        // Create the gRPC channel
-        Channel grpcChannel = createGrpcChannel(options, tokenCache);
-
-        // Create and return the client
         return new DurableTaskGrpcClientBuilder()
             .grpcChannel(grpcChannel)
             .build();
+    }
+
+    public static DurableTaskClient createClient(String endpoint, String taskHubName, @Nullable TokenCredential tokenCredential) {
+        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
+            .setEndpoint(endpoint)
+            .setTaskHubName(taskHubName)
+            .setTokenCredential(tokenCredential);
+
+        Channel grpcChannel = options.createGrpcChannel();
+
+        return new DurableTaskGrpcClientBuilder()
+            .grpcChannel(grpcChannel)
+            .build();
+    }
+
+    public static void UseDurableTaskScheduler(DurableTaskGrpcClientBuilder builder, String endpoint, String taskHubName, @Nullable TokenCredential tokenCredential) {
+        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
+            .setEndpoint(endpoint)
+            .setTaskHubName(taskHubName)
+            .setTokenCredential(tokenCredential);
+
+        Channel grpcChannel = options.createGrpcChannel();
+        builder.grpcChannel(grpcChannel);
+    }
+    public static void UseDurableTaskScheduler(DurableTaskGrpcClientBuilder builder, String connectionString, @Nullable TokenCredential tokenCredential) {
+        DurableTaskSchedulerClientOptions options = DurableTaskSchedulerClientOptions.fromConnectionString(connectionString, tokenCredential);
+        Channel grpcChannel = options.createGrpcChannel();
+        builder.grpcChannel(grpcChannel);
+    }
+
+    /**
+     * Creates a DurableTaskGrpcClientBuilder that connects to Azure-managed Durable Task Scheduler using a connection string.
+     * 
+     * @param connectionString The connection string for connecting to Azure-managed Durable Task Scheduler.
+     * @param tokenCredential The token credential for connecting to Azure-managed Durable Task Scheduler.
+     * @return A new DurableTaskGrpcClientBuilder instance.
+     */
+    public static DurableTaskGrpcClientBuilder createClientBuilder(String connectionString, @Nullable TokenCredential tokenCredential) {
+        Objects.requireNonNull(connectionString, "connectionString must not be null");
+        DurableTaskSchedulerClientOptions options = DurableTaskSchedulerClientOptions.fromConnectionString(connectionString, tokenCredential);
+        Channel grpcChannel = options.createGrpcChannel();
+
+        return new DurableTaskGrpcClientBuilder()
+            .grpcChannel(grpcChannel);
+    }
+
+    /**
+     * Creates a DurableTaskGrpcClientBuilder that connects to Azure-managed Durable Task Scheduler.
+     * 
+     * @param endpoint The endpoint for connecting to Azure-managed Durable Task Scheduler.
+     * @param taskHubName The task hub name for connecting to Azure-managed Durable Task Scheduler.
+     * @param tokenCredential The token credential for connecting to Azure-managed Durable Task Scheduler.
+     * @return A new DurableTaskGrpcClientBuilder instance.
+     */
+    public static DurableTaskGrpcClientBuilder createClientBuilder(String endpoint, String taskHubName, @Nullable TokenCredential tokenCredential) {
+        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
+            .setEndpoint(endpoint)
+            .setTaskHubName(taskHubName)
+            .setTokenCredential(tokenCredential);
+
+        Channel grpcChannel = options.createGrpcChannel();
+
+        return new DurableTaskGrpcClientBuilder()
+            .grpcChannel(grpcChannel);
     }
 } 

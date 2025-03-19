@@ -201,7 +201,7 @@ public class DurableTaskSchedulerClientOptions {
         Objects.requireNonNull(taskHubName, "taskHubName must not be null");
     }
 
-    private static Channel createGrpcChannel() {
+    public Channel createGrpcChannel() {
         // Create token cache only if credential is not null
         AccessTokenCache tokenCache = null;
         if (credential != null) {
