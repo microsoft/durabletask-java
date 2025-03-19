@@ -2,8 +2,11 @@ rootProject.name = 'durabletask-java'
 
 include ":client"
 include ":azurefunctions"
+include ":azuremanaged"
+include ":azuremanaged:client"
+include ":azuremanaged:worker"
+include ":azuremanaged:shared"
 include ":samples"
 include ":samples-azure-functions"
 include ":endtoendtests"
-include ":azuremanaged"
 

@@ -33,7 +33,7 @@ repositories {
 }
 
 dependencies {
-    implementation project(':shared')
+    implementation project(':azuremanaged:shared')
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"

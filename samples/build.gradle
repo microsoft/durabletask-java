@@ -14,7 +14,8 @@ application {
 }
 
 dependencies {
-    implementation project(':client')
+    implementation project(':azuremanaged:client')
+    implementation project(':azuremanaged:worker')
     
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation platform("org.springframework.boot:spring-boot-dependencies:2.5.2")
