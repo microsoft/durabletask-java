@@ -79,7 +79,7 @@ public class WebAppToDurableTaskSchedulerSample {
             );
         }
 
-        @Bean(destroyMethod = "stop")
+        @Bean
         public DurableTaskGrpcWorker durableTaskWorker(
                 DurableTaskProperties properties,
                 TokenCredential tokenCredential) {
