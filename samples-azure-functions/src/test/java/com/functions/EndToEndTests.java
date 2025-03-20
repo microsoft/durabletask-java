@@ -168,7 +168,7 @@ public class EndToEndTests {
         Set<String> continueStates = new HashSet<>();
         continueStates.add("Pending");
         continueStates.add("Running");
-        final String expect = "AUSTIN-test";
+        final String expect = "\"AUSTIN\"-test";
         String startOrchestrationPath = "/api/StartOrchestrationThenChain";
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
@@ -226,7 +226,7 @@ public class EndToEndTests {
         assertTrue(pass);
         Response statusResponse = get(statusQueryGetUri);
         String outputName = statusResponse.jsonPath().get("output.name");
-        assertEquals("TESTNAME", outputName);
+        assertEquals("\"TESTNAME\"", outputName);
     }
 
     private boolean pollingCheck(String statusQueryGetUri,
