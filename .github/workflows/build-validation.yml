@@ -56,6 +56,9 @@ jobs:
       run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
       continue-on-error: true
 
+    - name: Display Durable Task Sidecar Logs
+      run: docker logs -f durabletask-sidecar
+
     - name: Archive test report
       uses: actions/upload-artifact@v4
       with:
