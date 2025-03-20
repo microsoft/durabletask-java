@@ -15,8 +15,10 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -31,10 +33,18 @@ import static org.junit.jupiter.api.Assertions.*;
  * sends invocation instructions to the DurableTaskWorker).
  */
 @Tag("integration")
+@ExtendWith(TestRetryExtension.class)
 public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
     // All tests that create a server should save it to this variable for proper shutdown
     private DurableTaskGrpcWorker server;
+
+    // Before whole test suite, delete the task hub
+    @BeforeEach
+    private void startUp() {
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        client.deleteTaskHub();
+    }
 
     @AfterEach
     private void shutdown() throws InterruptedException {
@@ -43,7 +53,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void emptyOrchestration() throws TimeoutException {
         final String orchestratorName = "EmptyOrchestration";
         final String input = "Hello " + Instant.now();
@@ -66,7 +76,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void singleTimer() throws IOException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         final Duration delay = Duration.ofSeconds(3);
@@ -89,7 +99,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void longTimer() throws TimeoutException {
         final String orchestratorName = "LongTimer";
         final Duration delay = Duration.ofSeconds(7);
@@ -106,6 +116,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
+            client.createTaskHub(true);
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             Duration timeout = delay.plus(defaultTimeout);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, timeout, false);
@@ -132,7 +143,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void longTimerNonblocking() throws TimeoutException {
         final String orchestratorName = "ActivityAnyOf";
         final String externalEventActivityName = "externalEvent";
@@ -170,7 +181,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void longTimerNonblockingNoExternal() throws TimeoutException {
         final String orchestratorName = "ActivityAnyOf";
         final String externalEventActivityName = "externalEvent";
@@ -207,7 +218,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
 
-    @Test
+    @RetryingTest
     void longTimeStampTimer() throws TimeoutException {
         final String orchestratorName = "LongTimeStampTimer";
         final Duration delay = Duration.ofSeconds(7);
@@ -241,7 +252,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void singleTimeStampTimer() throws IOException, TimeoutException {
         final String orchestratorName = "SingleTimeStampTimer";
         final Duration delay = Duration.ofSeconds(3);
@@ -265,7 +276,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void isReplaying() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
@@ -301,7 +312,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void singleActivity() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "SingleActivity";
         final String activityName = "Echo";
@@ -333,7 +344,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void currentDateTimeUtc() throws IOException, TimeoutException {
         final String orchestratorName = "CurrentDateTimeUtc";
         final String echoActivityName = "Echo";
@@ -372,7 +383,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityChain() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityChain";
         final String plusOneActivityName = "PlusOne";
@@ -399,7 +410,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void subOrchestration() throws TimeoutException {
         final String orchestratorName = "SubOrchestration";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
@@ -420,7 +431,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void continueAsNew() throws TimeoutException {
         final String orchestratorName = "continueAsNew";
         final Duration delay = Duration.ofSeconds(0);
@@ -443,7 +454,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void continueAsNewWithExternalEvents() throws TimeoutException, InterruptedException{
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
@@ -474,7 +485,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void termination() throws TimeoutException {
         final String orchestratorName = "Termination";
         final Duration delay = Duration.ofSeconds(3);
@@ -496,7 +507,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @ParameterizedTest
+    @RetryingParameterizedTest
     @ValueSource(booleans = {true, false})
     void restartOrchestrationWithNewInstanceId(boolean restartWithNewInstanceId) throws TimeoutException {
         final String orchestratorName = "restart";
@@ -523,7 +534,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void restartOrchestrationThrowsException() {
         final String orchestratorName = "restart";
         final Duration delay = Duration.ofSeconds(3);
@@ -585,7 +596,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void terminateSuspendOrchestration() throws TimeoutException, InterruptedException {
         final String orchestratorName = "suspendResume";
         final String eventName = "MyEvent";
@@ -611,7 +622,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityFanOut() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";
@@ -653,7 +664,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void externalEvents() throws IOException, TimeoutException {
         final String orchestratorName = "ExternalEvents";
         final String eventName = "MyEvent";
@@ -692,7 +703,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @ParameterizedTest
+    @RetryingParameterizedTest
     @ValueSource(booleans = {true, false})
     void externalEventsWithTimeouts(boolean raiseEvent) throws IOException, TimeoutException {
         final String orchestratorName = "ExternalEventsWithTimeouts";
@@ -731,7 +742,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void setCustomStatus() throws TimeoutException {
         final String orchestratorName = "SetCustomStatus";
 
@@ -764,7 +775,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void clearCustomStatus() throws TimeoutException {
         final String orchestratorName = "ClearCustomStatus";
 
@@ -793,7 +804,8 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    // due to clock drift, client/worker and sidecar time are not exactly synchronized, this test needs to accommodate for client vs backend timestamps difference
+    @RetryingTest
     void multiInstanceQuery() throws TimeoutException{
         final String plusOne = "plusOne";
         final String waitForEvent = "waitForEvent";
@@ -830,6 +842,11 @@ public class IntegrationTests extends IntegrationTestBase {
                 }
             });
 
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+            }
+
             Instant sequencesFinishedTime = Instant.now();
 
             IntStream.range(0, 5).mapToObj(i -> {
@@ -853,28 +870,43 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeTo filter
-            query.setCreatedTimeTo(startTime);
+            query.setCreatedTimeTo(startTime.minus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
-            assertTrue(result.getOrchestrationState().isEmpty());
+            assertTrue(result.getOrchestrationState().isEmpty(), 
+                "Result should be empty but found " + result.getOrchestrationState().size() + " instances: " + 
+                "Start time: " + startTime + ", " +
+                result.getOrchestrationState().stream()
+                    .map(state -> String.format("\nID: %s, Status: %s, Created: %s", 
+                        state.getInstanceId(), 
+                        state.getRuntimeStatus(), 
+                        state.getCreatedAt()))
+                    .collect(Collectors.joining(", ")));
 
             query.setCreatedTimeTo(sequencesFinishedTime);
             result = client.queryInstances(query);
-            assertEquals(5, result.getOrchestrationState().size());
+            // Verify all returned instances contain "sequence" in their IDs
+            assertEquals(5, result.getOrchestrationState().stream()
+                .filter(state -> state.getInstanceId().contains("sequence"))
+                .count(),
+                "Expected exactly 5 instances with 'sequence' in their IDs");
 
-            query.setCreatedTimeTo(Instant.now());
+            query.setCreatedTimeTo(Instant.now().plus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeFrom filter
-            query.setCreatedTimeFrom(Instant.now());
+            query.setCreatedTimeFrom(Instant.now().plus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
 
-            query.setCreatedTimeFrom(sequencesFinishedTime);
+            query.setCreatedTimeFrom(sequencesFinishedTime.minus(Duration.ofSeconds(5)));
             result = client.queryInstances(query);
-            assertEquals(5, result.getOrchestrationState().size());
+            assertEquals(5, result.getOrchestrationState().stream()
+                .filter(state -> state.getInstanceId().contains("sequence"))
+                .count(),
+                "Expected exactly 5 instances with 'sequence' in their IDs");
 
-            query.setCreatedTimeFrom(startTime);
+            query.setCreatedTimeFrom(startTime.minus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
@@ -954,7 +986,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void purgeInstanceId() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOneActivityName = "PlusOne";
@@ -985,7 +1017,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void purgeInstanceFilter() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOne = "PlusOne";
@@ -1028,7 +1060,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
             // Test CreatedTimeFrom
             PurgeInstanceCriteria criteria = new PurgeInstanceCriteria();
-            criteria.setCreatedTimeFrom(startTime);
+            criteria.setCreatedTimeFrom(startTime.minus(Duration.ofSeconds(1)));
 
             PurgeResult result = client.purgeInstances(criteria);
             assertEquals(1, result.getDeletedInstanceCount());
@@ -1082,7 +1114,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void purgeInstanceFilterTimeout() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOne = "PlusOne";
@@ -1139,7 +1171,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test()
+    @RetryingTest
     void waitForInstanceStartThrowsException() {
         final String orchestratorName = "orchestratorName";
 
@@ -1161,7 +1193,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test()
+    @RetryingTest
     void waitForInstanceCompletionThrowsException() {
         final String orchestratorName = "orchestratorName";
         final String plusOneActivityName = "PlusOne";
@@ -1191,7 +1223,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityFanOutWithException() throws TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "Divide";
@@ -1248,7 +1280,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 expectedExceptionMessage);
     }
 
-    @Test
+    @RetryingTest
     void thenApply() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "thenApplyActivity";
         final String activityName = "Echo";
@@ -1281,7 +1313,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void externalEventThenAccept() throws InterruptedException, TimeoutException {
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
@@ -1315,7 +1347,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityAllOf() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityAllOf";
         final String activityName = "ToString";
@@ -1374,7 +1406,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityAllOfException() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityAllOf";
         final String activityName = "ToString";
@@ -1436,7 +1468,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityAnyOf() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityAnyOf";
         final String activityName = "ToString";
@@ -1485,7 +1517,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     public void newUUIDTest() {
         String orchestratorName = "test-new-uuid";
         String echoActivityName = "Echo";

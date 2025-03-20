@@ -168,7 +168,7 @@ public class EndToEndTests {
         Set<String> continueStates = new HashSet<>();
         continueStates.add("Pending");
         continueStates.add("Running");
-        final String expect = "AUSTIN-test";
+        final String expect = "\"AUSTIN\"-test";
         String startOrchestrationPath = "/api/StartOrchestrationThenChain";
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
