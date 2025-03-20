@@ -68,21 +68,6 @@ jobs:
         name: Package
         path: client/build/libs
 
-    - name: Deploy Test Report to GitHub Pages
-      if: always()
-      run: |
-        mkdir -p gh-pages
-        cp -r client/build/reports/tests/integrationTest/* gh-pages/
-        touch gh-pages/.nojekyll  # Ensures GitHub Pages processes static files correctly
-
-    - name: Deploy to GitHub Pages
-      if: always()
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        branch: gh-pages
-        folder: gh-pages
-        clean: true  # Ensures old files are removed
-        
     - name: Fail the job if tests failed
       if: env.TEST_FAILED == 'true'
       run: exit 1
