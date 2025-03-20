@@ -44,11 +44,21 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew build
 
-      # TODO: Move the sidecar into a central image repository
-    - name: Initialize Durable Task Sidecar
-      run: docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d kaibocai/durabletask-sidecar:latest start --backend Emulator
+    - name: Checkout DurableTask Sidecar Repository
+      uses: actions/checkout@v4
+      with:
+        repository: microsoft/durabletask-sidecar
+        path: durabletask-sidecar
 
-      # wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
+    - name: Build DurableTask Sidecar Docker Image
+      run: |
+        docker build -t durabletask-sidecar:latest ./durabletask-sidecar
+
+    - name: Run DurableTask Sidecar Container
+      run: |
+        docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d durabletask-sidecar:latest start --backend Emulator
+
+    # wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
     - name: Wait for 10 seconds
       run: sleep 10
 
