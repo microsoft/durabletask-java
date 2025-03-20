@@ -20,8 +20,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      with:
-        submodules: true
 
     - name: Set up JDK 11
       uses: actions/setup-java@v2
@@ -59,13 +57,13 @@ jobs:
       continue-on-error: false
 
     - name: Archive test report
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Integration test report
         path: client/build/reports/tests/integrationTest
 
     - name: Upload JAR output
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Package
         path: client/build/libs
@@ -77,8 +75,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: true
 
       - name: Set up JDK 8
         uses: actions/setup-java@v2
@@ -90,7 +86,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
 
       - name: Publish to local
-        run: ./gradlew publishToMavenLocal -x sign
+        run: ./gradlew publishToMavenLocal
 
       - name: Build azure functions sample
         run: ./gradlew azureFunctionsPackage
@@ -106,7 +102,7 @@ jobs:
           arguments: endToEndTest
 
       - name: Archive test report
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Integration test report
           path: client/build/reports/tests/endToEndTest
@@ -118,8 +114,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: true
 
       - name: Set up JDK 8
         uses: actions/setup-java@v2
@@ -147,7 +141,7 @@ jobs:
           arguments: sampleTest
 
       - name: Archive test report
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Integration test report
           path: client/build/reports/tests/endToEndTest
