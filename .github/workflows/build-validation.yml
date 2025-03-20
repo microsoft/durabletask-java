@@ -53,8 +53,8 @@ jobs:
       run: sleep 10
 
     - name: Integration Tests with Gradle
-      run: ./gradlew integrationTest
-      continue-on-error: false
+      run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
+      continue-on-error: true
 
     - name: Archive test report
       uses: actions/upload-artifact@v4
@@ -67,6 +67,10 @@ jobs:
       with:
         name: Package
         path: client/build/libs
+
+    - name: Fail the job if tests failed
+      if: env.TEST_FAILED == 'true'
+      run: exit 1
 
   functions-e2e-tests:
 
