@@ -61,6 +61,12 @@ jobs:
 
     - name: Kill Durable Task Sidecar
       run: docker kill durabletask-sidecar
+    
+    - name: Upload Durable Task Sidecar Logs
+      uses: actions/upload-artifact@v4
+      with:
+        name: Durable Task Sidecar Logs
+        path: durabletask-sidecar.log
 
     - name: Archive test report
       uses: actions/upload-artifact@v4
