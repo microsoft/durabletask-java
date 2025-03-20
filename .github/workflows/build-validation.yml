@@ -46,14 +46,27 @@ jobs:
 
       # TODO: Move the sidecar into a central image repository
     - name: Initialize Durable Task Sidecar
-      run: docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d kaibocai/durabletask-sidecar:latest start --backend Emulator
+      run: docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d peterstone2019/durabletask-sidecar:latest start --backend Emulator
+
+    - name: Display Durable Task Sidecar Logs
+      run: nohup docker logs --since=0 durabletask-sidecar > durabletask-sidecar.log 2>&1 &
 
       # wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
     - name: Wait for 10 seconds
       run: sleep 10
 
     - name: Integration Tests with Gradle
-      run: ./gradlew integrationTest
+      run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
+      continue-on-error: true
+
+    - name: Kill Durable Task Sidecar
+      run: docker kill durabletask-sidecar
+    
+    - name: Upload Durable Task Sidecar Logs
+      uses: actions/upload-artifact@v4
+      with:
+        name: Durable Task Sidecar Logs
+        path: durabletask-sidecar.log
 
     - name: Archive test report
       uses: actions/upload-artifact@v4
@@ -66,6 +79,10 @@ jobs:
       with:
         name: Package
         path: client/build/libs
+
+    - name: Fail the job if tests failed
+      if: env.TEST_FAILED == 'true'
+      run: exit 1
 
   functions-e2e-tests:
 
@@ -124,7 +141,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
 
       - name: Publish to local
-        run: ./gradlew publishToMavenLocal -x sign
+        run: ./gradlew publishToMavenLocal
 
       - name: Build azure functions sample
         run: ./gradlew azureFunctionsPackage
