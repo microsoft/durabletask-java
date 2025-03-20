@@ -18,6 +18,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * sends invocation instructions to the DurableTaskWorker).
  */
 @Tag("integration")
+@ExtendWith(TestRetryExtension.class)
 public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
     // All tests that create a server should save it to this variable for proper shutdown
@@ -51,7 +53,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void emptyOrchestration() throws TimeoutException {
         final String orchestratorName = "EmptyOrchestration";
         final String input = "Hello " + Instant.now();
@@ -74,7 +76,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void singleTimer() throws IOException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         final Duration delay = Duration.ofSeconds(3);
@@ -97,7 +99,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void longTimer() throws TimeoutException {
         final String orchestratorName = "LongTimer";
         final Duration delay = Duration.ofSeconds(7);
@@ -141,7 +143,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void longTimerNonblocking() throws TimeoutException {
         final String orchestratorName = "ActivityAnyOf";
         final String externalEventActivityName = "externalEvent";
@@ -179,7 +181,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void longTimerNonblockingNoExternal() throws TimeoutException {
         final String orchestratorName = "ActivityAnyOf";
         final String externalEventActivityName = "externalEvent";
@@ -216,7 +218,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
 
-    @Test
+    @RetryingTest
     void longTimeStampTimer() throws TimeoutException {
         final String orchestratorName = "LongTimeStampTimer";
         final Duration delay = Duration.ofSeconds(7);
@@ -250,7 +252,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void singleTimeStampTimer() throws IOException, TimeoutException {
         final String orchestratorName = "SingleTimeStampTimer";
         final Duration delay = Duration.ofSeconds(3);
@@ -274,7 +276,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void isReplaying() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
@@ -310,7 +312,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void singleActivity() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "SingleActivity";
         final String activityName = "Echo";
@@ -342,7 +344,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void currentDateTimeUtc() throws IOException, TimeoutException {
         final String orchestratorName = "CurrentDateTimeUtc";
         final String echoActivityName = "Echo";
@@ -381,7 +383,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityChain() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityChain";
         final String plusOneActivityName = "PlusOne";
@@ -408,7 +410,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void subOrchestration() throws TimeoutException {
         final String orchestratorName = "SubOrchestration";
         DurableTaskGrpcWorker worker = this.createWorkerBuilder().addOrchestrator(orchestratorName, ctx -> {
@@ -429,7 +431,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void continueAsNew() throws TimeoutException {
         final String orchestratorName = "continueAsNew";
         final Duration delay = Duration.ofSeconds(0);
@@ -452,7 +454,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void continueAsNewWithExternalEvents() throws TimeoutException, InterruptedException{
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
@@ -483,7 +485,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void termination() throws TimeoutException {
         final String orchestratorName = "Termination";
         final Duration delay = Duration.ofSeconds(3);
@@ -505,7 +507,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @ParameterizedTest
+    @RetryingParameterizedTest
     @ValueSource(booleans = {true, false})
     void restartOrchestrationWithNewInstanceId(boolean restartWithNewInstanceId) throws TimeoutException {
         final String orchestratorName = "restart";
@@ -532,7 +534,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void restartOrchestrationThrowsException() {
         final String orchestratorName = "restart";
         final Duration delay = Duration.ofSeconds(3);
@@ -594,7 +596,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void terminateSuspendOrchestration() throws TimeoutException, InterruptedException {
         final String orchestratorName = "suspendResume";
         final String eventName = "MyEvent";
@@ -620,7 +622,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityFanOut() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";
@@ -662,7 +664,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void externalEvents() throws IOException, TimeoutException {
         final String orchestratorName = "ExternalEvents";
         final String eventName = "MyEvent";
@@ -701,7 +703,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @ParameterizedTest
+    @RetryingParameterizedTest
     @ValueSource(booleans = {true, false})
     void externalEventsWithTimeouts(boolean raiseEvent) throws IOException, TimeoutException {
         final String orchestratorName = "ExternalEventsWithTimeouts";
@@ -740,7 +742,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void setCustomStatus() throws TimeoutException {
         final String orchestratorName = "SetCustomStatus";
 
@@ -773,7 +775,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void clearCustomStatus() throws TimeoutException {
         final String orchestratorName = "ClearCustomStatus";
 
@@ -803,7 +805,7 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     // due to clock drift, client/worker and sidecar time are not exactly synchronized, this test needs to accommodate for client vs backend timestamps difference
-    @Test
+    @RetryingTest
     void multiInstanceQuery() throws TimeoutException{
         final String plusOne = "plusOne";
         final String waitForEvent = "waitForEvent";
@@ -984,7 +986,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void purgeInstanceId() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOneActivityName = "PlusOne";
@@ -1015,7 +1017,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void purgeInstanceFilter() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOne = "PlusOne";
@@ -1112,7 +1114,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void purgeInstanceFilterTimeout() throws TimeoutException {
         final String orchestratorName = "PurgeInstance";
         final String plusOne = "PlusOne";
@@ -1169,7 +1171,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test()
+    @RetryingTest
     void waitForInstanceStartThrowsException() {
         final String orchestratorName = "orchestratorName";
 
@@ -1191,7 +1193,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test()
+    @RetryingTest
     void waitForInstanceCompletionThrowsException() {
         final String orchestratorName = "orchestratorName";
         final String plusOneActivityName = "PlusOne";
@@ -1221,7 +1223,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityFanOutWithException() throws TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "Divide";
@@ -1278,7 +1280,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 expectedExceptionMessage);
     }
 
-    @Test
+    @RetryingTest
     void thenApply() throws IOException, InterruptedException, TimeoutException {
         final String orchestratorName = "thenApplyActivity";
         final String activityName = "Echo";
@@ -1311,7 +1313,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void externalEventThenAccept() throws InterruptedException, TimeoutException {
         final String orchestratorName = "continueAsNewWithExternalEvents";
         final String eventName = "MyEvent";
@@ -1345,7 +1347,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityAllOf() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityAllOf";
         final String activityName = "ToString";
@@ -1404,7 +1406,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityAllOfException() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityAllOf";
         final String activityName = "ToString";
@@ -1466,7 +1468,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     void activityAnyOf() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityAnyOf";
         final String activityName = "ToString";
@@ -1515,7 +1517,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @RetryingTest
     public void newUUIDTest() {
         String orchestratorName = "test-new-uuid";
         String echoActivityName = "Echo";
