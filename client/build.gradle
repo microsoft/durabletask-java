@@ -51,17 +51,17 @@ compileTestJava {
 
 task downloadProtoFiles {
     ext.branch = project.hasProperty('protoBranch') ? project.protoBranch : 'main'
-    
+
     doLast {
         def protoDir = file("${rootProject.projectDir}/internal/durabletask-protobuf/protos")
         protoDir.mkdirs()
-        
+
         // Download the proto file
         new URL("https://raw.githubusercontent.com/microsoft/durabletask-protobuf/${ext.branch}/protos/orchestrator_service.proto")
             .withInputStream { i -> 
                 new File(protoDir, 'orchestrator_service.proto').withOutputStream { it << i }
             }
-            
+
         // Get and save the commit hash
         def commitHashFile = new File("${rootProject.projectDir}/internal/durabletask-protobuf/PROTO_SOURCE_COMMIT_HASH")
         def commitApiUrl = new URL("https://api.github.com/repos/microsoft/durabletask-protobuf/commits?path=protos/orchestrator_service.proto&sha=${ext.branch}&per_page=1")
