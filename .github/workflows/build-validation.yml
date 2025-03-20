@@ -42,7 +42,8 @@ jobs:
       uses: gradle/gradle-build-action@v2
 
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build --stacktrace
+    
 
       # TODO: Move the sidecar into a central image repository
     - name: Initialize Durable Task Sidecar
