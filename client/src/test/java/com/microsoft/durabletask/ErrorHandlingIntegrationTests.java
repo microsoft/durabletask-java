@@ -24,6 +24,12 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
+    @BeforeEach
+    private void startUp() {
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        client.deleteTaskHub();
+    }
+
     @Test
     void orchestratorException() throws TimeoutException {
         final String orchestratorName = "OrchestratorWithException";
