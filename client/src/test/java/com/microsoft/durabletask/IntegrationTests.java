@@ -15,6 +15,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,6 +36,13 @@ public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
     // All tests that create a server should save it to this variable for proper shutdown
     private DurableTaskGrpcWorker server;
+
+    // Before whole test suite, delete the task hub
+    @BeforeEach
+    private void startUp() {
+        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        client.deleteTaskHub();
+    }
 
     @AfterEach
     private void shutdown() throws InterruptedException {
@@ -793,6 +801,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
+    // due to clock drift, client/worker and sidecar time are not exactly synchronized, this test needs to accommodate for client vs backend timestamps difference
     @Test
     void multiInstanceQuery() throws TimeoutException{
         final String plusOne = "plusOne";
@@ -830,6 +839,11 @@ public class IntegrationTests extends IntegrationTestBase {
                 }
             });
 
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+            }
+
             Instant sequencesFinishedTime = Instant.now();
 
             IntStream.range(0, 5).mapToObj(i -> {
@@ -853,28 +867,43 @@ public class IntegrationTests extends IntegrationTestBase {
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeTo filter
-            query.setCreatedTimeTo(startTime);
+            query.setCreatedTimeTo(startTime.minus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
-            assertTrue(result.getOrchestrationState().isEmpty());
+            assertTrue(result.getOrchestrationState().isEmpty(), 
+                "Result should be empty but found " + result.getOrchestrationState().size() + " instances: " + 
+                "Start time: " + startTime + ", " +
+                result.getOrchestrationState().stream()
+                    .map(state -> String.format("\nID: %s, Status: %s, Created: %s", 
+                        state.getInstanceId(), 
+                        state.getRuntimeStatus(), 
+                        state.getCreatedAt()))
+                    .collect(Collectors.joining(", ")));
 
             query.setCreatedTimeTo(sequencesFinishedTime);
             result = client.queryInstances(query);
-            assertEquals(5, result.getOrchestrationState().size());
+            // Verify all returned instances contain "sequence" in their IDs
+            assertEquals(5, result.getOrchestrationState().stream()
+                .filter(state -> state.getInstanceId().contains("sequence"))
+                .count(),
+                "Expected exactly 5 instances with 'sequence' in their IDs");
 
-            query.setCreatedTimeTo(Instant.now());
+            query.setCreatedTimeTo(Instant.now().plus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
             // Test CreatedTimeFrom filter
-            query.setCreatedTimeFrom(Instant.now());
+            query.setCreatedTimeFrom(Instant.now().plus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
 
-            query.setCreatedTimeFrom(sequencesFinishedTime);
+            query.setCreatedTimeFrom(sequencesFinishedTime.minus(Duration.ofSeconds(3)));
             result = client.queryInstances(query);
-            assertEquals(5, result.getOrchestrationState().size());
+            assertEquals(5, result.getOrchestrationState().stream()
+                .filter(state -> state.getInstanceId().contains("sequence"))
+                .count(),
+                "Expected exactly 5 instances with 'sequence' in their IDs");
 
-            query.setCreatedTimeFrom(startTime);
+            query.setCreatedTimeFrom(startTime.minus(Duration.ofSeconds(1)));
             result = client.queryInstances(query);
             assertEquals(10, result.getOrchestrationState().size());
 
@@ -1028,7 +1057,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
             // Test CreatedTimeFrom
             PurgeInstanceCriteria criteria = new PurgeInstanceCriteria();
-            criteria.setCreatedTimeFrom(startTime);
+            criteria.setCreatedTimeFrom(startTime.minus(Duration.ofSeconds(1)));
 
             PurgeResult result = client.purgeInstances(criteria);
             assertEquals(1, result.getDeletedInstanceCount());
