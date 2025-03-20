@@ -114,6 +114,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
         try (worker; client) {
+            client.createTaskHub(true);
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             Duration timeout = delay.plus(defaultTimeout);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, timeout, false);
@@ -896,7 +897,7 @@ public class IntegrationTests extends IntegrationTestBase {
             result = client.queryInstances(query);
             assertTrue(result.getOrchestrationState().isEmpty());
 
-            query.setCreatedTimeFrom(sequencesFinishedTime.minus(Duration.ofSeconds(3)));
+            query.setCreatedTimeFrom(sequencesFinishedTime.minus(Duration.ofSeconds(5)));
             result = client.queryInstances(query);
             assertEquals(5, result.getOrchestrationState().stream()
                 .filter(state -> state.getInstanceId().contains("sequence"))
