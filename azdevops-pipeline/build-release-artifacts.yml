@@ -10,7 +10,6 @@ pool:
 
 steps:
 - checkout: self
-  submodules: true
 
 - task: Gradle@3
   inputs:
