@@ -21,10 +21,15 @@ public class DurableTaskSchedulerConnectionString {
      * @throws IllegalArgumentException If the connection string is invalid or missing required properties.
      */
     public DurableTaskSchedulerConnectionString(String connectionString) {
-        if (connectionString == null || connectionString.isEmpty()) {
+        if (connectionString == null || connectionString.trim().isEmpty()) {
             throw new IllegalArgumentException("connectionString must not be null or empty");
         }
         this.properties = parseConnectionString(connectionString);
+        
+        // Validate required properties
+        getRequiredValue("Endpoint");
+        getRequiredValue("Authentication");
+        getRequiredValue("TaskHub");
     }
 
     /**
