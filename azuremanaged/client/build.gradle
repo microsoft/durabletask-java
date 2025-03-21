@@ -22,7 +22,7 @@ def azureIdentityVersion = '1.11.1'
 def durabletaskClientVersion = '1.5.0'
 // When build on local, you need to set this value to your local jdk11 directory.
 // Java11 is used to compile and run all the tests.
-def PATH_TO_TEST_JAVA_RUNTIME = "$System.env.JDK_11"
+def PATH_TO_TEST_JAVA_RUNTIME = System.env.JDK_11 ?: System.getProperty("java.home")
 
 repositories {
     mavenCentral()
