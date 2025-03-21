@@ -4,8 +4,8 @@ package io.durabletask.samples;
 
 import com.azure.core.credential.TokenCredential;
 import com.microsoft.durabletask.*;
-import com.microsoft.durabletask.client.azuremanaged.DurableTaskSchedulerClientExtensions;
-import com.microsoft.durabletask.worker.azuremanaged.DurableTaskSchedulerWorkerExtensions;
+import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerClientExtensions;
+import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerWorkerExtensions;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.*;
