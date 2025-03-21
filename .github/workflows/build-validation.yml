@@ -45,7 +45,9 @@ jobs:
       run: ./gradlew build -x test
     
     - name: Run Unit Tests with Gradle
-      run: ./gradlew clean test || echo "UNIT_TEST_FAILED=true" >> $GITHUB_ENV
+      run: |
+        export JAVA_HOME=$JDK_11
+        ./gradlew clean test || echo "UNIT_TEST_FAILED=true" >> $GITHUB_ENV
       continue-on-error: true
 
     - name: Upload test reports if tests failed
