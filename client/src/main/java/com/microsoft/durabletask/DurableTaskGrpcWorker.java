@@ -177,6 +177,10 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         }
 
                         this.sidecarClient.completeActivityTask(responseBuilder.build());
+                    } 
+                    else if (requestType == RequestCase.HEALTHPING)
+                    {
+                        // No-op
                     } else {
                         logger.log(Level.WARNING, "Received and dropped an unknown '{0}' work-item from the sidecar.", requestType);
                     }

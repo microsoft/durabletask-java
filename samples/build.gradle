@@ -15,10 +15,11 @@ application {
 }
 
 dependencies {
-    implementation project(':azuremanaged:client')
-    implementation project(':azuremanaged:worker')
-    
-    implementation "com.microsoft:durabletask-client:${durabletaskClientVersion}"
+    implementation project(':client')
+    implementation project(':azuremanaged:dtclient')
+    implementation project(':azuremanaged:dtworker')
+
+    // implementation "com.microsoft:durabletask-client:${durabletaskClientVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation platform("org.springframework.boot:spring-boot-dependencies:2.5.2")
     implementation 'org.springframework.boot:spring-boot-starter'

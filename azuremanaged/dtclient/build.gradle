@@ -29,12 +29,13 @@ repositories {
 }
 
 dependencies {
+    implementation project(':client')
     implementation project(':azuremanaged:shared')
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
 
-    implementation "com.microsoft:durabletask-client:${durabletaskClientVersion}"
+    // implementation "com.microsoft:durabletask-client:${durabletaskClientVersion}"
     implementation "com.azure:azure-core:${azureCoreVersion}"
     implementation "com.azure:azure-identity:${azureIdentityVersion}"
 
