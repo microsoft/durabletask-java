@@ -556,7 +556,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
     }
 
-//    @Test
+   @Test
     void suspendResumeOrchestration() throws TimeoutException, InterruptedException {
         final String orchestratorName = "suspend";
         final String eventName = "MyEvent";

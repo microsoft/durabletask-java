@@ -42,7 +42,25 @@ jobs:
       uses: gradle/gradle-build-action@v2
 
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build -x test
+    
+    - name: Run Unit Tests with Gradle
+      run: |
+        export JAVA_HOME=$JDK_11
+        ./gradlew clean test || echo "UNIT_TEST_FAILED=true" >> $GITHUB_ENV
+      continue-on-error: true
+
+    - name: Upload test reports if tests failed
+      if: env.UNIT_TEST_FAILED == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: Unit Test Reports
+        path: '**/build/reports/tests/test'
+        if-no-files-found: ignore  # Prevents errors if no reports exist
+    
+    - name: Fail the job if unit tests failed
+      if: env.UNIT_TEST_FAILED == 'true'
+      run: exit 1
 
       # TODO: Move the sidecar into a central image repository
     - name: Initialize Durable Task Sidecar
