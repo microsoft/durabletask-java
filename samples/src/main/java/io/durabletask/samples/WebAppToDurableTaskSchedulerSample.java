@@ -190,18 +190,8 @@ class OrderController {
             orderJson
         );
 
-        // Wait for the orchestration to complete with a timeout
-        OrchestrationMetadata metadata = client.waitForInstanceCompletion(
-            instanceId,
-            Duration.ofSeconds(30),
-            true
-        );
-
-        if (metadata.getRuntimeStatus() == OrchestrationRuntimeStatus.COMPLETED) {
-            return metadata.readOutputAs(String.class);
-        } else {
-            return "{\"status\": \"" + metadata.getRuntimeStatus() + "\"}";
-        }
+        // Return the instance ID immediately without waiting for completion
+        return "{\"instanceId\": \"" + instanceId + "\"}";
     }
 
     @GetMapping("/{instanceId}")
