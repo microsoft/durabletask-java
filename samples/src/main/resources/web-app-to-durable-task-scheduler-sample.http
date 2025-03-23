@@ -1,5 +1,5 @@
 ### Variables
-@instanceId = dafc6c87-964b-4e99-8aaf-a5d1061de890
+@instanceId = c32752e9-ae3e-42f7-9dc3-0e91277b1286
 
 ### Create a new order
 POST http://localhost:8082/api/orders

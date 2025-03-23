@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 package io.durabletask.samples;
 
-import com.azure.core.credential.TokenCredential;
 import com.microsoft.durabletask.*;
 import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerClientExtensions;
 import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerWorkerExtensions;
@@ -14,8 +13,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import java.time.Duration;
-import com.azure.identity.DefaultAzureCredentialBuilder;
 
 @ConfigurationProperties(prefix = "durable.task")
 @lombok.Data
@@ -23,7 +20,7 @@ class DurableTaskProperties {
     private String endpoint;
     private String taskHubName;
     private String resourceId = "https://durabletask.io";
-    private boolean allowInsecureCredentials = false;
+    private String connectionString;
 }
 
 /**
@@ -47,22 +44,13 @@ public class WebAppToDurableTaskSchedulerSample {
 
     @Configuration
     static class DurableTaskConfig {
-
-        @Bean
-        public TokenCredential tokenCredential() {
-            return new DefaultAzureCredentialBuilder().build();
-        }
-
         @Bean
         public DurableTaskGrpcWorker durableTaskWorker(
-                DurableTaskProperties properties,
-                TokenCredential tokenCredential) {
+                DurableTaskProperties properties) {
 
             // Create worker using Azure-managed extensions
             DurableTaskGrpcWorkerBuilder workerBuilder = DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(
-                properties.getEndpoint(),
-                properties.getTaskHubName(),
-                tokenCredential);
+                properties.getConnectionString());
 
             // Add orchestrations using the factory pattern
             workerBuilder.addOrchestration(new TaskOrchestrationFactory() {
@@ -122,7 +110,6 @@ public class WebAppToDurableTaskSchedulerSample {
                 @Override
                 public TaskActivity create() {
                     return ctx -> {
-                        String orderJson = ctx.getInput(String.class);
                         // Simulate payment processing
                         sleep(1000); // Simulate processing time
                         return "{\"success\":true, \"transactionId\":\"TXN" + System.currentTimeMillis() + "\"}";
@@ -137,7 +124,6 @@ public class WebAppToDurableTaskSchedulerSample {
                 @Override
                 public TaskActivity create() {
                     return ctx -> {
-                        String orderJson = ctx.getInput(String.class);
                         // Simulate shipping process
                         sleep(1000); // Simulate processing time
                         return "{\"trackingNumber\":\"TRACK" + System.currentTimeMillis() + "\"}";
@@ -150,14 +136,10 @@ public class WebAppToDurableTaskSchedulerSample {
 
         @Bean
         public DurableTaskClient durableTaskClient(
-                DurableTaskProperties properties,
-                TokenCredential tokenCredential) {
+                DurableTaskProperties properties) {
 
             // Create client using Azure-managed extensions
-            return DurableTaskSchedulerClientExtensions.createClientBuilder(
-                properties.getEndpoint(),
-                properties.getTaskHubName(),
-                tokenCredential).build();
+            return DurableTaskSchedulerClientExtensions.createClientBuilder(properties.getConnectionString()).build();
         }
     }
 

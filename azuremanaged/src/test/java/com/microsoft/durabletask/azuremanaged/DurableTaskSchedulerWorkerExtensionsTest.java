@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -38,7 +37,7 @@ public class DurableTaskSchedulerWorkerExtensionsTest {
         
         // Act
         DurableTaskSchedulerWorkerExtensions.useDurableTaskScheduler(
-            mockBuilder, VALID_CONNECTION_STRING, mockCredential);
+            mockBuilder, VALID_CONNECTION_STRING);
         
         // Assert
         verify(mockBuilder).grpcChannel(any(Channel.class));
@@ -50,7 +49,7 @@ public class DurableTaskSchedulerWorkerExtensionsTest {
         // Act & Assert
         assertThrows(NullPointerException.class, 
             () -> DurableTaskSchedulerWorkerExtensions.useDurableTaskScheduler(
-                null, VALID_CONNECTION_STRING, mockCredential));
+                null, VALID_CONNECTION_STRING));
     }
     
     @Test
@@ -59,7 +58,7 @@ public class DurableTaskSchedulerWorkerExtensionsTest {
         // Act & Assert
         assertThrows(NullPointerException.class, 
             () -> DurableTaskSchedulerWorkerExtensions.useDurableTaskScheduler(
-                mockBuilder, null, mockCredential));
+                mockBuilder, null));
     }
     
     @Test
@@ -108,7 +107,7 @@ public class DurableTaskSchedulerWorkerExtensionsTest {
     public void createWorkerBuilder_WithConnectionString_CreatesValidBuilder() {
         // Act
         DurableTaskGrpcWorkerBuilder result = 
-            DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(VALID_CONNECTION_STRING, mockCredential);
+            DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(VALID_CONNECTION_STRING);
         
         // Assert
         assertNotNull(result);
@@ -119,7 +118,7 @@ public class DurableTaskSchedulerWorkerExtensionsTest {
     public void createWorkerBuilder_WithConnectionString_ThrowsForNullConnectionString() {
         // Act & Assert
         assertThrows(NullPointerException.class, 
-            () -> DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(null, mockCredential));
+            () -> DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(null));
     }
     
     @Test

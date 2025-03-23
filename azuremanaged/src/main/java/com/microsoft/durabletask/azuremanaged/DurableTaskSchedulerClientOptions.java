@@ -6,7 +6,6 @@ package com.microsoft.durabletask.azuremanaged;
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.credential.TokenRequestContext;
 import io.grpc.*;
-import javax.annotation.Nullable;
 import java.net.MalformedURLException;
 import java.time.Duration;
 import java.util.Objects;
@@ -34,12 +33,11 @@ public class DurableTaskSchedulerClientOptions {
      * Creates a new instance of DurableTaskSchedulerClientOptions from a connection string.
      * 
      * @param connectionString The connection string to parse.
-     * @param credential The credential to use for authentication. It is nullable for anonymous access.
      * @return A new DurableTaskSchedulerClientOptions object.
      */
-    public static DurableTaskSchedulerClientOptions fromConnectionString(String connectionString, @Nullable TokenCredential credential) {
+    public static DurableTaskSchedulerClientOptions fromConnectionString(String connectionString) {
         DurableTaskSchedulerConnectionString parsedConnectionString = new DurableTaskSchedulerConnectionString(connectionString);
-        return fromConnectionString(parsedConnectionString, credential);
+        return fromConnectionString(parsedConnectionString);
     }
 
     /**
@@ -48,13 +46,13 @@ public class DurableTaskSchedulerClientOptions {
      * @param connectionString The parsed connection string.
      * @return A new DurableTaskSchedulerClientOptions object.
      */
-    static DurableTaskSchedulerClientOptions fromConnectionString(DurableTaskSchedulerConnectionString connectionString, @Nullable TokenCredential credential) {
+    static DurableTaskSchedulerClientOptions fromConnectionString(DurableTaskSchedulerConnectionString connectionString) {
         // TODO: Parse different credential types from connection string
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
         options.setEndpointAddress(connectionString.getEndpoint());
         options.setTaskHubName(connectionString.getTaskHubName());
-        options.setCredential(credential);
-        options.setAllowInsecureCredentials(credential == null);
+        options.setCredential(connectionString.getCredential());
+        options.setAllowInsecureCredentials(options.getCredential() == null);
         return options;
     }
 
@@ -176,16 +174,6 @@ public class DurableTaskSchedulerClientOptions {
     public DurableTaskSchedulerClientOptions setTokenRefreshMargin(Duration tokenRefreshMargin) {
         this.tokenRefreshMargin = tokenRefreshMargin;
         return this;
-    }
-
-    /**
-     * Validates that the options are properly configured.
-     * 
-     * @throws IllegalArgumentException If the options are not properly configured.
-     */
-    public void validate() {
-        Objects.requireNonNull(endpointAddress, "endpointAddress must not be null");
-        Objects.requireNonNull(taskHubName, "taskHubName must not be null");
     }
 
     /**

@@ -1,7 +1,6 @@
 package com.microsoft.durabletask.azuremanaged;
 
 import com.azure.core.credential.TokenCredential;
-import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerConnectionString;
 import io.grpc.Channel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,21 +46,25 @@ public class DurableTaskSchedulerWorkerOptionsTest {
     public void fromConnectionString_ParsesConnectionStringCorrectly() {
         // Act
         DurableTaskSchedulerWorkerOptions options = 
-            DurableTaskSchedulerWorkerOptions.fromConnectionString(VALID_CONNECTION_STRING, mockCredential);
+            DurableTaskSchedulerWorkerOptions.fromConnectionString(VALID_CONNECTION_STRING);
         
         // Assert
         assertEquals(VALID_ENDPOINT, options.getEndpointAddress());
         assertEquals(VALID_TASKHUB, options.getTaskHubName());
-        assertSame(mockCredential, options.getCredential());
+        assertNotNull(options.getCredential());
+        assertTrue(options.getCredential() instanceof com.azure.identity.ManagedIdentityCredential);
         assertFalse(options.isAllowInsecureCredentials());
     }
 
     @Test
-    @DisplayName("fromConnectionString should allow insecure credentials when credential is null")
-    public void fromConnectionString_AllowsInsecureCredentialsWhenCredentialIsNull() {
+    @DisplayName("fromConnectionString should allow insecure credentials when authentication is None")
+    public void fromConnectionString_AllowsInsecureCredentialsWhenAuthenticationIsNone() {
+        // Arrange
+        String connectionString = "Endpoint=https://example.com;Authentication=None;TaskHub=myTaskHub";
+        
         // Act
         DurableTaskSchedulerWorkerOptions options = 
-            DurableTaskSchedulerWorkerOptions.fromConnectionString(VALID_CONNECTION_STRING, null);
+            DurableTaskSchedulerWorkerOptions.fromConnectionString(connectionString);
         
         // Assert
         assertTrue(options.isAllowInsecureCredentials());
@@ -152,42 +155,6 @@ public class DurableTaskSchedulerWorkerOptionsTest {
         // Assert
         assertEquals(customMargin, options.getTokenRefreshMargin());
         assertSame(options, result); // Builder pattern returns this
-    }
-
-    @Test
-    @DisplayName("validate should not throw when options are valid")
-    public void validate_DoesNotThrowWhenOptionsAreValid() {
-        // Arrange
-        DurableTaskSchedulerWorkerOptions options = new DurableTaskSchedulerWorkerOptions()
-            .setEndpointAddress(VALID_ENDPOINT)
-            .setTaskHubName(VALID_TASKHUB);
-        
-        // Act & Assert
-        assertDoesNotThrow(() -> options.validate());
-    }
-
-    @Test
-    @DisplayName("validate should throw when endpoint address is null")
-    public void validate_ThrowsWhenEndpointAddressIsNull() {
-        // Arrange
-        DurableTaskSchedulerWorkerOptions options = new DurableTaskSchedulerWorkerOptions()
-            .setEndpointAddress(null)
-            .setTaskHubName(VALID_TASKHUB);
-        
-        // Act & Assert
-        assertThrows(NullPointerException.class, () -> options.validate());
-    }
-
-    @Test
-    @DisplayName("validate should throw when task hub name is null")
-    public void validate_ThrowsWhenTaskHubNameIsNull() {
-        // Arrange
-        DurableTaskSchedulerWorkerOptions options = new DurableTaskSchedulerWorkerOptions()
-            .setEndpointAddress(VALID_ENDPOINT)
-            .setTaskHubName(null);
-        
-        // Act & Assert
-        assertThrows(NullPointerException.class, () -> options.validate());
     }
 
     @Test

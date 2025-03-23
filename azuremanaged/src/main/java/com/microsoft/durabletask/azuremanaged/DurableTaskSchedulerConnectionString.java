@@ -8,6 +8,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
+import com.azure.core.credential.TokenCredential;
+import com.azure.identity.AzureCliCredentialBuilder;
+import com.azure.identity.AzurePowerShellCredentialBuilder;
+import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.azure.identity.EnvironmentCredentialBuilder;
+import com.azure.identity.ManagedIdentityCredentialBuilder;
+import com.azure.identity.WorkloadIdentityCredentialBuilder;
+
 /**
  * Represents the constituent parts of a connection string for a Durable Task Scheduler service.
  */
@@ -27,9 +37,9 @@ public class DurableTaskSchedulerConnectionString {
         this.properties = parseConnectionString(connectionString);
         
         // Validate required properties
-        getRequiredValue("Endpoint");
-        getRequiredValue("Authentication");
-        getRequiredValue("TaskHub");
+        this.getAuthentication();
+        this.getTaskHubName();
+        this.getEndpoint();
     }
 
     /**
@@ -126,5 +136,55 @@ public class DurableTaskSchedulerConnectionString {
         }
         
         return properties;
+    }
+
+    /**
+     * Gets a TokenCredential based on the authentication type specified in the connection string.
+     * 
+     * @return A TokenCredential instance based on the specified authentication type, or null if authentication type is "none".
+     * @throws IllegalArgumentException If the connection string contains an unsupported authentication type.
+     */
+    public @Nullable TokenCredential getCredential() {
+        String authType = getAuthentication();
+        
+        // Parse the supported auth types in a case-insensitive way
+        switch (authType.toLowerCase().trim()) {
+            case "defaultazure":
+                return new DefaultAzureCredentialBuilder().build();
+            case "managedidentity":
+                return new ManagedIdentityCredentialBuilder().clientId(getClientId()).build();
+            case "workloadidentity":
+                WorkloadIdentityCredentialBuilder builder = new WorkloadIdentityCredentialBuilder();
+                if (getClientId() != null && !getClientId().isEmpty()) {
+                    builder.clientId(getClientId());
+                }
+                
+                if (getTenantId() != null && !getTenantId().isEmpty()) {
+                    builder.tenantId(getTenantId());
+                }
+                                
+                if (getTokenFilePath() != null && !getTokenFilePath().isEmpty()) {
+                    builder.tokenFilePath(getTokenFilePath());
+                }
+
+                if (getAdditionallyAllowedTenants() != null) {
+                    for (String tenant : getAdditionallyAllowedTenants()) {
+                        builder.additionallyAllowedTenants(tenant);
+                    }
+                }
+
+                return builder.build();
+            case "environment":
+                return new EnvironmentCredentialBuilder().build();
+            case "azurecli":
+                return new AzureCliCredentialBuilder().build();
+            case "azurepowershell":
+                return new AzurePowerShellCredentialBuilder().build();
+            case "none":
+                return null;
+            default:
+                throw new IllegalArgumentException(
+                    String.format("The connection string contains an unsupported authentication type '%s'.", authType));
+        }
     }
 } 

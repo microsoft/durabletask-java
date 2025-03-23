@@ -1,5 +1,7 @@
 package com.microsoft.durabletask.azuremanaged;
 
+import com.azure.core.credential.TokenCredential;
+import com.azure.identity.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -168,5 +170,58 @@ public class DurableTaskSchedulerConnectionStringTest {
         
         // Assert
         assertEquals("/path/to/token", parsedString.getTokenFilePath());
+    }
+
+    @Test
+    @DisplayName("getCredential should handle supported authentication types")
+    public void getCredential_HandlesSupportedAuthTypes() {
+        // Arrange
+        String connectionString = String.format(
+            "Endpoint=%s;Authentication=%s;TaskHub=%s",
+            "https://example.com", "ManagedIdentity", "myTaskHub");
+
+        // Act
+        DurableTaskSchedulerConnectionString result = 
+            new DurableTaskSchedulerConnectionString(connectionString);
+
+        // Assert
+        TokenCredential credential = result.getCredential();
+        assertNotNull(credential);
+        
+        // Verify the correct credential type is returned
+        assertTrue(credential instanceof ManagedIdentityCredential);
+    }
+
+    @Test
+    @DisplayName("getCredential should throw for unsupported authentication type")
+    public void getCredential_ThrowsForUnsupportedAuthType() {
+        // Arrange
+        String connectionString = String.format(
+            "Endpoint=%s;Authentication=%s;TaskHub=%s",
+            "https://example.com", "UnsupportedType", "myTaskHub");
+        DurableTaskSchedulerConnectionString result = 
+            new DurableTaskSchedulerConnectionString(connectionString);
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, result::getCredential);
+    }
+
+    @Test
+    @DisplayName("getCredential should configure WorkloadIdentity with all properties")
+    public void getCredential_ConfiguresWorkloadIdentityWithAllProperties() {
+        // Arrange
+        String connectionString = String.format(
+            "Endpoint=%s;Authentication=%s;TaskHub=%s;ClientID=%s;TenantId=%s;TokenFilePath=%s;AdditionallyAllowedTenants=%s",
+            "https://example.com", "WorkloadIdentity", "myTaskHub", "client-id-123", "tenant-id-123", 
+            "/path/to/token", "tenant1,tenant2,tenant3");
+
+        // Act
+        DurableTaskSchedulerConnectionString result = 
+            new DurableTaskSchedulerConnectionString(connectionString);
+        TokenCredential credential = result.getCredential();
+
+        // Assert
+        assertNotNull(credential);
+        assertTrue(credential instanceof WorkloadIdentityCredential);
     }
 } 

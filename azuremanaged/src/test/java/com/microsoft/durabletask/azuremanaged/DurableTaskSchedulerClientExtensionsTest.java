@@ -37,7 +37,7 @@ public class DurableTaskSchedulerClientExtensionsTest {
         
         // Act
         DurableTaskSchedulerClientExtensions.useDurableTaskScheduler(
-            mockBuilder, VALID_CONNECTION_STRING, mockCredential);
+            mockBuilder, VALID_CONNECTION_STRING);
         
         // Assert
         verify(mockBuilder).grpcChannel(any(Channel.class));
@@ -49,7 +49,7 @@ public class DurableTaskSchedulerClientExtensionsTest {
         // Act & Assert
         assertThrows(NullPointerException.class, 
             () -> DurableTaskSchedulerClientExtensions.useDurableTaskScheduler(
-                null, VALID_CONNECTION_STRING, mockCredential));
+                null, VALID_CONNECTION_STRING));
     }
     
     @Test
@@ -58,7 +58,7 @@ public class DurableTaskSchedulerClientExtensionsTest {
         // Act & Assert
         assertThrows(NullPointerException.class, 
             () -> DurableTaskSchedulerClientExtensions.useDurableTaskScheduler(
-                mockBuilder, null, mockCredential));
+                mockBuilder, null));
     }
     
     @Test
@@ -107,7 +107,7 @@ public class DurableTaskSchedulerClientExtensionsTest {
     public void createClientBuilder_WithConnectionString_CreatesValidBuilder() {
         // Act
         DurableTaskGrpcClientBuilder result = 
-            DurableTaskSchedulerClientExtensions.createClientBuilder(VALID_CONNECTION_STRING, mockCredential);
+            DurableTaskSchedulerClientExtensions.createClientBuilder(VALID_CONNECTION_STRING);
         
         // Assert
         assertNotNull(result);
@@ -118,7 +118,7 @@ public class DurableTaskSchedulerClientExtensionsTest {
     public void createClientBuilder_WithConnectionString_ThrowsForNullConnectionString() {
         // Act & Assert
         assertThrows(NullPointerException.class, 
-            () -> DurableTaskSchedulerClientExtensions.createClientBuilder(null, mockCredential));
+            () -> DurableTaskSchedulerClientExtensions.createClientBuilder(null));
     }
     
     @Test

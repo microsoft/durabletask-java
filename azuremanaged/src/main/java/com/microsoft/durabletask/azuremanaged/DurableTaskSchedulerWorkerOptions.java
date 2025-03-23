@@ -21,7 +21,6 @@ import java.time.Duration;
 import java.util.Objects;
 import java.net.URL;
 import java.net.MalformedURLException;
-import javax.annotation.Nullable;
 
 /**
  * Options for configuring the Durable Task Scheduler worker.
@@ -45,27 +44,25 @@ public class DurableTaskSchedulerWorkerOptions {
      * Creates a new instance of DurableTaskSchedulerWorkerOptions from a connection string.
      * 
      * @param connectionString The connection string to parse.
-     * @param credential The token credential for authentication, or null to use connection string credentials.
      * @return A new DurableTaskSchedulerWorkerOptions object.
      */
-    public static DurableTaskSchedulerWorkerOptions fromConnectionString(String connectionString, @Nullable TokenCredential credential) {
+    public static DurableTaskSchedulerWorkerOptions fromConnectionString(String connectionString) {
         DurableTaskSchedulerConnectionString parsedConnectionString = new DurableTaskSchedulerConnectionString(connectionString);
-        return fromConnectionString(parsedConnectionString, credential);
+        return fromConnectionString(parsedConnectionString);
     }
 
     /**
      * Creates a new instance of DurableTaskSchedulerWorkerOptions from a parsed connection string.
      * 
      * @param connectionString The parsed connection string.
-     * @param credential The token credential for authentication, or null to use connection string credentials.
      * @return A new DurableTaskSchedulerWorkerOptions object.
      */
-    static DurableTaskSchedulerWorkerOptions fromConnectionString(DurableTaskSchedulerConnectionString connectionString, @Nullable TokenCredential credential) {
+    static DurableTaskSchedulerWorkerOptions fromConnectionString(DurableTaskSchedulerConnectionString connectionString) {
         DurableTaskSchedulerWorkerOptions options = new DurableTaskSchedulerWorkerOptions();
         options.setEndpointAddress(connectionString.getEndpoint());
         options.setTaskHubName(connectionString.getTaskHubName());
-        options.setCredential(credential);
-        options.setAllowInsecureCredentials(credential == null);
+        options.setCredential(connectionString.getCredential());
+        options.setAllowInsecureCredentials(options.getCredential() == null);
         return options;
     }
 
@@ -187,16 +184,6 @@ public class DurableTaskSchedulerWorkerOptions {
     public DurableTaskSchedulerWorkerOptions setTokenRefreshMargin(Duration tokenRefreshMargin) {
         this.tokenRefreshMargin = tokenRefreshMargin;
         return this;
-    }
-
-    /**
-     * Validates that the options are properly configured.
-     * 
-     * @throws IllegalArgumentException If the options are not properly configured.
-     */
-    public void validate() {
-        Objects.requireNonNull(endpointAddress, "endpointAddress must not be null");
-        Objects.requireNonNull(taskHubName, "taskHubName must not be null");
     }
 
     /**

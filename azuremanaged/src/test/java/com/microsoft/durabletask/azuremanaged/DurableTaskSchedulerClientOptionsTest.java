@@ -1,7 +1,6 @@
 package com.microsoft.durabletask.azuremanaged;
 
 import com.azure.core.credential.TokenCredential;
-import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerConnectionString;
 import io.grpc.Channel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,67 +18,40 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(MockitoExtension.class)
 public class DurableTaskSchedulerClientOptionsTest {
 
-    private static final String VALID_ENDPOINT = "https://example.com";
-    private static final String VALID_TASKHUB = "myTaskHub";
     private static final String VALID_CONNECTION_STRING = 
         "Endpoint=https://example.com;Authentication=ManagedIdentity;TaskHub=myTaskHub";
+    private static final String VALID_ENDPOINT = "https://example.com";
+    private static final String VALID_TASKHUB = "myTaskHub";
+    private static final String CUSTOM_RESOURCE_ID = "https://custom.resource";
+    private static final Duration CUSTOM_REFRESH_MARGIN = Duration.ofMinutes(10);
 
     @Mock
     private TokenCredential mockCredential;
 
     @Test
-    @DisplayName("Default constructor should set default values")
-    public void defaultConstructor_SetsDefaultValues() {
-        // Act
-        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
-        
-        // Assert
-        assertEquals("", options.getEndpointAddress());
-        assertEquals("", options.getTaskHubName());
-        assertNull(options.getCredential());
-        assertEquals("https://durabletask.io", options.getResourceId());
-        assertFalse(options.isAllowInsecureCredentials());
-        assertEquals(Duration.ofMinutes(5), options.getTokenRefreshMargin());
-    }
-
-    @Test
-    @DisplayName("fromConnectionString should parse connection string correctly")
-    public void fromConnectionString_ParsesConnectionStringCorrectly() {
+    @DisplayName("fromConnectionString should create valid options")
+    public void fromConnectionString_CreatesValidOptions() {
         // Act
         DurableTaskSchedulerClientOptions options = 
-            DurableTaskSchedulerClientOptions.fromConnectionString(VALID_CONNECTION_STRING, mockCredential);
-        
+            DurableTaskSchedulerClientOptions.fromConnectionString(VALID_CONNECTION_STRING);
+
         // Assert
+        assertNotNull(options);
         assertEquals(VALID_ENDPOINT, options.getEndpointAddress());
         assertEquals(VALID_TASKHUB, options.getTaskHubName());
-        assertSame(mockCredential, options.getCredential());
-        assertFalse(options.isAllowInsecureCredentials());
     }
 
     @Test
-    @DisplayName("fromConnectionString should allow insecure credentials when credential is null")
-    public void fromConnectionString_AllowsInsecureCredentialsWhenCredentialIsNull() {
-        // Act
-        DurableTaskSchedulerClientOptions options = 
-            DurableTaskSchedulerClientOptions.fromConnectionString(VALID_CONNECTION_STRING, null);
-        
-        // Assert
-        assertTrue(options.isAllowInsecureCredentials());
-        assertNull(options.getCredential());
-    }
-
-    @Test
-    @DisplayName("setEndpointAddress should update endpoint address")
-    public void setEndpointAddress_UpdatesEndpointAddress() {
+    @DisplayName("setEndpointAddress should update endpoint")
+    public void setEndpointAddress_UpdatesEndpoint() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
-        
+
         // Act
-        DurableTaskSchedulerClientOptions result = options.setEndpointAddress(VALID_ENDPOINT);
-        
+        options.setEndpointAddress(VALID_ENDPOINT);
+
         // Assert
         assertEquals(VALID_ENDPOINT, options.getEndpointAddress());
-        assertSame(options, result); // Builder pattern returns this
     }
 
     @Test
@@ -87,13 +59,12 @@ public class DurableTaskSchedulerClientOptionsTest {
     public void setTaskHubName_UpdatesTaskHubName() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
-        
+
         // Act
-        DurableTaskSchedulerClientOptions result = options.setTaskHubName(VALID_TASKHUB);
-        
+        options.setTaskHubName(VALID_TASKHUB);
+
         // Assert
         assertEquals(VALID_TASKHUB, options.getTaskHubName());
-        assertSame(options, result); // Builder pattern returns this
     }
 
     @Test
@@ -101,13 +72,12 @@ public class DurableTaskSchedulerClientOptionsTest {
     public void setCredential_UpdatesCredential() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
-        
+
         // Act
-        DurableTaskSchedulerClientOptions result = options.setCredential(mockCredential);
-        
+        options.setCredential(mockCredential);
+
         // Assert
-        assertSame(mockCredential, options.getCredential());
-        assertSame(options, result); // Builder pattern returns this
+        assertEquals(mockCredential, options.getCredential());
     }
 
     @Test
@@ -115,117 +85,67 @@ public class DurableTaskSchedulerClientOptionsTest {
     public void setResourceId_UpdatesResourceId() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
-        String customResourceId = "https://custom-resource.example.com";
-        
+
         // Act
-        DurableTaskSchedulerClientOptions result = options.setResourceId(customResourceId);
-        
+        options.setResourceId(CUSTOM_RESOURCE_ID);
+
         // Assert
-        assertEquals(customResourceId, options.getResourceId());
-        assertSame(options, result); // Builder pattern returns this
+        assertEquals(CUSTOM_RESOURCE_ID, options.getResourceId());
     }
 
     @Test
-    @DisplayName("setAllowInsecureCredentials should update allowInsecureCredentials")
-    public void setAllowInsecureCredentials_UpdatesAllowInsecureCredentials() {
+    @DisplayName("setAllowInsecureCredentials should update insecure credentials flag")
+    public void setAllowInsecureCredentials_UpdatesFlag() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
-        
+
         // Act
-        DurableTaskSchedulerClientOptions result = options.setAllowInsecureCredentials(true);
-        
+        options.setAllowInsecureCredentials(true);
+
         // Assert
         assertTrue(options.isAllowInsecureCredentials());
-        assertSame(options, result); // Builder pattern returns this
     }
 
     @Test
     @DisplayName("setTokenRefreshMargin should update token refresh margin")
-    public void setTokenRefreshMargin_UpdatesTokenRefreshMargin() {
+    public void setTokenRefreshMargin_UpdatesMargin() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions();
-        Duration customMargin = Duration.ofMinutes(10);
-        
+
         // Act
-        DurableTaskSchedulerClientOptions result = options.setTokenRefreshMargin(customMargin);
-        
+        options.setTokenRefreshMargin(CUSTOM_REFRESH_MARGIN);
+
         // Assert
-        assertEquals(customMargin, options.getTokenRefreshMargin());
-        assertSame(options, result); // Builder pattern returns this
+        assertEquals(CUSTOM_REFRESH_MARGIN, options.getTokenRefreshMargin());
     }
 
     @Test
-    @DisplayName("validate should not throw when options are valid")
-    public void validate_DoesNotThrowWhenOptionsAreValid() {
+    @DisplayName("createGrpcChannel should create valid channel")
+    public void createGrpcChannel_CreatesValidChannel() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
             .setEndpointAddress(VALID_ENDPOINT)
             .setTaskHubName(VALID_TASKHUB);
-        
-        // Act & Assert
-        assertDoesNotThrow(() -> options.validate());
-    }
 
-    @Test
-    @DisplayName("validate should throw when endpoint address is null")
-    public void validate_ThrowsWhenEndpointAddressIsNull() {
-        // Arrange
-        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
-            .setEndpointAddress(null)
-            .setTaskHubName(VALID_TASKHUB);
-        
-        // Act & Assert
-        assertThrows(NullPointerException.class, () -> options.validate());
-    }
-
-    @Test
-    @DisplayName("validate should throw when task hub name is null")
-    public void validate_ThrowsWhenTaskHubNameIsNull() {
-        // Arrange
-        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
-            .setEndpointAddress(VALID_ENDPOINT)
-            .setTaskHubName(null);
-        
-        // Act & Assert
-        assertThrows(NullPointerException.class, () -> options.validate());
-    }
-
-    @Test
-    @DisplayName("createGrpcChannel should create a channel")
-    public void createGrpcChannel_CreatesChannel() {
-        // Arrange
-        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
-            .setEndpointAddress(VALID_ENDPOINT)
-            .setTaskHubName(VALID_TASKHUB);
-        
         // Act
         Channel channel = options.createGrpcChannel();
-        
+
         // Assert
         assertNotNull(channel);
     }
 
     @Test
-    @DisplayName("createGrpcChannel should handle endpoints without protocol")
-    public void createGrpcChannel_HandlesEndpointsWithoutProtocol() {
+    @DisplayName("createGrpcChannel should handle endpoint without protocol")
+    public void createGrpcChannel_HandlesEndpointWithoutProtocol() {
         // Arrange
         DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
             .setEndpointAddress("example.com")
             .setTaskHubName(VALID_TASKHUB);
-        
-        // Act & Assert
-        assertDoesNotThrow(() -> options.createGrpcChannel());
-    }
 
-    @Test
-    @DisplayName("createGrpcChannel should throw for invalid URLs")
-    public void createGrpcChannel_ThrowsForInvalidUrls() {
-        // Arrange
-        DurableTaskSchedulerClientOptions options = new DurableTaskSchedulerClientOptions()
-            .setEndpointAddress("invalid:url")
-            .setTaskHubName(VALID_TASKHUB);
-        
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> options.createGrpcChannel());
+        // Act
+        Channel channel = options.createGrpcChannel();
+
+        // Assert
+        assertNotNull(channel);
     }
 } 

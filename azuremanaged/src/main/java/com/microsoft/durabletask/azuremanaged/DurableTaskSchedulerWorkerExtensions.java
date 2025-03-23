@@ -22,18 +22,16 @@ public final class DurableTaskSchedulerWorkerExtensions {
      * 
      * @param builder The builder to configure.
      * @param connectionString The connection string for Azure-managed Durable Task Scheduler.
-     * @param tokenCredential The token credential for authentication, or null to use connection string credentials.
      * @throws NullPointerException if builder or connectionString is null
      */
     public static void useDurableTaskScheduler(
             DurableTaskGrpcWorkerBuilder builder,
-            String connectionString,
-            @Nullable TokenCredential tokenCredential) {
+            String connectionString) {
         Objects.requireNonNull(builder, "builder must not be null");
         Objects.requireNonNull(connectionString, "connectionString must not be null");
         
         configureBuilder(builder, 
-            DurableTaskSchedulerWorkerOptions.fromConnectionString(connectionString, tokenCredential));
+            DurableTaskSchedulerWorkerOptions.fromConnectionString(connectionString));
     }
 
     /**
@@ -64,16 +62,14 @@ public final class DurableTaskSchedulerWorkerExtensions {
      * Creates a DurableTaskGrpcWorkerBuilder configured for Azure-managed Durable Task Scheduler using a connection string.
      * 
      * @param connectionString The connection string for Azure-managed Durable Task Scheduler.
-     * @param tokenCredential The token credential for authentication, or null to use connection string credentials.
      * @return A new configured DurableTaskGrpcWorkerBuilder instance.
      * @throws NullPointerException if connectionString is null
      */
     public static DurableTaskGrpcWorkerBuilder createWorkerBuilder(
-            String connectionString,
-            @Nullable TokenCredential tokenCredential) {
+            String connectionString) {
         Objects.requireNonNull(connectionString, "connectionString must not be null");
         return createBuilderFromOptions(
-            DurableTaskSchedulerWorkerOptions.fromConnectionString(connectionString, tokenCredential));
+            DurableTaskSchedulerWorkerOptions.fromConnectionString(connectionString));
     }
 
     /**
