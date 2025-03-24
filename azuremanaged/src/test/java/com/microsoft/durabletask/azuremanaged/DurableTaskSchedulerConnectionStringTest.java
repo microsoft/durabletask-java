@@ -224,4 +224,44 @@ public class DurableTaskSchedulerConnectionStringTest {
         assertNotNull(credential);
         assertTrue(credential instanceof WorkloadIdentityCredential);
     }
+
+    @Test
+    @DisplayName("getCredential should return VisualStudioCodeCredential for VisualStudioCode authentication type")
+    public void getCredential_ReturnsVisualStudioCodeCredential() {
+        // Arrange
+        String connectionString = String.format(
+            "Endpoint=%s;Authentication=%s;TaskHub=%s",
+            "https://example.com", "VisualStudioCode", "myTaskHub");
+
+        // Act
+        DurableTaskSchedulerConnectionString result = 
+            new DurableTaskSchedulerConnectionString(connectionString);
+
+        // Assert
+        TokenCredential credential = result.getCredential();
+        assertNotNull(credential);
+        
+        // Verify the correct credential type is returned
+        assertTrue(credential instanceof VisualStudioCodeCredential);
+    }
+
+    @Test
+    @DisplayName("getCredential should return InteractiveBrowserCredential for InteractiveBrowser authentication type")
+    public void getCredential_ReturnsInteractiveBrowserCredential() {
+        // Arrange
+        String connectionString = String.format(
+            "Endpoint=%s;Authentication=%s;TaskHub=%s",
+            "https://example.com", "InteractiveBrowser", "myTaskHub");
+
+        // Act
+        DurableTaskSchedulerConnectionString result = 
+            new DurableTaskSchedulerConnectionString(connectionString);
+
+        // Assert
+        TokenCredential credential = result.getCredential();
+        assertNotNull(credential);
+        
+        // Verify the correct credential type is returned
+        assertTrue(credential instanceof InteractiveBrowserCredential);
+    }
 } 

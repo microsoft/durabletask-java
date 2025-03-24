@@ -15,7 +15,9 @@ import com.azure.identity.AzureCliCredentialBuilder;
 import com.azure.identity.AzurePowerShellCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.identity.EnvironmentCredentialBuilder;
+import com.azure.identity.InteractiveBrowserCredentialBuilder;
 import com.azure.identity.ManagedIdentityCredentialBuilder;
+import com.azure.identity.VisualStudioCodeCredentialBuilder;
 import com.azure.identity.WorkloadIdentityCredentialBuilder;
 
 /**
@@ -180,6 +182,10 @@ public class DurableTaskSchedulerConnectionString {
                 return new AzureCliCredentialBuilder().build();
             case "azurepowershell":
                 return new AzurePowerShellCredentialBuilder().build();
+            case "visualstudiocode":
+                return new VisualStudioCodeCredentialBuilder().build();
+            case "interactivebrowser":
+                return new InteractiveBrowserCredentialBuilder().build();
             case "none":
                 return null;
             default:
