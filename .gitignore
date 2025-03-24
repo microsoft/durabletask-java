@@ -7,3 +7,6 @@ build/
 .settings
 .classpath
 repo/
+
+# Ignore sample application properties or any other properties files used for sample
+samples/src/main/resources/*.properties

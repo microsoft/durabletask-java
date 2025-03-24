@@ -140,6 +140,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 .setInstanceId(orchestratorRequest.getInstanceId())
                                 .addAllActions(taskOrchestratorResult.getActions())
                                 .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
+                                .setCompletionToken(workItem.getCompletionToken())
                                 .build();
 
                         this.sidecarClient.completeOrchestratorTask(response);
@@ -164,7 +165,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
                         ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
                                 .setInstanceId(activityRequest.getOrchestrationInstance().getInstanceId())
-                                .setTaskId(activityRequest.getTaskId());
+                                .setTaskId(activityRequest.getTaskId())
+                                .setCompletionToken(workItem.getCompletionToken());
 
                         if (output != null) {
                             responseBuilder.setResult(StringValue.of(output));
@@ -175,6 +177,10 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         }
 
                         this.sidecarClient.completeActivityTask(responseBuilder.build());
+                    } 
+                    else if (requestType == RequestCase.HEALTHPING)
+                    {
+                        // No-op
                     } else {
                         logger.log(Level.WARNING, "Received and dropped an unknown '{0}' work-item from the sidecar.", requestType);
                     }

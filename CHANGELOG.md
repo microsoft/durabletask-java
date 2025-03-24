@@ -1,4 +1,5 @@
 ## placeholder
+* DTS Support ([#201](https://github.com/microsoft/durabletask-java/pull/201))
 * Add automatic proto file download and commit hash tracking during build ([#207](https://github.com/microsoft/durabletask-java/pull/207))
 * Fix infinite loop when use continueasnew after wait external event ([#183](https://github.com/microsoft/durabletask-java/pull/183))
 * Fix the issue "Deserialize Exception got swallowed when use anyOf with external event." ([#185](https://github.com/microsoft/durabletask-java/pull/185))

@@ -21,7 +21,7 @@ import java.util.logging.Logger;
 /**
  * Durable Task client implementation that uses gRPC to connect to a remote "sidecar" process.
  */
-final class DurableTaskGrpcClient extends DurableTaskClient {
+public final class DurableTaskGrpcClient extends DurableTaskClient {
     private static final int DEFAULT_PORT = 4001;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcClient.class.getPackage().getName());
 
