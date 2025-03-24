@@ -264,4 +264,24 @@ public class DurableTaskSchedulerConnectionStringTest {
         // Verify the correct credential type is returned
         assertTrue(credential instanceof InteractiveBrowserCredential);
     }
+
+    @Test
+    @DisplayName("getCredential should return IntelliJCredential for IntelliJ authentication type")
+    public void getCredential_ReturnsIntelliJCredential() {
+        // Arrange
+        String connectionString = String.format(
+            "Endpoint=%s;Authentication=%s;TaskHub=%s",
+            "https://example.com", "IntelliJ", "myTaskHub");
+
+        // Act
+        DurableTaskSchedulerConnectionString result = 
+            new DurableTaskSchedulerConnectionString(connectionString);
+
+        // Assert
+        TokenCredential credential = result.getCredential();
+        assertNotNull(credential);
+        
+        // Verify the correct credential type is returned
+        assertTrue(credential instanceof IntelliJCredential);
+    }
 } 
