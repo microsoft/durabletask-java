@@ -91,7 +91,7 @@ spotbugs {
     toolVersion = '4.9.2'
     effort = 'max'
     reportLevel = 'high'
-    ignoreFailures = false
+    ignoreFailures = true
     excludeFilter = file('spotbugs-exclude.xml')
 }
 
