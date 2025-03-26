@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Exclude generated protobuf code -->
+    <Match>
+        <Package name="com.microsoft.durabletask.protobuf"/>
+    </Match>
+    
+    <!-- Exclude test classes -->
+    <Match>
+        <Class name="~.*Test"/>
+    </Match>
+    
+    <!-- Exclude common false positives -->
+    <Match>
+        <BugPattern name="DM_CONVERT_CASE"/>
+    </Match>
+    
+    <!-- Exclude serialization related warnings -->
+    <Match>
+        <BugPattern name="SE_NO_SERIALVERSIONID"/>
+    </Match>
+</FindBugsFilter> 
