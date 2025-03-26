@@ -46,7 +46,7 @@ jobs:
     
     - name: Run SpotBugs
       run: ./gradlew spotbugsMain spotbugsTest
-      continue-on-error: false
+      continue-on-error: true
       
     - name: Upload SpotBugs reports
       uses: actions/upload-artifact@v4

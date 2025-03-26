@@ -463,7 +463,6 @@ message PurgeInstanceFilter {
 
 message PurgeInstancesResponse {
     int32 deletedInstanceCount = 1;
-    google.protobuf.BoolValue isComplete = 2;
 }
 
 message CreateTaskHubRequest {
