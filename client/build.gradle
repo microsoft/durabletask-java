@@ -186,8 +186,8 @@ java {
 spotbugs {
     toolVersion = '4.9.2'
     effort = 'max'
-    reportLevel = 'medium'
-    ignoreFailures = true
+    reportLevel = 'high'
+    ignoreFailures = false
     excludeFilter = file('spotbugs-exclude.xml')
 }
 
