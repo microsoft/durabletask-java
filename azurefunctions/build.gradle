@@ -77,10 +77,10 @@ publishing {
     }
 }
 
-// TODO: manual signing temporarily disabled, in favor of 1ES signing utils
-//signing {
-//    sign publishing.publications.mavenJava
-//}
+signing {
+   required = !project.hasProperty("skipSigning")
+   sign publishing.publications.mavenJava
+}
 
 java {
     withSourcesJar()
