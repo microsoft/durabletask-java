@@ -8,7 +8,6 @@ jobs:
                 artifact: drop
                 sbomBuildDropPath: $(System.DefaultWorkingDirectory)
                 sbomPackageName: 'Durable Task / Durable Functions Java SBOM'
-
       steps:
         - checkout: self
 
@@ -25,9 +24,15 @@ jobs:
             jdkArchitectureOption: 'x64'
             publishJUnitResults: false
             tasks: clean assemble
-          displayName: Assemble durabletask-client and durabletask-azure-functions
+          displayName: Assemble durabletask-client and durabletask-azure-functions and durabletask-azuremanaged
 
-        # TODO: add 1ES-level signing
+        # the secring.gpg file is required to sign the artifacts, it's generated from GnuPG, and it's stored in the library of the durabletaskframework ADO
+        - task: DownloadSecureFile@1
+          name: gpgSecretFile
+          displayName: 'Download GPG secret file'
+          inputs:
+            secureFile: 'secring.gpg'
+
         - task: Gradle@3
           inputs:
             workingDirectory: ''
@@ -37,7 +42,8 @@ jobs:
             jdkVersionOption: 1.11
             jdkArchitectureOption: 'x64'
             tasks: publish
-          displayName: Publish durabletask-client and durabletask-azure-functions
+            options: '-Psigning.keyId=$(gpgSignKey) -Psigning.password=$(gpgSignPassword) -Psigning.secretKeyRingFile=$(gpgSecretFile.secureFilePath)'
+          displayName: Publish durabletask-client and durabletask-azure-functions and durabletask-azuremanaged
 
         - task: CopyFiles@2
           displayName: 'Copy publish file to Artifact Staging Directory'
