@@ -44,6 +44,17 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew build -x test
     
+    - name: Run SpotBugs
+      run: ./gradlew spotbugsMain spotbugsTest
+      continue-on-error: false
+      
+    - name: Upload SpotBugs reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: SpotBugs Reports
+        path: '**/build/reports/spotbugs'
+        if-no-files-found: ignore
+    
     - name: Run Unit Tests with Gradle
       run: |
         export JAVA_HOME=$JDK_11

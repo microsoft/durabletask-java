@@ -2,6 +2,7 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'signing'
+    id 'com.github.spotbugs' version '5.2.1'
 }
 
 group 'com.microsoft'
@@ -84,4 +85,36 @@ publishing {
 java {
     withSourcesJar()
     withJavadocJar()
+}
+
+spotbugs {
+    toolVersion = '4.9.2'
+    effort = 'max'
+    reportLevel = 'high'
+    ignoreFailures = true
+    excludeFilter = file('spotbugs-exclude.xml')
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+        }
+    }
+}
+
+spotbugsTest {
+    reports {
+        html {
+            required = true
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+        }
+    }
 }
