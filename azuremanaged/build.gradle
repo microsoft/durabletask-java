@@ -111,7 +111,8 @@ publishing {
 }
 
 signing {
-   sign publishing.publications.mavenJava
+    required = !project.hasProperty("skipSigning")
+    sign publishing.publications.mavenJava
 }
 
 java {
