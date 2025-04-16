@@ -2,21 +2,29 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Logger;
+
+import javax.annotation.Nullable;
+
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
-import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.TaskHubSidecarServiceBlockingStub;
 
-import io.grpc.*;
-
-import javax.annotation.Nullable;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.logging.Logger;
+import io.grpc.Channel;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 /**
  * Durable Task client implementation that uses gRPC to connect to a remote "sidecar" process.
@@ -108,6 +116,16 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         if (startTime != null) {
             Timestamp ts = DataConverter.getTimestampFromInstant(startTime);
             builder.setScheduledStartTimestamp(ts);
+        }
+
+        String traceParent = options.getTraceParent();
+        String traceState = options.getTraceState();
+        if (traceParent != null) {
+            TraceContext traceContext = TraceContext.newBuilder()
+                .setTraceParent(traceParent)
+                .setTraceState(traceState != null ? StringValue.of(traceState) : StringValue.getDefaultInstance())
+                .build();
+            builder.setParentTraceContext(traceContext); // Set the TraceContext in the CreateInstanceRequest
         }
 
         CreateInstanceRequest request = builder.build();
