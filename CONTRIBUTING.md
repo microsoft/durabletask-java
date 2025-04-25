@@ -1,4 +1,5 @@
 # Contributor Onboarding
+This contributor guide explains how to make and test changes to Durable Functions in Java.
 Thank you for taking the time to contribute to Durable Functions in Java!
 
 ## Table of Contents
@@ -62,6 +63,6 @@ mvn install:install-file -Dfile="C:/Temp/durabletask-azure-functions-1.6.0.jar" 
 If you want to debug into the Durable Task or any of the .NET bits, follow the instructions below:
 
 1. If you would like to debug a custom local WebJobs extension package then create the custom package, place it in a local directory, and then run `func extensions install --package Microsoft.Azure.WebJobs.Extensions.DurableTask --version <VERSION>`. If you update the version while debugging and the new version doesn't get picked up, then try running `func extensions install` to get the new changes.
-3. Make sure the Durable Functions Java debugging is setup already and the debugger has started the `func` process.
-4. In the VSCode editor for DurableTask, click Debug -> .NET Core Attach Process, search for `func host start` process and attach to it.
-5. Add a breakpoint in both editors and continue debugging.
+2. Make sure the Durable Functions Java debugging is setup already and the debugger has started the `func` process.
+3. In the VSCode editor for DurableTask, click Debug -> .NET Core Attach Process, search for `func host start` process and attach to it.
+4. Add a breakpoint in both editors and continue debugging.
