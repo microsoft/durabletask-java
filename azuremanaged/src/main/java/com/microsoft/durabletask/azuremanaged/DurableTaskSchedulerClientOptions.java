@@ -226,6 +226,11 @@ public class DurableTaskSchedulerClientOptions {
                             taskHubName
                         );
                         
+                        headers.put(
+                            Metadata.Key.of("user-agent", Metadata.ASCII_STRING_MARSHALLER),
+                            DurableTaskUserAgentUtil.getUserAgent()
+                        );
+                        
                         // Add authorization token if credentials are configured
                         if (finalTokenCache != null) {
                             String token = finalTokenCache.getToken().getToken();
