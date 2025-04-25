@@ -1,17 +1,15 @@
 # Contributor Onboarding
-Thank you for taking the time to contribute to Durable Functions in Java
+Thank you for taking the time to contribute to Durable Functions in Java!
 
 ## Table of Contents
 
-- [What should I know before I get started?](#what-should-i-know-before-i-get-started)
+- [Relevant Docs](#relevant-docs)
 - [Pre-requisites](#pre-requisites)
 - [Pull Request Change Flow](#pull-request-change-flow)
-- [Development Setup](#development-setup)
-- [Pre Commit Tasks](#pre-commit-tasks)
-- [Continuous Integration Guidelines & Conventions](#continuous-integration-guidelines-&-conventions)
-- [Getting Help](#getting-help)
+- [Testing with a Durable Functions app](#testing-with-a-durable-functions-app)
+- [Debugging .NET packages from a Durable Functions Java app](#debugging-net-packages-from-a-durable-functions-java-app)
 
-## What should I know before I get started
+## Relevant Docs
 - [Durable Functions Overview](https://docs.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-overview)
 - [Durable Functions Application Patterns](https://learn.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-overview?tabs=in-process%2Cnodejs-v3%2Cv1-model&pivots=java#application-patterns)
 - [Azure Functions Java Quickstart](https://learn.microsoft.com/en-us/azure/azure-functions/create-first-function-vs-code-java)
@@ -22,7 +20,7 @@ Thank you for taking the time to contribute to Durable Functions in Java
 - Visual Studio Code
 - [Azure Functions Core Tools](https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local?tabs=windows%2Cisolated-process%2Cnode-v4%2Cpython-v2%2Chttp-trigger%2Ccontainer-apps&pivots=programming-language-java) 
 
-## Pull Request Change flow
+## Pull Request Change Flow
 
 The general flow for making a change to the library is:
 
@@ -37,15 +35,15 @@ The general flow for making a change to the library is:
 9. :shipit: Rebase and merge (This will be done for you if you don't have contributor access)
 10. ✂️ Delete your branch (optional)
 
-## Development Process to test Durable Functions changes
+## Testing with a Durable Functions app
 
-The following instructions are for development with VS Code to test changes in durabletask-java in a Durable Functions Java app
+The following instructions explain how to test durabletask-java changes in a Durable Functions Java app.
 
-1. After making any changes in durabletask-java, you will need to increment the version number in build.gradle. For example, if I make a change in the azurefunctions directory, then I would update the version in `azurefunctions/build.gradle`.
+1. After making changes in durabletask-java, you will need to increment the version number in build.gradle. For example, if I make a change in the azurefunctions directory, then I would update the version in `azurefunctions/build.gradle`.
 2. In the durabletask-java repo, from the root of the project, run `gradle clean build`. This will create the .jar files with the updated version that you specified.
 3. To get the .jar file that was created, go to the `build/libs` directory. For example, if you made a change in azurefunctions, then go to `distributed-tracing\durabletask-java\azurefunctions\build\libs`. If you made a change to client, then go to `distributed-tracing\durabletask-java\client\build\`. Add the .jar files that you are testing to a local directory.
 4. [Create a Durable Functions Java app](https://learn.microsoft.com/en-us/azure/azure-functions/durable/quickstart-java?tabs=bash&pivots=create-option-vscode) if you haven't done so already.
-5. In the Durable Functions Java app, run the following command to install the local .jar files that were created in step 2: `mvn install:install-file -Dfile="<path to .jar file that was create in step 2>" -DgroupId="com.microsoft" -DartifactId="<name of .jar file>" -Dversion="<version>" -Dpackaging="jar" -DlocalRepositoryPath="<path to Durable Functions Java app>"`.
+5. In the Durable Functions Java app, run the following command to install the local .jar files that were created in step 2: `mvn install:install-file -Dfile="<path to .jar file that was created in step 2>" -DgroupId="com.microsoft" -DartifactId="<name of .jar file>" -Dversion="<version>" -Dpackaging="jar" -DlocalRepositoryPath="<path to Durable Functions Java app>"`.
 
 For example, if you created custom `durabletask-client` and `durabletask-azurefunctions` packages with version 1.6.0 in step 2, then you would run the following commands:
 
