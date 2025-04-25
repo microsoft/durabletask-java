@@ -1,6 +1,7 @@
 ## placeholder
+* Add User-Agent Header to gRPC Metadata ([#213](https://github.com/microsoft/durabletask-java/pull/213))
+## v1.5.0-preview.1
 * Update protobuf definitions to include new properties in OrchestratorRequest and update source commit hash ([#214](https://github.com/microsoft/durabletask-java/pull/214))
-## v1.5.1.preview
 * DTS Support ([#201](https://github.com/microsoft/durabletask-java/pull/201))
 * Add automatic proto file download and commit hash tracking during build ([#207](https://github.com/microsoft/durabletask-java/pull/207))
 * Fix infinite loop when use continueasnew after wait external event ([#183](https://github.com/microsoft/durabletask-java/pull/183))
