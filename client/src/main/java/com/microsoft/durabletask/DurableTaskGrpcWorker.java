@@ -191,7 +191,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 } else if (e.getStatus().getCode() == Status.Code.CANCELLED) {
                     logger.log(Level.INFO, "Durable Task worker has disconnected from {0}.", this.getSidecarAddress()); 
                 } else {
-                    logger.log(Level.WARNING, "Unexpected failure connecting to {0}.", this.getSidecarAddress());
+                    logger.log(Level.WARNING, String.format("Unexpected failure connecting to %s", this.getSidecarAddress()), e);
                 }
 
                 // Retry after 5 seconds
