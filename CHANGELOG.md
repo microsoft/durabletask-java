@@ -1,7 +1,6 @@
-## placeholder
+## v1.5.1
 * Improve logging for unexpected connection failures in DurableTaskGrpcWorker ([#216](https://github.com/microsoft/durabletask-java/pull/216/files))
 * Add User-Agent Header to gRPC Metadata ([#213](https://github.com/microsoft/durabletask-java/pull/213))
-## v1.5.0-preview.1
 * Update protobuf definitions to include new properties in OrchestratorRequest and update source commit hash ([#214](https://github.com/microsoft/durabletask-java/pull/214))
 * DTS Support ([#201](https://github.com/microsoft/durabletask-java/pull/201))
 * Add automatic proto file download and commit hash tracking during build ([#207](https://github.com/microsoft/durabletask-java/pull/207))
