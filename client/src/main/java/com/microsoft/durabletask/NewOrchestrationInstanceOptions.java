@@ -12,8 +12,6 @@ public final class NewOrchestrationInstanceOptions {
     private String instanceId;
     private Object input;
     private Instant startTime;
-    private String traceParent;
-    private String traceState;
 
     /**
      * Default constructor for the {@link NewOrchestrationInstanceOptions} class.
@@ -107,21 +105,5 @@ public final class NewOrchestrationInstanceOptions {
      */
     public Instant getStartTime() {
         return this.startTime;
-    }
-
-    public String getTraceParent() {
-        return traceParent;
-    }
-
-    public void setTraceParent(String traceParent) {
-        this.traceParent = traceParent;
-    }
-
-    public String getTraceState() {
-        return traceState;
-    }
-
-    public void setTraceState(String traceState) {
-        this.traceState = traceState;
     }
 }

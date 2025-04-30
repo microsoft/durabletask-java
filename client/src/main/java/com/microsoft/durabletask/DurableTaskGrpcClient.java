@@ -25,6 +25,8 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
 
 /**
  * Durable Task client implementation that uses gRPC to connect to a remote "sidecar" process.
@@ -118,8 +120,25 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             builder.setScheduledStartTimestamp(ts);
         }
 
-        String traceParent = options.getTraceParent();
-        String traceState = options.getTraceState();
+        Span currentSpan = Span.current();
+        String traceParent = null;
+        String traceState = null;
+
+        if (currentSpan != null && currentSpan.getSpanContext().isValid()) {
+            SpanContext spanContext = currentSpan.getSpanContext();
+
+            // Construct the traceparent according to the W3C Trace Context specification
+            // https://www.w3.org/TR/trace-context/#traceparent-header
+            traceParent = String.format("00-%s-%s-%02x",
+                spanContext.getTraceId(), // 32-character trace ID
+                spanContext.getSpanId(),  // 16-character span ID
+                spanContext.getTraceFlags().asByte() // Trace flags (i.e. sampled or not)
+            );
+
+            // Get the tracestate
+            traceState = spanContext.getTraceState().toString();
+        }
+
         if (traceParent != null) {
             TraceContext traceContext = TraceContext.newBuilder()
                 .setTraceParent(traceParent)
