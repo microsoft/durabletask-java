@@ -10,6 +10,7 @@ resources:
   pipelines:
   - pipeline: DurableTaskJavaBuildPipeline
     source: durabletask-java.official
+    branch: main
 
 extends:
   template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
@@ -31,6 +32,7 @@ extends:
           - input: pipelineArtifact
             pipeline: DurableTaskJavaBuildPipeline
             artifactName: drop
+            targetPath: $(System.DefaultWorkingDirectory)/drop
 
         steps:
         - task: SFP.release-tasks.custom-build-release-task.EsrpRelease@9
@@ -41,7 +43,7 @@ extends:
             keyvaultname: 'durable-esrp-akv'
             signcertname: 'dts-esrp-cert'
             clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
-            folderlocation: '$(System.DefaultWorkingDirectory)/_durabletask-java.official/drop/durabletask-azuremanaged'
+            folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-azuremanaged'
             owners: 'wangbill@microsoft.com'
             approvers: 'kaibocai@microsoft.com'
             mainpublisher: 'durabletask-java'
@@ -55,6 +57,7 @@ extends:
           - input: pipelineArtifact
             pipeline: DurableTaskJavaBuildPipeline
             artifactName: drop
+            targetPath: $(System.DefaultWorkingDirectory)/drop
 
         steps:
         - task: SFP.release-tasks.custom-build-release-task.EsrpRelease@9
@@ -65,7 +68,7 @@ extends:
             keyvaultname: 'durable-esrp-akv'
             signcertname: 'dts-esrp-cert'
             clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
-            folderlocation: '$(System.DefaultWorkingDirectory)/_durabletask-java.official/drop/durabletask-client'
+            folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-client'
             owners: 'wangbill@microsoft.com'
             approvers: 'kaibocai@microsoft.com'
             mainpublisher: 'durabletask-java'
@@ -79,6 +82,7 @@ extends:
           - input: pipelineArtifact
             pipeline: DurableTaskJavaBuildPipeline
             artifactName: drop
+            targetPath: $(System.DefaultWorkingDirectory)/drop
 
         steps:
         - task: SFP.release-tasks.custom-build-release-task.EsrpRelease@9
@@ -89,7 +93,7 @@ extends:
             keyvaultname: 'durable-esrp-akv'
             signcertname: 'dts-esrp-cert'
             clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
-            folderlocation: '$(System.DefaultWorkingDirectory)/_durabletask-java.official/drop/durabletask-azure-functions'
+            folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-azure-functions'
             owners: 'wangbill@microsoft.com'
             approvers: 'kaibocai@microsoft.com'
             mainpublisher: 'durabletask-java'
