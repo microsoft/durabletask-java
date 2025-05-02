@@ -1,6 +1,6 @@
 # Contributor Onboarding
 This contributor guide explains how to make and test changes to Durable Functions in Java.
-Thank you for taking the time to contribute to Durable Functions in Java!
+Thank you for taking the time to contribute to the DurableTask Java SDK!
 
 ## Table of Contents
 
@@ -20,13 +20,13 @@ Thank you for taking the time to contribute to Durable Functions in Java!
 - [Azure Functions Core Tools](https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local?tabs=windows%2Cisolated-process%2Cnode-v4%2Cpython-v2%2Chttp-trigger%2Ccontainer-apps&pivots=programming-language-java)
 - Apache Maven 3.8.1 or higher (Note: the instructions in this doc were validated using Apache Maven 3.9.9)
 - Gradle 7.4
-- Java 17
+- Java 8 or higher (Note: the instructions in this doc were validated using Java 17)
 
 ## Pull Request Change Flow
 
 The general flow for making a change to the library is:
 
-1. 🍴 Fork the repo (add the fork via `git remote add me <clone url here>`
+1. 🍴 Fork the repo (add the fork via `git remote add me <clone url here>`)
 2. 🌳 Create a branch for your change (generally branch from dev) (`git checkout -b my-change`)
 3. 🛠 Make your change
 4. ✔️ Test your change
@@ -47,7 +47,7 @@ The following instructions explain how to test durabletask-java changes in a Dur
 4. [Create a Durable Functions Java app](https://learn.microsoft.com/en-us/azure/azure-functions/durable/quickstart-java?tabs=bash&pivots=create-option-vscode) if you haven't done so already.
 5. In the Durable Functions Java app, run the following command to install the local .jar files that were created in step 2: `mvn install:install-file -Dfile="<path to .jar file that was created in step 2>" -DgroupId="com.microsoft" -DartifactId="<name of .jar file>" -Dversion="<version>" -Dpackaging="jar" -DlocalRepositoryPath="<path to Durable Functions Java app>"`.
 
-For example, if you created custom `durabletask-client` and `durabletask-azurefunctions` packages with version 1.6.0 in step 2, then you would run the following commands:
+For example, if you created custom `durabletask-client` and `durabletask-azure-functions` packages with version 1.6.0 in step 2, then you would run the following commands:
 
 ```
 mvn install:install-file -Dfile="C:/Temp/durabletask-client-1.6.0.jar" -DgroupId="com.microsoft" -DartifactId="durabletask-client" -Dversion="1.6.0" -Dpackaging="jar" -DlocalRepositoryPath="C:/df-java-sample-app"
@@ -63,6 +63,6 @@ mvn install:install-file -Dfile="C:/Temp/durabletask-azure-functions-1.6.0.jar" 
 If you want to debug into the Durable Task or any of the .NET bits, follow the instructions below:
 
 1. If you would like to debug a custom local WebJobs extension package then create the custom package, place it in a local directory, and then run `func extensions install --package Microsoft.Azure.WebJobs.Extensions.DurableTask --version <VERSION>`. If you update the version while debugging and the new version doesn't get picked up, then try running `func extensions install` to get the new changes.
-2. Make sure the Durable Functions Java debugging is setup already and the debugger has started the `func` process.
+2. Make sure the Durable Functions Java debugging is set up already and the debugger has started the `func` process.
 3. In the VSCode editor for DurableTask, click Debug -> .NET Core Attach Process, search for `func host start` process and attach to it.
 4. Add a breakpoint in both editors and continue debugging.
