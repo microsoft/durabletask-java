@@ -1,0 +1,19 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+package com.microsoft.durabletask.azuremanaged;
+
+/**
+ * Auto-generated version information for the Durable Task SDK.
+ * This file is generated during the build process.
+ */
+public final class VersionInfo {
+    /**
+     * The version of the SDK.
+     */
+    public static final String VERSION = "${version}";
+
+    private VersionInfo() {
+        // Private constructor to prevent instantiation
+    }
+} 
