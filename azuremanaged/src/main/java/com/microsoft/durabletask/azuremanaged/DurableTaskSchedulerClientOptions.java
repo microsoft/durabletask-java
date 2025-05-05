@@ -227,7 +227,7 @@ public class DurableTaskSchedulerClientOptions {
                         );
                         
                         headers.put(
-                            Metadata.Key.of("user-agent", Metadata.ASCII_STRING_MARSHALLER),
+                            Metadata.Key.of("x-user-agent", Metadata.ASCII_STRING_MARSHALLER),
                             DurableTaskUserAgentUtil.getUserAgent()
                         );
                         
