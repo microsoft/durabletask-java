@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
@@ -129,7 +130,11 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             );
 
             // Get the tracestate
-            traceState = spanContext.getTraceState().toString();
+            traceState = spanContext.getTraceState().asMap()
+                .entrySet()
+                .stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(Collectors.joining(","));
         }
 
         if (traceParent != null) {
