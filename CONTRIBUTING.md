@@ -42,7 +42,7 @@ The general flow for making a change to the library is:
 The following instructions explain how to test durabletask-java changes in a Durable Functions Java app.
 
 1. After making changes in durabletask-java, you will need to increment the version number in build.gradle. For example, if you make a change in the azurefunctions directory, then you would update the version in `azurefunctions/build.gradle`.
-2. In the durabletask-java repo, from the root of the project, run `gradle clean build`. This will create the .jar files with the updated version that you specified.
+2. In the durabletask-java repo, from the root of the project, run `./gradlew clean build`. This will create the .jar files with the updated version that you specified.
 3. To get the .jar file that was created, go to the `build/libs` directory. For example, if you made a change in azurefunctions, then go to `durabletask-java/azurefunctions/build/libs`. If you made a change to client, then go to `durabletask-java/client/build/libs`. Add the .jar files that you are testing to a local directory.
 4. [Create a Durable Functions Java app](https://learn.microsoft.com/en-us/azure/azure-functions/durable/quickstart-java?tabs=bash&pivots=create-option-vscode) if you haven't done so already.
 5. In the Durable Functions Java app, run the following command to install the local .jar files that were created in step 2: `mvn install:install-file -Dfile="<path to .jar file that was created in step 2>" -DgroupId="com.microsoft" -DartifactId="<name of .jar file>" -Dversion="<version>" -Dpackaging="jar" -DlocalRepositoryPath="<path to Durable Functions Java app>"`.
