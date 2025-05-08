@@ -17,6 +17,10 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
 
 /**
  * Durable Task client implementation that uses gRPC to connect to a remote "sidecar" process.
@@ -108,6 +112,37 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         if (startTime != null) {
             Timestamp ts = DataConverter.getTimestampFromInstant(startTime);
             builder.setScheduledStartTimestamp(ts);
+        }
+
+        Span currentSpan = Span.current();
+        String traceParent = null;
+        String traceState = null;
+
+        if (currentSpan != null && currentSpan.getSpanContext().isValid()) {
+            SpanContext spanContext = currentSpan.getSpanContext();
+
+            // Construct the traceparent according to the W3C Trace Context specification
+            // https://www.w3.org/TR/trace-context/#traceparent-header
+            traceParent = String.format("00-%s-%s-%02x",
+                spanContext.getTraceId(), // 32-character trace ID
+                spanContext.getSpanId(),  // 16-character span ID
+                spanContext.getTraceFlags().asByte() // Trace flags (i.e. sampled or not)
+            );
+
+            // Get the tracestate
+            traceState = spanContext.getTraceState().asMap()
+                .entrySet()
+                .stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(Collectors.joining(","));
+        }
+
+        if (traceParent != null) {
+            TraceContext traceContext = TraceContext.newBuilder()
+                .setTraceParent(traceParent)
+                .setTraceState(traceState != null ? StringValue.of(traceState) : StringValue.getDefaultInstance())
+                .build();
+            builder.setParentTraceContext(traceContext); // Set the TraceContext in the CreateInstanceRequest
         }
 
         CreateInstanceRequest request = builder.build();

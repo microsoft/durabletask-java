@@ -1,3 +1,7 @@
+## v1.5.2
+* Add distributed tracing support for Azure Functions client scenarios ([#211](https://github.com/microsoft/durabletask-java/pull/211))
+
+
 ## v1.5.1
 * Improve logging for unexpected connection failures in DurableTaskGrpcWorker ([#216](https://github.com/microsoft/durabletask-java/pull/216/files))
 * Add User-Agent Header to gRPC Metadata ([#213](https://github.com/microsoft/durabletask-java/pull/213))
