@@ -34,6 +34,16 @@ public final class FailureDetails {
         this.isNonRetriable = isNonRetriable;
     }
 
+    /**
+     * Creates a new failure details object from an exception.
+     * This constructor captures comprehensive exception information including:
+     * - Exception type
+     * - Exception message (including multiline messages)
+     * - Complete stack trace with inner/nested exceptions
+     * - Suppressed exceptions
+     * 
+     * @param exception The exception to create failure details from
+     */
     FailureDetails(Exception exception) {
         // Use the most specific exception in the chain for error type
         String errorType = exception.getClass().getName();
@@ -124,7 +134,18 @@ public final class FailureDetails {
         }
     }
 
+    /**
+     * Generates a comprehensive stack trace string from a throwable, including inner exceptions, suppressed exceptions,
+     * and handling circular references. The format closely resembles Java's standard exception printing format.
+     * 
+     * @param e The throwable to convert to a stack trace string
+     * @return A formatted stack trace string
+     */
     static String getFullStackTrace(Throwable e) {
+        if (e == null) {
+            return "";
+        }
+        
         StringBuilder sb = new StringBuilder();
         
         // Process the exception chain recursively
@@ -166,16 +187,24 @@ public final class FailureDetails {
         Throwable[] suppressed = ex.getSuppressed();
         if (suppressed != null && suppressed.length > 0) {
             for (Throwable s : suppressed) {
-                sb.append("\tSuppressed: ");
-                appendExceptionDetails(sb, s, currentStackTrace);
+                if (s != ex) { // Avoid circular references
+                    sb.append("\tSuppressed: ");
+                    appendExceptionDetails(sb, s, currentStackTrace);
+                } else {
+                    sb.append("\tSuppressed: [CIRCULAR REFERENCE]").append(System.lineSeparator());
+                }
             }
         }
         
         // Handle cause (inner exception)
         Throwable cause = ex.getCause();
-        if (cause != null && cause != ex) { // Avoid infinite recursion
-            sb.append("Caused by: ");
-            appendExceptionDetails(sb, cause, currentStackTrace);
+        if (cause != null) {
+            if (cause != ex) { // Avoid direct circular references
+                sb.append("Caused by: ");
+                appendExceptionDetails(sb, cause, currentStackTrace);
+            } else {
+                sb.append("Caused by: [CIRCULAR REFERENCE]").append(System.lineSeparator());
+            }
         }
     }
     
