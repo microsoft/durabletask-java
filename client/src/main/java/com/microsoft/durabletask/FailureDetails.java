@@ -148,8 +148,18 @@ public final class FailureDetails {
         
         // Add the stack trace elements
         StackTraceElement[] currentStackTrace = ex.getStackTrace();
-        for (StackTraceElement element : currentStackTrace) {
-            sb.append("\tat ").append(element.toString()).append(System.lineSeparator());
+        int framesInCommon = 0;
+        if (parentStackTrace != null) {
+            framesInCommon = countCommonFrames(currentStackTrace, parentStackTrace);
+        }
+        
+        int framesToPrint = currentStackTrace.length - framesInCommon;
+        for (int i = 0; i < framesToPrint; i++) {
+            sb.append("\tat ").append(currentStackTrace[i].toString()).append(System.lineSeparator());
+        }
+        
+        if (framesInCommon > 0) {
+            sb.append("\t... ").append(framesInCommon).append(" more").append(System.lineSeparator());
         }
         
         // Handle any suppressed exceptions
@@ -167,6 +177,22 @@ public final class FailureDetails {
             sb.append("Caused by: ");
             appendExceptionDetails(sb, cause, currentStackTrace);
         }
+    }
+    
+    /**
+     * Count frames in common between two stack traces, starting from the end.
+     * This helps produce more concise stack traces for chained exceptions.
+     */
+    private static int countCommonFrames(StackTraceElement[] trace1, StackTraceElement[] trace2) {
+        int m = trace1.length - 1;
+        int n = trace2.length - 1;
+        int count = 0;
+        while (m >= 0 && n >= 0 && trace1[m].equals(trace2[n])) {
+            m--;
+            n--;
+            count++;
+        }
+        return count;
     }
 
     TaskFailureDetails toProto() {
