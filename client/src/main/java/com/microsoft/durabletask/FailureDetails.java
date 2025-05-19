@@ -35,7 +35,19 @@ public final class FailureDetails {
     }
 
     FailureDetails(Exception exception) {
-        this(exception.getClass().getName(), exception.getMessage(), getFullStackTrace(exception), false);
+        // Use the most specific exception in the chain for error type
+        String errorType = exception.getClass().getName();
+        String errorMessage = exception.getMessage();
+        
+        // Preserve null messages as empty string to match existing behavior
+        if (errorMessage == null) {
+            errorMessage = "";
+        }
+        
+        this.errorType = errorType;
+        this.errorMessage = errorMessage;
+        this.stackTrace = getFullStackTrace(exception);
+        this.isNonRetriable = false;
     }
 
     FailureDetails(TaskFailureDetails proto) {
@@ -113,14 +125,48 @@ public final class FailureDetails {
     }
 
     static String getFullStackTrace(Throwable e) {
-        StackTraceElement[] elements = e.getStackTrace();
+        StringBuilder sb = new StringBuilder();
+        
+        // Process the exception chain recursively
+        appendExceptionDetails(sb, e, null);
+        
+        return sb.toString();
+    }
+    
+    private static void appendExceptionDetails(StringBuilder sb, Throwable ex, StackTraceElement[] parentStackTrace) {
+        if (ex == null) {
+            return;
+        }
 
-        // Plan for 256 characters per stack frame (which is likely on the high-end)
-        StringBuilder sb = new StringBuilder(elements.length * 256);
-        for (StackTraceElement element : elements) {
+        // Add the exception class name and message
+        sb.append(ex.getClass().getName());
+        String message = ex.getMessage();
+        if (message != null) {
+            sb.append(": ").append(message);
+        }
+        sb.append(System.lineSeparator());
+        
+        // Add the stack trace elements
+        StackTraceElement[] currentStackTrace = ex.getStackTrace();
+        for (StackTraceElement element : currentStackTrace) {
             sb.append("\tat ").append(element.toString()).append(System.lineSeparator());
         }
-        return sb.toString();
+        
+        // Handle any suppressed exceptions
+        Throwable[] suppressed = ex.getSuppressed();
+        if (suppressed != null && suppressed.length > 0) {
+            for (Throwable s : suppressed) {
+                sb.append("\tSuppressed: ");
+                appendExceptionDetails(sb, s, currentStackTrace);
+            }
+        }
+        
+        // Handle cause (inner exception)
+        Throwable cause = ex.getCause();
+        if (cause != null && cause != ex) { // Avoid infinite recursion
+            sb.append("Caused by: ");
+            appendExceptionDetails(sb, cause, currentStackTrace);
+        }
     }
 
     TaskFailureDetails toProto() {
