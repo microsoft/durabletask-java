@@ -17,6 +17,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     Channel channel;
     DataConverter dataConverter;
     Duration maximumTimerInterval;
+    DurableTaskGrpcWorkerVersioningOptions versioningOptions;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -110,6 +111,17 @@ public final class DurableTaskGrpcWorkerBuilder {
      */
     public DurableTaskGrpcWorkerBuilder maximumTimerInterval(Duration maximumTimerInterval) {
         this.maximumTimerInterval = maximumTimerInterval;
+        return this;
+    }
+
+    /**
+     * Sets the versioning options for this worker.
+     * 
+     * @param options the versioning options to use
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder useVersioning(DurableTaskGrpcWorkerVersioningOptions options) {
+        this.versioningOptions = options;
         return this;
     }
 
