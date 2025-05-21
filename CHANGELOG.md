@@ -1,3 +1,6 @@
+## Unreleased
+* Add versioning support for client and worker ([#224](https://github.com/microsoft/durabletask-java/pull/224))
+
 ## v1.5.2
 * Add distributed tracing support for Azure Functions client scenarios ([#211](https://github.com/microsoft/durabletask-java/pull/211))
 
