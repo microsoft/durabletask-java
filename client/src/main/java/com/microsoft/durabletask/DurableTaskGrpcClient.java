@@ -32,9 +32,11 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     private final DataConverter dataConverter;
     private final ManagedChannel managedSidecarChannel;
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
+    private final String defaultVersion;
 
     DurableTaskGrpcClient(DurableTaskGrpcClientBuilder builder) {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
+        this.defaultVersion = builder.defaultVersion;
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
@@ -100,6 +102,8 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         String version = options.getVersion();
         if (version != null) {
             builder.setVersion(StringValue.of(version));
+        } else if (this.defaultVersion != null) {
+            builder.setVersion(StringValue.of(this.defaultVersion));
         }
 
         Object input = options.getInput();
