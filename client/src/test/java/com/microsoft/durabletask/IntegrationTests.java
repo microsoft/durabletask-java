@@ -1564,4 +1564,182 @@ public class IntegrationTests extends IntegrationTestBase {
             throw new RuntimeException(e);
         }
     }
+
+    @Test
+    public void defaultVersionPassedThroughToContext() {
+        final String orchestratorName = "VersionOrchestration";
+        final String activityName = "SayVersion";
+        final String defaultVersion = "1.0";
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                String version = ctx.getVersion();
+                String output = ctx.callActivity(activityName, version, String.class).await();
+                ctx.complete(output);
+            })
+            .addActivity(activityName, ctx -> {
+                return String.format("Version: %s", ctx.getInput(String.class));
+            })
+            .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder()
+            .defaultVersion(defaultVersion)
+            .build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId,
+                defaultTimeout,
+                true);
+
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            String output = instance.readOutputAs(String.class);
+            String expected = String.format("Version: %s", defaultVersion);
+            assertEquals(expected, output);
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void optionVersionOverridesDefault() {
+        final String orchestratorName = "VersionOrchestration";
+        final String activityName = "SayVersion";
+        final String defaultVersion = "1.0";
+        final String overrideVersion = "2.0";
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                String version = ctx.getVersion();
+                String output = ctx.callActivity(activityName, version, String.class).await();
+                ctx.complete(output);
+            })
+            .addActivity(activityName, ctx -> {
+                return String.format("Version: %s", ctx.getInput(String.class));
+            })
+            .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder()
+            .defaultVersion(defaultVersion)
+            .build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, new NewOrchestrationInstanceOptions()
+                .setVersion(overrideVersion));
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId,
+                defaultTimeout,
+                true);
+
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            String output = instance.readOutputAs(String.class);
+            String expected = String.format("Version: %s", overrideVersion);
+            assertEquals(expected, output);
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "0.9", "1.0", "1.1"})
+    void orchestrationVersionCurrentOrOlderMatchStrategy(String orchestrationVersion) {
+        final String orchestratorName = "VersionedOrchestrationFailTest";
+        final String activityName = "SayVersion";
+        final DurableTaskGrpcWorkerVersioningOptions versioningOptions = new DurableTaskGrpcWorkerVersioningOptions(
+            "1.0", // Version of the worker.
+            "1.0", // Default version, used to assign versions to suborchestrations created by the worker.
+            DurableTaskGrpcWorkerVersioningOptions.VersionMatchStrategy.CURRENTOROLDER, 
+            DurableTaskGrpcWorkerVersioningOptions.VersionFailureStrategy.FAIL);;
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                String version = ctx.getVersion();
+                String output = ctx.callActivity(activityName, version, String.class).await();
+                ctx.complete(output);
+            })
+            .addActivity(activityName, ctx -> String.format("Version: %s", ctx.getInput(String.class)))
+            .useVersioning(versioningOptions)
+            .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(
+                orchestratorName,
+                new NewOrchestrationInstanceOptions().setVersion(orchestrationVersion)
+            );
+            if (orchestrationVersion.equals("1.1")) {
+                OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                    instanceId,
+                    defaultTimeout,
+                    true
+                );
+                assertNotNull(instance);
+                assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+            } else {
+                OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                    instanceId,
+                    defaultTimeout,
+                    true
+                );
+                assertNotNull(instance);
+                assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+                String output = instance.readOutputAs(String.class);
+                String expected = String.format("Version: %s", orchestrationVersion);
+                assertEquals(expected, output);
+            }
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "0.9", "1.0", "1.1"})
+    void orchestrationVersionStrictMatchStrategy(String orchestrationVersion) {
+        final String orchestratorName = "VersionedOrchestrationFailTestStrict";
+        final String activityName = "SayVersion";
+        final DurableTaskGrpcWorkerVersioningOptions versioningOptions = new DurableTaskGrpcWorkerVersioningOptions(
+            "1.0", // Version of the worker.
+            "1.0", // Default version, used to assign versions to suborchestrations created by the worker.
+            DurableTaskGrpcWorkerVersioningOptions.VersionMatchStrategy.STRICT,
+            DurableTaskGrpcWorkerVersioningOptions.VersionFailureStrategy.FAIL);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+            .addOrchestrator(orchestratorName, ctx -> {
+                String version = ctx.getVersion();
+                String output = ctx.callActivity(activityName, version, String.class).await();
+                ctx.complete(output);
+            })
+            .addActivity(activityName, ctx -> String.format("Version: %s", ctx.getInput(String.class)))
+            .useVersioning(versioningOptions)
+            .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(
+                orchestratorName,
+                new NewOrchestrationInstanceOptions().setVersion(orchestrationVersion)
+            );
+            if (orchestrationVersion.equals("1.0")) {
+                OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                    instanceId,
+                    defaultTimeout,
+                    true
+                );
+                assertNotNull(instance);
+                assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+                String output = instance.readOutputAs(String.class);
+                String expected = String.format("Version: %s", orchestrationVersion);
+                assertEquals(expected, output);
+            } else {
+                OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                    instanceId,
+                    defaultTimeout,
+                    true
+                );
+                assertNotNull(instance);
+                assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+            }
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

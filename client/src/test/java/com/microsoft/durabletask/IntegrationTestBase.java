@@ -114,5 +114,10 @@ public class IntegrationTestBase {
             });
             return this;
         }
+
+        public TestDurableTaskWorkerBuilder useVersioning(DurableTaskGrpcWorkerVersioningOptions options) {
+            this.innerBuilder.useVersioning(options);
+            return this;
+        }
     }
 }

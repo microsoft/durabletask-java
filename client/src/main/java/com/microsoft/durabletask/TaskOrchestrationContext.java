@@ -60,6 +60,13 @@ public interface TaskOrchestrationContext {
     boolean getIsReplaying();
 
     /**
+     * Gets the version of the orchestration that this context represents.
+     * 
+     * @return the version of the orchestration
+     */
+    String getVersion();
+
+    /**
      * Returns a new {@code Task} that is completed when all tasks in {@code tasks} completes.
      * See {@link #allOf(Task[])} for more detailed information.
      *
