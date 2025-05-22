@@ -1,5 +1,5 @@
-## v1.5.2
-* Update dependencies to fix CVE vulnerabilities ([#226](https://github.com/microsoft/durabletask-java/pull/226))
+## placeholder
+* Fix CVE vulnerabilities by updating dependencies ([#226](https://github.com/microsoft/durabletask-java/pull/226))
   * Update gRPC from 1.59.0 to 1.62.2
   * Update Jackson from 2.15.3 to 2.16.1
   * Update Azure Core from 1.45.0 to 1.46.0
