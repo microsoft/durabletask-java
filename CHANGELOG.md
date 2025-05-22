@@ -1,3 +1,10 @@
+## v1.5.3
+* Update dependencies to fix CVE vulnerabilities:
+  * Update gRPC from 1.59.0 to 1.62.2
+  * Update Jackson from 2.15.3 to 2.16.1
+  * Update Azure Core from 1.45.0 to 1.46.0
+  * Update Azure Identity from 1.11.1 to 1.11.2
+
 ## v1.5.2
 * Add distributed tracing support for Azure Functions client scenarios ([#211](https://github.com/microsoft/durabletask-java/pull/211))
 

@@ -17,11 +17,11 @@ plugins {
 
 archivesBaseName = 'durabletask-azuremanaged'
 group 'com.microsoft'
-version = '1.5.1-preview.1'
+version = '1.5.1-preview.2'
 
-def grpcVersion = '1.59.0'
-def azureCoreVersion = '1.45.0'
-def azureIdentityVersion = '1.11.1'
+def grpcVersion = '1.62.2'
+def azureCoreVersion = '1.46.0'
+def azureIdentityVersion = '1.11.2'
 // When build on local, you need to set this value to your local jdk11 directory.
 // Java11 is used to compile and run all the tests.
 def PATH_TO_TEST_JAVA_RUNTIME = System.env.JDK_11 ?: System.getProperty("java.home")
