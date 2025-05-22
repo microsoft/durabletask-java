@@ -9,7 +9,7 @@ plugins {
 }
 
 group 'com.microsoft'
-version = '1.5.3'
+version = '1.5.1'
 archivesBaseName = 'durabletask-client'
 
 def grpcVersion = '1.62.2'

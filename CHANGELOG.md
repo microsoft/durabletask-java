@@ -1,4 +1,4 @@
-## v1.5.3
+## Unreleased
 * Update dependencies to fix CVE vulnerabilities:
   * Update gRPC from 1.59.0 to 1.62.2
   * Update Jackson from 2.15.3 to 2.16.1

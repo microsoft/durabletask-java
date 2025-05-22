@@ -17,7 +17,7 @@ plugins {
 
 archivesBaseName = 'durabletask-azuremanaged'
 group 'com.microsoft'
-version = '1.5.1-preview.2'
+version = '1.5.1-preview.1'
 
 def grpcVersion = '1.62.2'
 def azureCoreVersion = '1.46.0'
