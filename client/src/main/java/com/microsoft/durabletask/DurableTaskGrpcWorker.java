@@ -272,11 +272,23 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 }
             }
             
+            logger.fine(() -> String.format(
+                    "Successfully streamed history for instance '%s': %d past events, %d new events",
+                    orchestratorRequest.getInstanceId(), pastEvents.size(), newEvents.size()));
+            
             // Execute the orchestration with the collected history events
             return taskOrchestrationExecutor.execute(pastEvents, newEvents);
         } catch (StatusRuntimeException e) {
-            logger.log(Level.WARNING, "Error streaming history for instance " + 
-                    orchestratorRequest.getInstanceId(), e);
+            if (e.getStatus().getCode() == Status.Code.UNAVAILABLE) {
+                logger.log(Level.WARNING, "The sidecar service is unavailable while streaming history for instance " + 
+                        orchestratorRequest.getInstanceId());
+            } else if (e.getStatus().getCode() == Status.Code.CANCELLED) {
+                logger.log(Level.WARNING, "History streaming was canceled for instance " +
+                        orchestratorRequest.getInstanceId());
+            } else {
+                logger.log(Level.WARNING, "Error streaming history for instance " + 
+                        orchestratorRequest.getInstanceId(), e);
+            }
             throw e;
         }
     }
