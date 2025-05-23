@@ -359,4 +359,24 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
         return new PurgeResult(response.getDeletedInstanceCount());
     }
+    
+    /**
+     * Streams the history events for an orchestration instance.
+     *
+     * @param instanceId The ID of the orchestration instance.
+     * @param executionId Optional execution ID of the orchestration instance.
+     * @param forWorkItemProcessing Whether the history is being streamed for work item processing.
+     * @return An iterator of HistoryChunk objects containing the orchestration history.
+     */
+    public Iterator<HistoryChunk> streamInstanceHistory(String instanceId, String executionId, boolean forWorkItemProcessing) {
+        StreamInstanceHistoryRequest.Builder requestBuilder = StreamInstanceHistoryRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .setForWorkItemProcessing(forWorkItemProcessing);
+                
+        if (executionId != null && !executionId.isEmpty()) {
+            requestBuilder.setExecutionId(StringValue.of(executionId));
+        }
+        
+        return this.sidecarClient.streamInstanceHistory(requestBuilder.build());
+    }
 }

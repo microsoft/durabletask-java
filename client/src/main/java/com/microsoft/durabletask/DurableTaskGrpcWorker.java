@@ -6,6 +6,7 @@ import com.google.protobuf.StringValue;
 
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkerCapability;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkItem.RequestCase;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
 
@@ -122,7 +123,9 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         // TODO: How do we interrupt manually?
         while (true) {
             try {
-                GetWorkItemsRequest getWorkItemsRequest = GetWorkItemsRequest.newBuilder().build();
+                GetWorkItemsRequest getWorkItemsRequest = GetWorkItemsRequest.newBuilder()
+                        .addCapabilities(WorkerCapability.WORKER_CAPABILITY_HISTORY_STREAMING)
+                        .build();
                 Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(getWorkItemsRequest);
                 while (workItemStream.hasNext()) {
                     WorkItem workItem = workItemStream.next();
@@ -132,9 +135,19 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
-                        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
-                                orchestratorRequest.getPastEventsList(),
-                                orchestratorRequest.getNewEventsList());
+                        TaskOrchestratorResult taskOrchestratorResult;
+                        
+                        if (orchestratorRequest.getRequiresHistoryStreaming()) {
+                            // Stream the history events when requested by the orchestrator service
+                            taskOrchestratorResult = processOrchestrationWithStreamingHistory(
+                                    taskOrchestrationExecutor, 
+                                    orchestratorRequest);
+                        } else {
+                            // Standard non-streaming execution path
+                            taskOrchestratorResult = taskOrchestrationExecutor.execute(
+                                    orchestratorRequest.getPastEventsList(),
+                                    orchestratorRequest.getNewEventsList());
+                        }
 
                         OrchestratorResponse response = OrchestratorResponse.newBuilder()
                                 .setInstanceId(orchestratorRequest.getInstanceId())
@@ -209,5 +222,62 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      */
     public void stop() {
         this.close();
+    }
+
+    /**
+     * Process an orchestration request using streaming history instead of receiving the full history in the work item.
+     * This is used when the history is too large to fit in a single gRPC message.
+     *
+     * @param taskOrchestrationExecutor the executor to use for processing the orchestration
+     * @param orchestratorRequest the request containing orchestration details
+     * @return the result of executing the orchestration
+     */
+    private TaskOrchestratorResult processOrchestrationWithStreamingHistory(
+            TaskOrchestrationExecutor taskOrchestrationExecutor,
+            OrchestratorRequest orchestratorRequest) {
+        
+        logger.fine(() -> String.format(
+                "Streaming history for instance '%s' as it requires history streaming",
+                orchestratorRequest.getInstanceId()));
+
+        // Create a request to stream the instance history
+        StreamInstanceHistoryRequest.Builder requestBuilder = StreamInstanceHistoryRequest.newBuilder()
+                .setInstanceId(orchestratorRequest.getInstanceId())
+                .setForWorkItemProcessing(true);
+                
+        // Include execution ID if present
+        if (orchestratorRequest.hasExecutionId()) {
+            requestBuilder.setExecutionId(orchestratorRequest.getExecutionId());
+        }
+        
+        StreamInstanceHistoryRequest request = requestBuilder.build();
+
+        // Stream history from the service
+        List<HistoryEvent> pastEvents = new ArrayList<>();
+        List<HistoryEvent> newEvents = new ArrayList<>();
+        
+        try {
+            // Get a stream of history chunks
+            Iterator<HistoryChunk> historyStream = this.sidecarClient.streamInstanceHistory(request);
+            
+            // Process each chunk of history events
+            while (historyStream.hasNext()) {
+                HistoryChunk chunk = historyStream.next();
+                
+                // The first chunk is considered the "past events", and the rest are "new events"
+                if (pastEvents.isEmpty()) {
+                    pastEvents.addAll(chunk.getEventsList());
+                } else {
+                    newEvents.addAll(chunk.getEventsList());
+                }
+            }
+            
+            // Execute the orchestration with the collected history events
+            return taskOrchestrationExecutor.execute(pastEvents, newEvents);
+        } catch (StatusRuntimeException e) {
+            logger.log(Level.WARNING, "Error streaming history for instance " + 
+                    orchestratorRequest.getInstanceId(), e);
+            throw e;
+        }
     }
 }
