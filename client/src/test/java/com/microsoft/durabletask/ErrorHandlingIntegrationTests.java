@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.concurrent.TimeoutException;
@@ -25,15 +24,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * client operations and sends invocation instructions to the DurableTaskWorker).
  */
 @Tag("integration")
-@ExtendWith(TestRetryExtension.class)
 public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
+
     @BeforeEach
     private void startUp() {
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
-        client.deleteTaskHub();
+        try(DurableTaskClient client = new DurableTaskGrpcClientBuilder().build()) {
+            client.deleteTaskHub();
+        }
     }
 
-    @RetryingTest
+    @Test
     void orchestratorException() throws TimeoutException {
         final String orchestratorName = "OrchestratorWithException";
         final String errorMessage = "Kah-BOOOOOM!!!";
@@ -59,7 +59,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @RetryingParameterizedTest
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void activityException(boolean handleException) throws TimeoutException {
         final String orchestratorName = "OrchestratorWithActivityException";
@@ -111,7 +111,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @RetryingParameterizedTest
+    @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
     public void retryActivityFailures(int maxNumberOfAttempts) throws TimeoutException {
         // There is one task for each activity call and one task between each retry
@@ -125,7 +125,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         });
     }
 
-    @RetryingParameterizedTest
+    @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
     public void retryActivityFailuresWithCustomLogic(int maxNumberOfAttempts) throws TimeoutException {
         // This gets incremented every time the retry handler is invoked
@@ -142,7 +142,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         assertEquals(maxNumberOfAttempts, retryHandlerCalls.get());
     }
 
-    @RetryingParameterizedTest
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void subOrchestrationException(boolean handleException) throws TimeoutException {
         final String orchestratorName = "OrchestrationWithBustedSubOrchestrator";
@@ -192,7 +192,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @RetryingParameterizedTest
+    @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
     public void retrySubOrchestratorFailures(int maxNumberOfAttempts) throws TimeoutException {
         // There is one task for each sub-orchestrator call and one task between each retry
@@ -207,7 +207,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
             });
     }
 
-    @RetryingParameterizedTest
+    @ParameterizedTest
     @ValueSource(ints = {1, 2, 10})
     public void retrySubOrchestrationFailuresWithCustomLogic(int maxNumberOfAttempts) throws TimeoutException {
         // This gets incremented every time the retry handler is invoked
