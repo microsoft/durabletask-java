@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.concurrent.TimeoutException;
@@ -25,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * client operations and sends invocation instructions to the DurableTaskWorker).
  */
 @Tag("integration")
-@ExtendWith(TestRetryExtension.class)
 public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
     @BeforeEach
@@ -198,7 +196,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     @ValueSource(ints = {1, 2, 10})
     public void retrySubOrchestratorFailures(int maxNumberOfAttempts) throws TimeoutException {
         // There is one task for each sub-orchestrator call and one task between each retry
-        int expectedTaskCount = (maxNumberOfAttempts * 2);
+        int expectedTaskCount = (maxNumberOfAttempts * 2) - 1;
         this.retryOnFailuresCoreTest(maxNumberOfAttempts, expectedTaskCount, ctx -> {
                 RetryPolicy retryPolicy = getCommonRetryPolicy(maxNumberOfAttempts);
                 ctx.callSubOrchestrator(

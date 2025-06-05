@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -34,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * sends invocation instructions to the DurableTaskWorker).
  */
 @Tag("integration")
-@ExtendWith(TestRetryExtension.class)
 public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
     // All tests that create a server should save it to this variable for proper shutdown
