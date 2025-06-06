@@ -1,4 +1,5 @@
-## v1.5.2
+## placeholder
+* Fix CVE vulnerabilities by updating dependencies ([#226](https://github.com/microsoft/durabletask-java/pull/226))
 * Add distributed tracing support for Azure Functions client scenarios ([#211](https://github.com/microsoft/durabletask-java/pull/211))
 
 
