@@ -81,6 +81,7 @@ final class TaskOrchestrationExecutor {
         private boolean isSuspended;
         private boolean isReplaying = true;
         private int newUUIDCounter;
+        private String version;
 
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
         private final LinkedHashMap<Integer, OrchestratorAction> pendingActions = new LinkedHashMap<>();
@@ -170,6 +171,15 @@ final class TaskOrchestrationExecutor {
 
         private void setDoneReplaying() {
             this.isReplaying = false;
+        }
+
+        @Override
+        public String getVersion() {
+            return this.version;
+        }
+
+        private void setVersion(String version) {
+            this.version = version;
         }
 
         public <V> Task<V> completedTask(V value) {
@@ -839,6 +849,8 @@ final class TaskOrchestrationExecutor {
                         this.setInstanceId(instanceId);
                         String input = startedEvent.getInput().getValue();
                         this.setInput(input);
+                        String version = startedEvent.getVersion().getValue();
+                        this.setVersion(version);
                         TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
                         if (factory == null) {
                             // Try getting the default orchestrator
