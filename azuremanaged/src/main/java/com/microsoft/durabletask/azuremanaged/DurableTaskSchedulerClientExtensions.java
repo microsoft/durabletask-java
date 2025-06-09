@@ -91,7 +91,8 @@ public final class DurableTaskSchedulerClientExtensions {
         return createBuilderFromOptions(new DurableTaskSchedulerClientOptions()
             .setEndpointAddress(endpoint)
             .setTaskHubName(taskHubName)
-            .setCredential(tokenCredential));
+            .setCredential(tokenCredential)
+            .setAllowInsecureCredentials(tokenCredential == null));
     }
 
     // Private helper methods to reduce code duplication

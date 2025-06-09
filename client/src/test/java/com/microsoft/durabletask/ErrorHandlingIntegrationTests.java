@@ -13,7 +13,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -26,13 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("integration")
 public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
 
-    @BeforeEach
-    private void startUp() {
-        try(DurableTaskClient client = new DurableTaskGrpcClientBuilder().build()) {
-            client.deleteTaskHub();
-        }
-    }
-
     @Test
     void orchestratorException() throws TimeoutException {
         final String orchestratorName = "OrchestratorWithException";
@@ -44,7 +36,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -83,7 +75,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -166,7 +158,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                     throw new RuntimeException(errorMessage);
                 })
                 .buildAndStart();
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 1);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -284,7 +276,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);

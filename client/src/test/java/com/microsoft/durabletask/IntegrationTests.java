@@ -14,8 +14,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -35,25 +33,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("integration")
 public class IntegrationTests extends IntegrationTestBase {
     static final Duration defaultTimeout = Duration.ofSeconds(100);
-    // All tests that create a server should save it to this variable for proper shutdown
-    private DurableTaskGrpcWorker server;
 
-    // Before whole test suite, delete the task hub
-    @BeforeEach
-    private void startUp() {
-        try (DurableTaskClient client = new DurableTaskGrpcClientBuilder().build()) {
-            client.deleteTaskHub();
-        }
-    }
-
-    @AfterEach
-    private void shutdown() throws InterruptedException {
-        if (this.server != null) {
-            this.server.stop();
-        }
-    }
-
-    @Test
+    @Test    
     void emptyOrchestration() throws TimeoutException {
         final String orchestratorName = "EmptyOrchestration";
         final String input = "Hello " + Instant.now();
@@ -61,7 +42,7 @@ public class IntegrationTests extends IntegrationTestBase {
             .addOrchestrator(orchestratorName, ctx -> ctx.complete(ctx.getInput(String.class)))
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(
@@ -76,7 +57,7 @@ public class IntegrationTests extends IntegrationTestBase {
         }
     }
 
-    @Test
+    @Test    
     void singleTimer() throws IOException, TimeoutException {
         final String orchestratorName = "SingleTimer";
         final Duration delay = Duration.ofSeconds(3);
@@ -84,7 +65,7 @@ public class IntegrationTests extends IntegrationTestBase {
             .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             Duration timeout = delay.plus(defaultTimeout);
@@ -110,14 +91,12 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(orchestratorName, ctx -> {
                     timestamps.set(counter.get(), LocalDateTime.now());
                     counter.incrementAndGet();
-                    ctx.createTimer(delay).await();
-                })
+                    ctx.createTimer(delay).await();                })
                 .setMaximumTimerInterval(Duration.ofSeconds(3))
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
-            client.createTaskHub(true);
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             Duration timeout = delay.plus(defaultTimeout);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, timeout, false);
@@ -164,7 +143,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 }
             }).setMaximumTimerInterval(Duration.ofSeconds(3)).buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             client.raiseEvent(instanceId, externalEventActivityName, "Hello world");
@@ -202,7 +181,7 @@ public class IntegrationTests extends IntegrationTestBase {
                     }
                 }).setMaximumTimerInterval(Duration.ofSeconds(3)).buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -235,7 +214,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 .setMaximumTimerInterval(Duration.ofSeconds(3))
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             Duration timeout = delay.plus(defaultTimeout);
@@ -263,7 +242,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(zonedDateTime).await())
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             Duration timeout = delay.plus(defaultTimeout);
@@ -293,7 +272,7 @@ public class IntegrationTests extends IntegrationTestBase {
             })
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(
@@ -330,7 +309,7 @@ public class IntegrationTests extends IntegrationTestBase {
             })
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(
@@ -375,7 +354,7 @@ public class IntegrationTests extends IntegrationTestBase {
             })
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -402,7 +381,7 @@ public class IntegrationTests extends IntegrationTestBase {
             .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -423,7 +402,7 @@ public class IntegrationTests extends IntegrationTestBase {
             }
             ctx.complete(result);
         }).buildAndStart();
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try(worker; client){
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 1);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -446,7 +425,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 ctx.complete(input);
             }
         }).buildAndStart();
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try(worker; client){
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 1);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -472,7 +451,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 ctx.complete(receivedEventCount);
             }
         }).buildAndStart();
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
@@ -496,7 +475,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             String expectOutput = "I'll be back.";
@@ -519,7 +498,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "RestartTest");
             client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -546,7 +525,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(orchestratorName, ctx -> ctx.createTimer(delay).await())
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             client.scheduleNewOrchestrationInstance(orchestratorName, "RestartTest");
 
@@ -573,7 +552,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             client.suspendInstance(instanceId);
@@ -612,7 +591,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             String suspendReason = "Suspend for testing.";
@@ -647,7 +626,7 @@ public class IntegrationTests extends IntegrationTestBase {
             .addActivity(activityName, ctx -> ctx.getInput(Object.class).toString())
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -689,7 +668,7 @@ public class IntegrationTests extends IntegrationTestBase {
             })
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
 
@@ -723,7 +702,7 @@ public class IntegrationTests extends IntegrationTestBase {
             })
             .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
 
@@ -757,7 +736,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
 
@@ -790,7 +769,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
 
@@ -813,7 +792,7 @@ public class IntegrationTests extends IntegrationTestBase {
     void multiInstanceQuery() throws TimeoutException{
         final String plusOne = "plusOne";
         final String waitForEvent = "waitForEvent";
-        final DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        final DurableTaskClient client = this.createClientBuilder().build();
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(plusOne, ctx -> {
                     int value = ctx.getInput(int.class);
@@ -830,7 +809,6 @@ public class IntegrationTests extends IntegrationTestBase {
                 }).buildAndStart();
 
         try(worker; client){
-            client.createTaskHub(true);
             Instant startTime = Instant.now();
             String prefix = startTime.toString();
 
@@ -1004,9 +982,8 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addActivity(plusOneActivityName, ctx -> ctx.getInput(int.class) + 1)
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
-            client.createTaskHub(true);
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId,  defaultTimeout, true);
             assertNotNull(metadata);
@@ -1051,9 +1028,8 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addOrchestrator(terminate, ctx -> ctx.createTimer(delay).await())
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
-            client.createTaskHub(true);
             Instant startTime = Instant.now();
 
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
@@ -1144,9 +1120,8 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addActivity(plusTwo, ctx -> ctx.getInput(int.class) + 2)
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
-            client.createTaskHub(true);
             Instant startTime = Instant.now();
 
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
@@ -1190,7 +1165,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
             assertThrows(TimeoutException.class, () -> client.waitForInstanceStart(instanceId, Duration.ofSeconds(2)));
@@ -1219,9 +1194,8 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
-            client.createTaskHub(true);
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             assertThrows(TimeoutException.class, () -> client.waitForInstanceCompletion(instanceId, Duration.ofSeconds(2), false));
         }
@@ -1259,7 +1233,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 .addActivity(activityName, ctx -> count / ctx.getInput(Integer.class))
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -1301,7 +1275,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, input);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(
@@ -1336,7 +1310,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 ctx.complete(receivedEventCount);
             }
         }).buildAndStart();
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
 
@@ -1390,7 +1364,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -1458,7 +1432,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -1508,7 +1482,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .buildAndStart();
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
@@ -1553,7 +1527,7 @@ public class IntegrationTests extends IntegrationTestBase {
                 })
                 .addActivity(echoActivityName, ctx -> ctx.getInput(UUID.class))
                 .buildAndStart();
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = this.createClientBuilder().build();
 
         try(worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
