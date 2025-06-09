@@ -1539,4 +1539,29 @@ public class IntegrationTests extends IntegrationTestBase {
             throw new RuntimeException(e);
         }
     }
+
+    @Test
+    public void newOrchestrationWithTags() {
+        String orchestratorName = "test-new-orchestration-with-tags";
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    ctx.complete("Orchestration with tags started");
+                })
+                .buildAndStart();
+        DurableTaskClient client = this.createClientBuilder().build();
+
+        try(worker; client) {
+            NewOrchestrationInstanceOptions options = new NewOrchestrationInstanceOptions()
+                    .setTags(Map.of("key1", "value1", "key2", "value2"));
+
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, options);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals("Orchestration with tags started", instance.readOutputAs(String.class));
+            assertEquals(options.getTags(), instance.getTags());
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

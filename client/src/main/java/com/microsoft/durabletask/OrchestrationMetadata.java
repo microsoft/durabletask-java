@@ -6,6 +6,8 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationState;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.microsoft.durabletask.Helpers.isNullOrEmpty;
 
@@ -29,6 +31,7 @@ public final class OrchestrationMetadata {
     private final String serializedOutput;
     private final String serializedCustomStatus;
     private final FailureDetails failureDetails;
+    private final Map<String, String> tags;
 
     OrchestrationMetadata(
             OrchestratorService.GetInstanceResponse fetchResponse,
@@ -53,6 +56,7 @@ public final class OrchestrationMetadata {
         this.serializedOutput = state.getOutput().getValue();
         this.serializedCustomStatus = state.getCustomStatus().getValue();
         this.failureDetails = new FailureDetails(state.getFailureDetails());
+        this.tags = state.getTagsMap().isEmpty() ? new HashMap<>() : new HashMap<>(state.getTagsMap());
     }
 
     /**
@@ -203,6 +207,15 @@ public final class OrchestrationMetadata {
      */
     public boolean isCustomStatusFetched() {
         return this.serializedCustomStatus != null && !this.serializedCustomStatus.isEmpty();
+    }
+
+    /**
+     * Gets the tags associated with the orchestration instance.
+     * 
+     * @return a map of tags associated with the orchestration instance
+     */
+    public Map<String, String> getTags() {
+        return this.tags;
     }
 
     private <T> T readPayloadAs(Class<T> type, String payload) {

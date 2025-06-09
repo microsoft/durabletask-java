@@ -3,6 +3,9 @@
 package com.microsoft.durabletask;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Options for starting a new instance of an orchestration.
@@ -12,6 +15,7 @@ public final class NewOrchestrationInstanceOptions {
     private String instanceId;
     private Object input;
     private Instant startTime;
+    private Map<String, String> tags;
 
     /**
      * Default constructor for the {@link NewOrchestrationInstanceOptions} class.
@@ -72,6 +76,21 @@ public final class NewOrchestrationInstanceOptions {
     }
 
     /**
+     * Sets the tags associated with the new orchestration instance.
+     * 
+     * @param tags the tags to associate with the new orchestration instance
+     * @return this {@link NewOrchestrationInstanceOptions} object
+     */
+    public NewOrchestrationInstanceOptions setTags(Map<String, String> tags) {
+        if (this.tags == null) {
+            this.tags = new HashMap<>(tags);
+        } else {
+            this.tags.putAll(tags);
+        }
+        return this;
+    }
+
+    /**
      * Gets the user-specified version of the new orchestration.
      *
      * @return the user-specified version of the new orchestration.
@@ -105,5 +124,14 @@ public final class NewOrchestrationInstanceOptions {
      */
     public Instant getStartTime() {
         return this.startTime;
+    }
+
+    /**
+     * Gets the tags associated with the new orchestration instance. If no tags were set, an empty map is returned.
+     * 
+     * @return a map of tags associated with the new orchestration instance.
+     */
+    public Map<String, String> getTags() {
+        return this.tags == null ? Collections.emptyMap() : new HashMap<>(this.tags);
     }
 }

@@ -114,6 +114,10 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             builder.setScheduledStartTimestamp(ts);
         }
 
+        if (!options.getTags().isEmpty()) {
+            builder.putAllTags(options.getTags());
+        }
+
         Span currentSpan = Span.current();
         String traceParent = null;
         String traceState = null;

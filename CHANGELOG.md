@@ -1,3 +1,6 @@
+## Unreleased
+* Add support for tags when creating new orchestrations ([#231](https://github.com/microsoft/durabletask-java/pull/230))
+
 ## v1.5.2
 * Add distributed tracing support for Azure Functions client scenarios ([#211](https://github.com/microsoft/durabletask-java/pull/211))
 
