@@ -73,12 +73,11 @@ jobs:
       if: env.UNIT_TEST_FAILED == 'true'
       run: exit 1
 
-      # TODO: Move the sidecar into a central image repository
-    - name: Initialize Durable Task Sidecar
-      run: docker run --name durabletask-sidecar -p 4001:4001 --env 'DURABLETASK_SIDECAR_LOGLEVEL=Debug' -d peterstone2019/durabletask-sidecar:latest start --backend Emulator
+    - name: Initialize Durable Task Emulator
+      run: docker run --name durabletask-emulator -p 4001:8080 -d mcr.microsoft.com/dts/dts-emulator:latest
 
-    - name: Display Durable Task Sidecar Logs
-      run: nohup docker logs --since=0 durabletask-sidecar > durabletask-sidecar.log 2>&1 &
+    - name: Display Durable Task Emulator Logs
+      run: nohup docker logs --since=0 durabletask-emulator > durabletask-emulator.log 2>&1 &
 
       # wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
     - name: Wait for 10 seconds
@@ -88,14 +87,14 @@ jobs:
       run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
       continue-on-error: true
 
-    - name: Kill Durable Task Sidecar
-      run: docker kill durabletask-sidecar
+    - name: Kill Durable Task Emulator
+      run: docker kill durabletask-emulator
     
-    - name: Upload Durable Task Sidecar Logs
+    - name: Upload Durable Task Emulator Logs
       uses: actions/upload-artifact@v4
       with:
-        name: Durable Task Sidecar Logs
-        path: durabletask-sidecar.log
+        name: Durable Task Emulator Logs
+        path: durabletask-emulator.log
 
     - name: Archive test report
       uses: actions/upload-artifact@v4
