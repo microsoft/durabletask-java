@@ -117,7 +117,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 this.orchestrationFactories,
                 this.dataConverter,
                 this.maximumTimerInterval,
-                logger);
+                logger,
+                this.versioningOptions);
         TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,
                 this.dataConverter,
