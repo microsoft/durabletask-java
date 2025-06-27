@@ -409,9 +409,7 @@ final class TaskOrchestrationExecutor {
 
             if (options instanceof NewSubOrchestrationInstanceOptions && ((NewSubOrchestrationInstanceOptions)options).getVersion() != null) {
                 NewSubOrchestrationInstanceOptions subOrchestrationOptions = (NewSubOrchestrationInstanceOptions) options;
-                if (subOrchestrationOptions.getVersion() != null) {
-                    createSubOrchestrationActionBuilder.setVersion(StringValue.of(subOrchestrationOptions.getVersion()));
-                }
+                createSubOrchestrationActionBuilder.setVersion(StringValue.of(subOrchestrationOptions.getVersion()));
             } else if (this.getDefaultVersion() != null) {
                 // If the options are not of the correct type, we still allow the version to be set
                 createSubOrchestrationActionBuilder.setVersion(StringValue.of(this.getDefaultVersion()));

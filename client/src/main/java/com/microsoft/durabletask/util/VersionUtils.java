@@ -19,41 +19,60 @@ public class VersionUtils {
             return 1;
         }
 
-        // We're looking for a dot-separated version string, e.g. "1.0.0".
-        // This can contain strings and falls back to string comparison if that is the case.
-        String[] parts1 = v1.split("\\.");
-        String[] parts2 = v2.split("\\.");
+        // Check if both versions are in standard format (e.g., "1.0.0")
+        boolean isV1Standard = isStandardVersionString(v1);
+        boolean isV2Standard = isStandardVersionString(v2);
+        
+        // If both versions were successfully normalized, compare them as structured versions
+        if (isV1Standard && isV2Standard) {
+            return compareStandardVersions(v1, v2);
+        }
+        
+        // If either version couldn't be normalized, fall back to string comparison
+        return v1.compareTo(v2);
+    }
 
-        int length = Math.max(parts1.length, parts2.length);
-        for (int i = 0; i < length; i++) {
-            String part1 = i < parts1.length ? parts1[i] : "";
-            String part2 = i < parts2.length ? parts2[i] : "";
-            
-            // Try to parse as integers first
-            Integer num1 = tryParseInt(part1);
-            Integer num2 = tryParseInt(part2);
-            
-            if (num1 != null && num2 != null) {
-                // Both are numeric, compare as integers
-                if (!num1.equals(num2)) {
-                    return num1 - num2;
-                }
-            } else if (num1 != null) {
-                // part1 is numeric, part2 is not - numeric versions come before non-numeric
-                return 1;
-            } else if (num2 != null) {
-                // part2 is numeric, part1 is not - numeric versions come before non-numeric
-                return -1;
-            } else {
-                // Both are non-numeric, compare as strings
-                int stringComparison = part1.compareTo(part2);
-                if (stringComparison != 0) {
-                    return stringComparison;
-                }
+    /**
+     * Checks if the version string is in a standard format (e.g., "1.0.0").
+     * @param version The version string to check
+     * @return true if the version is in standard format, false otherwise
+     */
+    private static boolean isStandardVersionString(String version) {
+        if (version == null || version.trim().isEmpty()) {
+            return false;
+        }
+        
+        String[] parts = version.split("\\.");
+        
+        // Check if all parts are numeric
+        for (String part : parts) {
+            if (tryParseInt(part) == null) {
+                return false; // Contains non-numeric part, cannot normalize
             }
         }
+        return true;
+    }
 
-        return 0; // All parts are equal
+    /**
+     * Compares two standard version strings part by part.
+     * @param v1 First standard version string
+     * @param v2 Second standard version string
+     * @return Negative if v1 < v2, positive if v1 > v2, zero if equal
+     */
+    private static int compareStandardVersions(String v1, String v2) {
+        String[] parts1 = v1.split("\\.");
+        String[] parts2 = v2.split("\\.");
+        
+        int length = Math.max(parts1.length, parts2.length);
+        for (int i = 0; i < length; i++) {
+            int p1 = i < parts1.length ? Integer.parseInt(parts1[i]) : 0;
+            int p2 = i < parts2.length ? Integer.parseInt(parts2[i]) : 0;
+            if (p1 != p2) {
+                return p1 - p2;
+            }
+        }
+        
+        return 0;
     }
 
     private static Integer tryParseInt(String part) {
