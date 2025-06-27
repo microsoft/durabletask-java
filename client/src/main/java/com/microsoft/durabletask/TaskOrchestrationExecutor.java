@@ -30,20 +30,28 @@ final class TaskOrchestrationExecutor {
     private final DataConverter dataConverter;
     private final Logger logger;
     private final Duration maximumTimerInterval;
+    private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
             DataConverter dataConverter,
             Duration maximumTimerInterval,
-            Logger logger) {
+            Logger logger,
+            DurableTaskGrpcWorkerVersioningOptions versioningOptions) {
         this.orchestrationFactories = orchestrationFactories;
         this.dataConverter = dataConverter;
         this.maximumTimerInterval = maximumTimerInterval;
         this.logger = logger;
+        this.versioningOptions = versioningOptions;
     }
 
     public TaskOrchestratorResult execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
         ContextImplTask context = new ContextImplTask(pastEvents, newEvents);
+
+        if (this.versioningOptions != null && this.versioningOptions.getDefaultVersion() != null) {
+            // Set the default version for the orchestrator
+            context.setDefaultVersion(this.versioningOptions.getDefaultVersion());
+        }
 
         boolean completed = false;
         try {
@@ -81,6 +89,8 @@ final class TaskOrchestrationExecutor {
         private boolean isSuspended;
         private boolean isReplaying = true;
         private int newUUIDCounter;
+        private String version;
+        private String defaultVersion;
 
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
         private final LinkedHashMap<Integer, OrchestratorAction> pendingActions = new LinkedHashMap<>();
@@ -170,6 +180,24 @@ final class TaskOrchestrationExecutor {
 
         private void setDoneReplaying() {
             this.isReplaying = false;
+        }
+
+        @Override
+        public String getVersion() {
+            return this.version;
+        }
+
+        private void setVersion(String version) {
+            this.version = version;
+        }
+
+        private String getDefaultVersion() {
+            return this.defaultVersion;
+        }
+
+        private void setDefaultVersion(String defaultVersion) {
+            // This is used when starting sub-orchestrations
+            this.defaultVersion = defaultVersion;
         }
 
         public <V> Task<V> completedTask(V value) {
@@ -378,6 +406,14 @@ final class TaskOrchestrationExecutor {
                 instanceId = this.newUUID().toString();
             }
             createSubOrchestrationActionBuilder.setInstanceId(instanceId);
+
+            if (options instanceof NewSubOrchestrationInstanceOptions && ((NewSubOrchestrationInstanceOptions)options).getVersion() != null) {
+                NewSubOrchestrationInstanceOptions subOrchestrationOptions = (NewSubOrchestrationInstanceOptions) options;
+                createSubOrchestrationActionBuilder.setVersion(StringValue.of(subOrchestrationOptions.getVersion()));
+            } else if (this.getDefaultVersion() != null) {
+                // If the options are not of the correct type, we still allow the version to be set
+                createSubOrchestrationActionBuilder.setVersion(StringValue.of(this.getDefaultVersion()));
+            }
 
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
@@ -839,6 +875,8 @@ final class TaskOrchestrationExecutor {
                         this.setInstanceId(instanceId);
                         String input = startedEvent.getInput().getValue();
                         this.setInput(input);
+                        String version = startedEvent.getVersion().getValue();
+                        this.setVersion(version);
                         TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
                         if (factory == null) {
                             // Try getting the default orchestrator

@@ -12,6 +12,7 @@ public final class DurableTaskGrpcClientBuilder {
     DataConverter dataConverter;
     int port;
     Channel channel;
+    String defaultVersion;
 
     /**
      * Sets the {@link DataConverter} to use for converting serializable data payloads.
@@ -50,6 +51,17 @@ public final class DurableTaskGrpcClientBuilder {
      */
     public DurableTaskGrpcClientBuilder port(int port) {
         this.port = port;
+        return this;
+    }
+
+    /**
+     * Sets the default version that orchestrations will be created with.
+     * 
+     * @param defaultVersion the default version to create orchestrations with
+     * @return this builder object
+     */
+    public DurableTaskGrpcClientBuilder defaultVersion(String defaultVersion) {
+        this.defaultVersion = defaultVersion;
         return this;
     }
 

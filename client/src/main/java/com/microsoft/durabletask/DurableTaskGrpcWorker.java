@@ -8,6 +8,7 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkItem.RequestCase;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
+import com.microsoft.durabletask.util.VersionUtils;
 
 import io.grpc.*;
 
@@ -16,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 /**
  * Task hub worker that connects to a sidecar process over gRPC to execute orchestrator and activity events.
@@ -31,6 +33,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final ManagedChannel managedSidecarChannel;
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
+    private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
@@ -61,6 +64,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
+        this.versioningOptions = builder.versioningOptions;
     }
 
     /**
@@ -113,7 +117,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 this.orchestrationFactories,
                 this.dataConverter,
                 this.maximumTimerInterval,
-                logger);
+                logger,
+                this.versioningOptions);
         TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,
                 this.dataConverter,
@@ -130,20 +135,87 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                     if (requestType == RequestCase.ORCHESTRATORREQUEST) {
                         OrchestratorRequest orchestratorRequest = workItem.getOrchestratorRequest();
 
+                        // If versioning is set, process it first to see if the orchestration should be executed.
+                        boolean versioningFailed = false;
+                        if (versioningOptions != null && versioningOptions.getVersion() != null) {
+                            String version = Stream.concat(orchestratorRequest.getPastEventsList().stream(), orchestratorRequest.getNewEventsList().stream())
+                                .filter(event -> event.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
+                                .map(event -> event.getExecutionStarted().getVersion().getValue())
+                                .findFirst()
+                                .orElse(null);
+
+                            if (version != null) {
+                                int comparison = VersionUtils.compareVersions(version, versioningOptions.getVersion());
+
+                                switch (versioningOptions.getMatchStrategy()) {
+                                    case NONE:
+                                        break;
+                                    case STRICT:
+                                        if (comparison != 0) {
+                                            logger.log(Level.WARNING, String.format("The orchestration version '%s' does not match the worker version '%s'.", version, versioningOptions.getVersion()));
+                                            versioningFailed = true;
+                                        }
+                                        break;
+                                    case CURRENTOROLDER:
+                                        if (comparison > 0) {
+                                            logger.log(Level.WARNING, String.format("The orchestration version '%s' is greater than the worker version '%s'.", version, versioningOptions.getVersion()));
+                                            versioningFailed = true;
+                                        }
+                                        break;
+                                    default:
+                                        logger.log(Level.SEVERE, String.format("Unknown version match strategy '%s'.", versioningOptions.getMatchStrategy()));
+                                        versioningFailed = true;
+                                        break;
+                                }
+                            }
+                        }
+
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
-                        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
+                        if (!versioningFailed) {
+                            TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
                                 orchestratorRequest.getPastEventsList(),
                                 orchestratorRequest.getNewEventsList());
 
-                        OrchestratorResponse response = OrchestratorResponse.newBuilder()
-                                .setInstanceId(orchestratorRequest.getInstanceId())
-                                .addAllActions(taskOrchestratorResult.getActions())
-                                .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
-                                .setCompletionToken(workItem.getCompletionToken())
-                                .build();
+                            OrchestratorResponse response = OrchestratorResponse.newBuilder()
+                                    .setInstanceId(orchestratorRequest.getInstanceId())
+                                    .addAllActions(taskOrchestratorResult.getActions())
+                                    .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
+                                    .setCompletionToken(workItem.getCompletionToken())
+                                    .build();
 
-                        this.sidecarClient.completeOrchestratorTask(response);
+                            this.sidecarClient.completeOrchestratorTask(response);
+                        } else {
+                            switch(versioningOptions.getFailureStrategy()) {
+                                case FAIL:
+                                    CompleteOrchestrationAction completeAction = CompleteOrchestrationAction.newBuilder()
+                                        .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                                        .setFailureDetails(TaskFailureDetails.newBuilder()
+                                            .setErrorType("VersionMismatch")
+                                            .setErrorMessage("The orchestration version does not match the worker version.")
+                                            .build())
+                                        .build();
+
+                                    OrchestratorAction action = OrchestratorAction.newBuilder()
+                                        .setCompleteOrchestration(completeAction)
+                                        .build();
+
+                                    OrchestratorResponse response = OrchestratorResponse.newBuilder()
+                                        .setInstanceId(orchestratorRequest.getInstanceId())
+                                        .setCompletionToken(workItem.getCompletionToken())
+                                        .addActions(action)
+                                        .build();
+
+                                    this.sidecarClient.completeOrchestratorTask(response);
+                                    break;
+                                // Reject and default share the same behavior as it does not change the orchestration to a terminal state.
+                                case REJECT:
+                                default:
+                                    this.sidecarClient.abandonTaskOrchestratorWorkItem(AbandonOrchestrationTaskRequest.newBuilder()
+                                        .setCompletionToken(workItem.getCompletionToken())
+                                        .build());
+                            }
+                        }                        
                     } else if (requestType == RequestCase.ACTIVITYREQUEST) {
                         ActivityRequest activityRequest = workItem.getActivityRequest();
 

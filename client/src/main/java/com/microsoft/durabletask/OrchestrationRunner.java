@@ -129,7 +129,8 @@ public final class OrchestrationRunner {
                 orchestrationFactories,
                 new JacksonDataConverter(),
                 DEFAULT_MAXIMUM_TIMER_INTERVAL,
-                logger);
+                logger,
+                null);
 
         // TODO: Error handling
         TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(

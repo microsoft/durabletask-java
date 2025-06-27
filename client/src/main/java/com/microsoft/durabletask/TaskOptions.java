@@ -5,7 +5,7 @@ package com.microsoft.durabletask;
 /**
  * Options that can be used to control the behavior of orchestrator and activity task execution.
  */
-public final class TaskOptions {
+public class TaskOptions {
     private final RetryPolicy retryPolicy;
     private final RetryHandler retryHandler;
 
