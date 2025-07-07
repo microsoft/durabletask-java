@@ -45,7 +45,9 @@ jobs:
       run: ./gradlew build -x test
     
     - name: Run SpotBugs
-      run: ./gradlew spotbugsMain spotbugsTest
+      run: |
+        export JAVA_HOME=$JDK_11
+        ./gradlew spotbugsMain spotbugsTest
       continue-on-error: false
       
     - name: Upload SpotBugs reports
