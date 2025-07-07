@@ -1,6 +1,9 @@
 ## Unreleased
+
+## v1.6.0
 * Add support for tags when creating new orchestrations ([#231](https://github.com/microsoft/durabletask-java/pull/230))
 * Add versioning support for client and worker ([#224](https://github.com/microsoft/durabletask-java/pull/224))
+* Add tracing support to send information to the WebJobs extension ([#211](https://github.com/microsoft/durabletask-java/pull/211))
 
 ## v1.5.2
 * Add distributed tracing support for Azure Functions client scenarios ([#211](https://github.com/microsoft/durabletask-java/pull/211))
