@@ -39,7 +39,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
+      uses: gradle/gradle-build-action@v3
 
     - name: Build with Gradle
       run: ./gradlew build -x test
@@ -117,7 +117,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/gradle-build-action@v3
 
       - name: Publish to local
         run: ./gradlew publishToMavenLocal -PskipSigning
@@ -131,7 +131,7 @@ jobs:
         shell: pwsh
 
       - name: End to End Tests with Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/gradle-build-action@v3
         with:
           arguments: endToEndTest
 
@@ -156,7 +156,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/gradle-build-action@v3
 
       - name: Publish to local
         run: ./gradlew publishToMavenLocal -PskipSigning
@@ -170,7 +170,7 @@ jobs:
         shell: pwsh
 
       - name: Sample Tests with Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/gradle-build-action@v3
         with:
           arguments: sampleTest
 
