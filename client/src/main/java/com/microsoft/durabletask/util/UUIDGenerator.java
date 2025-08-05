@@ -29,7 +29,9 @@ public class UUIDGenerator {
 
     private static MessageDigest hasher(String algorithm) {
         try {
-            return MessageDigest.getInstance(algorithm);
+            return MessageDigest.getInstance(algorithm); /* CodeQL [SM05136] Suppressed: SHA1 is not used for cryptographic purposes here. The information being hashed is not sensitive,
+                                                            and the goal is to generate a deterministic Guid. We cannot update to SHA2-based algorithms without breaking
+                                                            customers' inflight orchestrations. */
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(String.format("%s not supported.", algorithm));
         }
