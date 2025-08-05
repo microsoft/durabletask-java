@@ -153,7 +153,7 @@ public class DurableTaskSchedulerConnectionString {
         // Parse the supported auth types in a case-insensitive way
         switch (authType.toLowerCase().trim()) {
             case "defaultazure":
-                return new DefaultAzureCredentialBuilder().build();
+                return new DefaultAzureCredentialBuilder().build(); // CodeQL [SM05141] Use DefaultAzureCredential explicitly for local development and is decided by the user
             case "managedidentity":
                 return new ManagedIdentityCredentialBuilder().clientId(getClientId()).build();
             case "workloadidentity":
