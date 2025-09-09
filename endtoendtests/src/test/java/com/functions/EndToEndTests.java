@@ -21,6 +21,7 @@ import static io.restassured.RestAssured.post;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("e2e")
 public class EndToEndTests {
@@ -260,6 +261,68 @@ public class EndToEndTests {
         Response resp = get(statusQueryGetUri);
         String errorMessage = resp.jsonPath().get("output");
         assertTrue(errorMessage.contains("Failed to deserialize the JSON text"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "default",
+        "",
+        "0.9",
+        "1.0"
+    })
+    public void VersionedOrchestrationTests(String version) throws InterruptedException {
+        Response response = post("api/StartVersionedOrchestration?version=" + version);
+        String statusQueryGetUri = null;
+        try {
+
+            JsonPath jsonPath = response.jsonPath();
+            // assert orchestration status
+            statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        } catch (Exception e) {
+            fail("Failed to parse response: " + response.asString());
+        }
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(10));
+        assertTrue(completed);
+
+        // assert exception message
+        Response resp = get(statusQueryGetUri);
+        String output = resp.jsonPath().get("output");
+        if (version.equals("default")) {
+            assertTrue(output.contains("Version: '1.0'"), "Expected default version (1.0), got: " + output);
+        } else {
+            assertTrue(output.contains(String.format("Version: '%s'", version)), "Expected version (" + version + "), got: " + output);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "default",
+        "",
+        "0.9",
+        "1.0"
+    })
+    public void VersionedSubOrchestrationTests(String version) throws InterruptedException {
+        Response response = post("api/StartVersionedSubOrchestration?version=" + version);
+        String statusQueryGetUri = null;
+        try {
+
+            JsonPath jsonPath = response.jsonPath();
+            // assert orchestration status
+            statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        } catch (Exception e) {
+            fail("Failed to parse response: " + response.asString());
+        }
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(10));
+        assertTrue(completed);
+
+        // assert exception message
+        Response resp = get(statusQueryGetUri);
+        String output = resp.jsonPath().get("output");
+        if (version.equals("default")) {
+            assertTrue(output.contains(String.format("Version: '%s'", "1.0")), "Expected default version (1.0), got: " + output);
+        } else {
+            assertTrue(output.contains(String.format("Version: '%s'", version)), "Expected version (" + version + "), got: " + output);
+        }
     }
 
     private boolean pollingCheck(String statusQueryGetUri,
