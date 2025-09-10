@@ -1,4 +1,5 @@
 ## Unreleased
+* Add support for default versions in Durable Function sub-orchestrations ([#241](https://github.com/microsoft/durabletask-java/pull/241))
 
 ## v1.6.0
 * Add support for tags when creating new orchestrations ([#231](https://github.com/microsoft/durabletask-java/pull/230))

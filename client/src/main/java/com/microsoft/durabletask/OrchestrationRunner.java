@@ -4,6 +4,8 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.StringValue;
+import com.microsoft.durabletask.DurableTaskGrpcWorkerVersioningOptions.VersionFailureStrategy;
+import com.microsoft.durabletask.DurableTaskGrpcWorkerVersioningOptions.VersionMatchStrategy;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 
 import java.time.Duration;
@@ -125,12 +127,24 @@ public final class OrchestrationRunner {
             }
         });
 
+        DurableTaskGrpcWorkerVersioningOptions versioningOptions = null;
+        if (orchestratorRequest.getPropertiesMap().containsKey("defaultVersion")) {
+            // If a default version is found, add it to the versioning options so it can be used in the execution flow.
+            // It is safe to construct this here as we do not provide a client version nor a match/failure strategy that
+            // would take effect. This is only used in the creation of sub-orchestrations.
+            versioningOptions = new DurableTaskGrpcWorkerVersioningOptions(
+                null,
+                orchestratorRequest.getPropertiesMap().get("defaultVersion").getStringValue(),
+                VersionMatchStrategy.NONE,
+                VersionFailureStrategy.REJECT);
+        }
+
         TaskOrchestrationExecutor taskOrchestrationExecutor = new TaskOrchestrationExecutor(
                 orchestrationFactories,
                 new JacksonDataConverter(),
                 DEFAULT_MAXIMUM_TIMER_INTERVAL,
                 logger,
-                null);
+                versioningOptions);
 
         // TODO: Error handling
         TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(

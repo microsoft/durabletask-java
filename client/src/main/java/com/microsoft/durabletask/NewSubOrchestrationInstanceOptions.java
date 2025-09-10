@@ -9,6 +9,14 @@ public class NewSubOrchestrationInstanceOptions extends TaskOptions {
     private String version;
 
     /**
+     * Creates default options for the sub-orchestration. Useful for chaining
+     * when a RetryPolicy or RetryHandler is not needed.
+     */
+    public NewSubOrchestrationInstanceOptions() {
+        super((RetryPolicy) null);
+    }
+
+    /**
      * Creates options with a retry policy for the sub-orchestration.
      * @param retryPolicy The retry policy to use for the sub-orchestration.
      */

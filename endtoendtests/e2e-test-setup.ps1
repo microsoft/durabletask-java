@@ -29,6 +29,7 @@ if ($NoSetup -eq $false) {
 	docker run --name $ContainerName -p 8080:80 -it --add-host=host.docker.internal:host-gateway -d `
 		--env 'AzureWebJobsStorage=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://host.docker.internal' `
 		--env 'WEBSITE_HOSTNAME=localhost:8080' `
+		--env 'FUNCTIONS_EXTENSIONBUNDLE_SOURCE_URI=https://functionscdnstaging.azureedge.net/public' `
 		$ImageName
 }
 
