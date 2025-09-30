@@ -1,4 +1,6 @@
 ## Unreleased
+
+## v1.6.1
 * Add support for default versions in Durable Function sub-orchestrations ([#241](https://github.com/microsoft/durabletask-java/pull/241))
 
 ## v1.6.0
