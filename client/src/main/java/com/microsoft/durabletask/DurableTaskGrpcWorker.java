@@ -7,13 +7,18 @@ import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.WorkItem.RequestCase;
-import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.TaskHubSidecarServiceBlockingStub;
 import com.microsoft.durabletask.util.VersionUtils;
 
-import io.grpc.*;
+import io.grpc.Channel;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
