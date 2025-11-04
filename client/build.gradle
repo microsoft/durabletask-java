@@ -64,12 +64,20 @@ task downloadProtoFiles {
 
     doLast {
         def protoDir = file("${rootProject.projectDir}/internal/durabletask-protobuf/protos")
+        def protoFile = new File(protoDir, 'orchestrator_service.proto')
+        
+        // Skip download if proto file already exists
+        if (protoFile.exists()) {
+            logger.info("Proto file already exists, skipping download")
+            return
+        }
+        
         protoDir.mkdirs()
 
         // Download the proto file
         new URL("https://raw.githubusercontent.com/microsoft/durabletask-protobuf/${ext.branch}/protos/orchestrator_service.proto")
             .withInputStream { i -> 
-                new File(protoDir, 'orchestrator_service.proto').withOutputStream { it << i }
+                protoFile.withOutputStream { it << i }
             }
 
         // Get and save the commit hash
