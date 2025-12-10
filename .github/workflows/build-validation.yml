@@ -22,21 +22,10 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Set up JDK 11
-      uses: actions/setup-java@v2
+      uses: actions/setup-java@v4
       with:
         java-version: '11'
         distribution: 'microsoft'
-
-    - name: set JDK_11 environment variable test compiling and running
-      env:
-        ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-      run: echo ::set-env name=JDK_11::$(echo $JAVA_HOME)
-
-    - name: Set up JDK 8
-      uses: actions/setup-java@v2
-      with:
-        java-version: '8'
-        distribution: 'temurin'
 
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
@@ -56,9 +45,7 @@ jobs:
         if-no-files-found: ignore
     
     - name: Run Unit Tests with Gradle
-      run: |
-        export JAVA_HOME=$JDK_11
-        ./gradlew clean test || echo "UNIT_TEST_FAILED=true" >> $GITHUB_ENV
+      run: ./gradlew clean test || echo "UNIT_TEST_FAILED=true" >> $GITHUB_ENV
       continue-on-error: true
 
     - name: Upload test reports if tests failed
@@ -77,11 +64,31 @@ jobs:
       run: docker run --name durabletask-emulator -p 4001:8080 -d mcr.microsoft.com/dts/dts-emulator:latest
 
     - name: Display Durable Task Emulator Logs
-      run: nohup docker logs --since=0 durabletask-emulator > durabletask-emulator.log 2>&1 &
+      run: nohup docker logs -f durabletask-emulator > durabletask-emulator.log 2>&1 &
 
-      # wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
-    - name: Wait for 10 seconds
-      run: sleep 10
+    - name: Wait for Durable Task Emulator to be ready
+      run: |
+        echo "Waiting for Durable Task Emulator to be ready on port 4001..."
+        # Maximum wait time of 60 seconds for emulator startup
+        MAX_WAIT_SECONDS=60
+        attempt=0
+        # Use bash's /dev/tcp for portability instead of nc
+        while ! (echo > /dev/tcp/localhost/4001) 2>/dev/null; do
+          attempt=$((attempt + 1))
+          if [ $attempt -ge $MAX_WAIT_SECONDS ]; then
+            echo "ERROR: Emulator not ready after $MAX_WAIT_SECONDS seconds"
+            echo "Docker container status:"
+            docker ps -a
+            echo "Container logs:"
+            docker logs durabletask-emulator 2>&1 | tail -50
+            exit 1
+          fi
+          echo "Attempt $attempt/$MAX_WAIT_SECONDS - waiting for emulator..."
+          sleep 1
+        done
+        echo "Durable Task Emulator is ready on port 4001"
+        # Give additional time for gRPC service to fully initialize after port is open
+        sleep 5
 
     - name: Integration Tests with Gradle
       run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
@@ -120,11 +127,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Set up JDK 8
-        uses: actions/setup-java@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
         with:
-          java-version: '8'
-          distribution: 'temurin'
+          java-version: '11'
+          distribution: 'microsoft'
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
@@ -159,11 +166,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Set up JDK 8
-        uses: actions/setup-java@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
         with:
-          java-version: '8'
-          distribution: 'temurin'
+          java-version: '11'
+          distribution: 'microsoft'
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2

@@ -1,8 +1,7 @@
 plugins {
+    id 'java'
     id "com.microsoft.azure.azurefunctions" version "1.11.1"
 }
-apply plugin: 'java'
-apply plugin: "com.microsoft.azure.azurefunctions"
 
 group 'com.functions'
 version '0.1.0-SNAPSHOT'
