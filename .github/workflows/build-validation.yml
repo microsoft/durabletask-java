@@ -22,34 +22,19 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Set up JDK 11
-      uses: actions/setup-java@v2
+      uses: actions/setup-java@v4
       with:
         java-version: '11'
         distribution: 'microsoft'
-
-    - name: set JDK_11 environment variable test compiling and running
-      env:
-        ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-      run: echo ::set-env name=JDK_11::$(echo $JAVA_HOME)
-
-    - name: Set up JDK 8
-      uses: actions/setup-java@v2
-      with:
-        java-version: '8'
-        distribution: 'temurin'
 
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
 
     - name: Build with Gradle
-      run: |
-        export JAVA_HOME=$JDK_11
-        ./gradlew build -x test
+      run: ./gradlew build -x test
     
     - name: Run SpotBugs
-      run: |
-        export JAVA_HOME=$JDK_11
-        ./gradlew spotbugsMain spotbugsTest
+      run: ./gradlew spotbugsMain spotbugsTest
       continue-on-error: false
       
     - name: Upload SpotBugs reports
@@ -60,9 +45,7 @@ jobs:
         if-no-files-found: ignore
     
     - name: Run Unit Tests with Gradle
-      run: |
-        export JAVA_HOME=$JDK_11
-        ./gradlew clean test || echo "UNIT_TEST_FAILED=true" >> $GITHUB_ENV
+      run: ./gradlew clean test || echo "UNIT_TEST_FAILED=true" >> $GITHUB_ENV
       continue-on-error: true
 
     - name: Upload test reports if tests failed
@@ -108,9 +91,7 @@ jobs:
         sleep 5
 
     - name: Integration Tests with Gradle
-      run: |
-        export JAVA_HOME=$JDK_11
-        ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
+      run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
       continue-on-error: true
 
     - name: Kill Durable Task Emulator
@@ -147,7 +128,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Set up JDK 11
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v4
         with:
           java-version: '11'
           distribution: 'microsoft'
@@ -186,7 +167,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Set up JDK 11
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v4
         with:
           java-version: '11'
           distribution: 'microsoft'
