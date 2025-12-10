@@ -42,7 +42,9 @@ jobs:
       uses: gradle/gradle-build-action@v2
 
     - name: Build with Gradle
-      run: ./gradlew build -x test
+      run: |
+        export JAVA_HOME=$JDK_11
+        ./gradlew build -x test
     
     - name: Run SpotBugs
       run: |
