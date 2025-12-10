@@ -81,11 +81,29 @@ jobs:
       run: docker run --name durabletask-emulator -p 4001:8080 -d mcr.microsoft.com/dts/dts-emulator:latest
 
     - name: Display Durable Task Emulator Logs
-      run: nohup docker logs --since=0 durabletask-emulator > durabletask-emulator.log 2>&1 &
+      run: nohup docker logs -f durabletask-emulator > durabletask-emulator.log 2>&1 &
 
-      # wait for 10 seconds, so sidecar container can be fully up, this will avoid intermittent failing issues for integration tests causing by failed to connect to sidecar
-    - name: Wait for 10 seconds
-      run: sleep 10
+    - name: Wait for Durable Task Emulator to be ready
+      run: |
+        echo "Waiting for Durable Task Emulator to be ready on port 4001..."
+        max_attempts=60
+        attempt=0
+        while ! nc -z localhost 4001 2>/dev/null; do
+          attempt=$((attempt + 1))
+          if [ $attempt -ge $max_attempts ]; then
+            echo "ERROR: Emulator not ready after $max_attempts seconds"
+            echo "Docker container status:"
+            docker ps -a
+            echo "Container logs:"
+            docker logs durabletask-emulator 2>&1 | tail -50
+            exit 1
+          fi
+          echo "Attempt $attempt/$max_attempts - waiting for emulator..."
+          sleep 1
+        done
+        echo "Durable Task Emulator is ready on port 4001"
+        # Give additional time for gRPC service to fully initialize after port is open
+        sleep 5
 
     - name: Integration Tests with Gradle
       run: |
