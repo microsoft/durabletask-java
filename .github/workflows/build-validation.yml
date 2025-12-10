@@ -86,19 +86,21 @@ jobs:
     - name: Wait for Durable Task Emulator to be ready
       run: |
         echo "Waiting for Durable Task Emulator to be ready on port 4001..."
-        max_attempts=60
+        # Maximum wait time of 60 seconds for emulator startup
+        MAX_WAIT_SECONDS=60
         attempt=0
-        while ! nc -z localhost 4001 2>/dev/null; do
+        # Use bash's /dev/tcp for portability instead of nc
+        while ! (echo > /dev/tcp/localhost/4001) 2>/dev/null; do
           attempt=$((attempt + 1))
-          if [ $attempt -ge $max_attempts ]; then
-            echo "ERROR: Emulator not ready after $max_attempts seconds"
+          if [ $attempt -ge $MAX_WAIT_SECONDS ]; then
+            echo "ERROR: Emulator not ready after $MAX_WAIT_SECONDS seconds"
             echo "Docker container status:"
             docker ps -a
             echo "Container logs:"
             docker logs durabletask-emulator 2>&1 | tail -50
             exit 1
           fi
-          echo "Attempt $attempt/$max_attempts - waiting for emulator..."
+          echo "Attempt $attempt/$MAX_WAIT_SECONDS - waiting for emulator..."
           sleep 1
         done
         echo "Durable Task Emulator is ready on port 4001"
