@@ -41,7 +41,6 @@ message TaskFailureDetails {
     google.protobuf.StringValue stackTrace = 3;
     TaskFailureDetails innerFailure = 4;
     bool isNonRetriable = 5;
-    map<string, google.protobuf.Value> properties = 6;
 }
 
 enum OrchestrationStatus {
@@ -96,7 +95,6 @@ message TaskScheduledEvent {
     google.protobuf.StringValue version = 2;
     google.protobuf.StringValue input = 3;
     TraceContext parentTraceContext = 4;
-    map<string, string> tags = 5;
 }
 
 message TaskCompletedEvent {
@@ -194,7 +192,7 @@ message EntityOperationCalledEvent {
 }
 
 message EntityLockRequestedEvent {
-    string criticalSectionId = 1;
+    string criticalSectionId = 1;  
     repeated string lockSet = 2;
     int32 position = 3;
     google.protobuf.StringValue parentInstanceId = 4; // used only within messages, null in histories 
@@ -219,14 +217,7 @@ message EntityUnlockSentEvent {
 message EntityLockGrantedEvent {
     string criticalSectionId = 1;
 }
-
-message ExecutionRewoundEvent {
-    google.protobuf.StringValue reason = 1;
-    google.protobuf.StringValue parentExecutionId = 2; // used only for rewinding suborchestrations, null otherwise
-    google.protobuf.StringValue instanceId = 3; // used only for rewinding suborchestrations, null otherwise
-    TraceContext parentTraceContext = 4; // used only for rewinding suborchestrations, null otherwise
-}
-
+ 
 message HistoryEvent {
     int32 eventId = 1;
     google.protobuf.Timestamp timestamp = 2;
@@ -253,12 +244,11 @@ message HistoryEvent {
         ExecutionResumedEvent executionResumed = 22;
         EntityOperationSignaledEvent entityOperationSignaled = 23;
         EntityOperationCalledEvent entityOperationCalled = 24;
-        EntityOperationCompletedEvent entityOperationCompleted = 25;
-        EntityOperationFailedEvent entityOperationFailed = 26;
+        EntityOperationCompletedEvent entityOperationCompleted = 25; 
+        EntityOperationFailedEvent entityOperationFailed = 26; 
         EntityLockRequestedEvent entityLockRequested = 27;
         EntityLockGrantedEvent entityLockGranted = 28;
         EntityUnlockSentEvent entityUnlockSent = 29;
-        ExecutionRewoundEvent executionRewound = 30;
     }
 }
 
@@ -266,8 +256,6 @@ message ScheduleTaskAction {
     string name = 1;
     google.protobuf.StringValue version = 2;
     google.protobuf.StringValue input = 3;
-    map<string, string> tags = 4;
-    TraceContext parentTraceContext = 5;
 }
 
 message CreateSubOrchestrationAction {
@@ -275,7 +263,6 @@ message CreateSubOrchestrationAction {
     string name = 2;
     google.protobuf.StringValue version = 3;
     google.protobuf.StringValue input = 4;
-    TraceContext parentTraceContext = 5;
 }
 
 message CreateTimerAction {
@@ -295,7 +282,6 @@ message CompleteOrchestrationAction {
     google.protobuf.StringValue newVersion = 4;
     repeated HistoryEvent carryoverEvents = 5;
     TaskFailureDetails failureDetails = 6;
-    map<string, string> tags = 7;
 }
 
 message TerminateOrchestrationAction {
@@ -326,11 +312,6 @@ message OrchestratorAction {
     }
 }
 
-message OrchestrationTraceContext {
-    google.protobuf.StringValue spanID = 1;
-    google.protobuf.Timestamp spanStartTime = 2;   
-}
-
 message OrchestratorRequest {
     string instanceId = 1;
     google.protobuf.StringValue executionId = 2;
@@ -339,8 +320,6 @@ message OrchestratorRequest {
     OrchestratorEntityParameters entityParameters = 5;
     bool requiresHistoryStreaming = 6;
     map<string, google.protobuf.Value> properties = 7;
-
-    OrchestrationTraceContext orchestrationTraceContext = 8;
 }
 
 message OrchestratorResponse {
@@ -352,17 +331,6 @@ message OrchestratorResponse {
     // The number of work item events that were processed by the orchestrator.
     // This field is optional. If not set, the service should assume that the orchestrator processed all events.
     google.protobuf.Int32Value numEventsProcessed = 5;
-    OrchestrationTraceContext orchestrationTraceContext = 6;
-
-    // Whether or not a history is required to complete the original OrchestratorRequest and none was provided.
-    bool requiresHistory = 7;
-
-    // True if this is a partial (chunked) completion. The backend must keep the work item open until the final chunk (isPartial=false).
-    bool isPartial = 8;
-
-    // Zero-based position of the current chunk within a chunked completion sequence.
-    // This field is omitted for non-chunked completions.
-    google.protobuf.Int32Value chunkIndex = 9;
 }
 
 message CreateInstanceRequest {
@@ -375,7 +343,6 @@ message CreateInstanceRequest {
     google.protobuf.StringValue executionId = 7;
     map<string, string> tags = 8;
     TraceContext parentTraceContext = 9;
-    google.protobuf.Timestamp requestTime = 10;
 }
 
 message OrchestrationIdReusePolicy {
@@ -486,7 +453,6 @@ message PurgeInstancesRequest {
     oneof request {
         string instanceId = 1;
         PurgeInstanceFilter purgeInstanceFilter = 2;
-        InstanceBatch instanceBatch = 4;
     }
     bool recursive = 3;
 }
@@ -500,15 +466,6 @@ message PurgeInstanceFilter {
 message PurgeInstancesResponse {
     int32 deletedInstanceCount = 1;
     google.protobuf.BoolValue isComplete = 2;
-}
-
-message RestartInstanceRequest {
-    string instanceId = 1;
-    bool restartWithNewInstanceId = 2;
-}
-
-message RestartInstanceResponse {
-    string instanceId = 1;
 }
 
 message CreateTaskHubRequest {
@@ -533,12 +490,10 @@ message SignalEntityRequest {
     google.protobuf.StringValue input = 3;
     string requestId = 4;
     google.protobuf.Timestamp scheduledTime = 5;
-    TraceContext parentTraceContext = 6;
-    google.protobuf.Timestamp requestTime = 7;
 }
 
 message SignalEntityResponse {
-    // no payload
+     // no payload
 }
 
 message GetEntityRequest {
@@ -620,7 +575,6 @@ message OperationRequest {
     string operation = 1;
     string requestId = 2;
     google.protobuf.StringValue input = 3;
-    TraceContext traceContext = 4;
 }
 
 message OperationResult {
@@ -637,14 +591,10 @@ message OperationInfo {
 
 message OperationResultSuccess {
     google.protobuf.StringValue result = 1;
-    google.protobuf.Timestamp startTimeUtc = 2;
-    google.protobuf.Timestamp endTimeUtc = 3;
 }
 
 message OperationResultFailure {
     TaskFailureDetails failureDetails = 1;
-    google.protobuf.Timestamp startTimeUtc = 2;
-    google.protobuf.Timestamp endTimeUtc = 3;
 }
 
 message OperationAction {
@@ -660,8 +610,6 @@ message SendSignalAction {
     string name = 2;
     google.protobuf.StringValue input = 3;
     google.protobuf.Timestamp scheduledTime = 4;
-    google.protobuf.Timestamp requestTime = 5;
-    TraceContext parentTraceContext = 6;
 }
 
 message StartNewOrchestrationAction {
@@ -670,8 +618,6 @@ message StartNewOrchestrationAction {
     google.protobuf.StringValue version = 3;
     google.protobuf.StringValue input = 4;
     google.protobuf.Timestamp scheduledTime = 5;
-    google.protobuf.Timestamp requestTime = 6;
-    TraceContext parentTraceContext = 7;
 }
 
 message AbandonActivityTaskRequest {
@@ -698,17 +644,6 @@ message AbandonEntityTaskResponse {
     // Empty.
 }
 
-message SkipGracefulOrchestrationTerminationsRequest {
-    InstanceBatch instanceBatch = 1;
-    google.protobuf.StringValue reason = 2;
-}
-
-message SkipGracefulOrchestrationTerminationsResponse {
-    // Those instances which could not be terminated because they had locked entities at the time of this termination call,
-    // are already in a terminal state (completed, failed, terminated, etc.), are not orchestrations, or do not exist (i.e. have been purged)
-    repeated string unterminatedInstanceIds = 1;
-}
-
 service TaskHubSidecarService {
     // Sends a hello request to the sidecar service.
     rpc Hello(google.protobuf.Empty) returns (google.protobuf.Empty);
@@ -722,21 +657,18 @@ service TaskHubSidecarService {
     // Rewinds an orchestration instance to last known good state and replays from there.
     rpc RewindInstance(RewindInstanceRequest) returns (RewindInstanceResponse);
 
-    // Restarts an orchestration instance.
-    rpc RestartInstance(RestartInstanceRequest) returns (RestartInstanceResponse);
-
     // Waits for an orchestration instance to reach a running or completion state.
     rpc WaitForInstanceStart(GetInstanceRequest) returns (GetInstanceResponse);
-
+    
     // Waits for an orchestration instance to reach a completion state (completed, failed, terminated, etc.).
     rpc WaitForInstanceCompletion(GetInstanceRequest) returns (GetInstanceResponse);
 
     // Raises an event to a running orchestration instance.
     rpc RaiseEvent(RaiseEventRequest) returns (RaiseEventResponse);
-
+    
     // Terminates a running orchestration instance.
     rpc TerminateInstance(TerminateRequest) returns (TerminateResponse);
-
+    
     // Suspends a running orchestration instance.
     rpc SuspendInstance(SuspendRequest) returns (SuspendResponse);
 
@@ -782,10 +714,6 @@ service TaskHubSidecarService {
 
     // Abandon an entity work item
     rpc AbandonTaskEntityWorkItem(AbandonEntityTaskRequest) returns (AbandonEntityTaskResponse);
-
-    // "Skip" graceful termination of orchestrations by immediately changing their status in storage to "terminated".
-    // Note that a maximum of 500 orchestrations can be terminated at a time using this method.
-    rpc SkipGracefulOrchestrationTerminations(SkipGracefulOrchestrationTerminationsRequest) returns (SkipGracefulOrchestrationTerminationsResponse);
 }
 
 message GetWorkItemsRequest {
@@ -804,16 +732,6 @@ enum WorkerCapability {
     // When set, the service may return work items without any history events as an optimization.
     // It is strongly recommended that all SDKs support this capability.
     WORKER_CAPABILITY_HISTORY_STREAMING = 1;
-
-    // Indicates that the worker supports scheduled tasks.
-    // The service may send schedule-triggered orchestration work items,
-    // and the worker must handle them, including the scheduledTime field.
-    WORKER_CAPABILITY_SCHEDULED_TASKS = 2;
-
-    // Signals that the worker can handle large payloads stored externally (e.g., Blob Storage).
-    // Work items may contain URI references instead of inline data, and the worker must fetch them.
-    // This avoids message size limits and reduces network overhead.
-    WORKER_CAPABILITY_LARGE_PAYLOADS = 3;
 }
 
 message WorkItem {
@@ -832,7 +750,7 @@ message CompleteTaskResponse {
 }
 
 message HealthPing {
-    // No payload
+	// No payload
 }
 
 message StreamInstanceHistoryRequest {
@@ -845,9 +763,4 @@ message StreamInstanceHistoryRequest {
 
 message HistoryChunk {
     repeated HistoryEvent events = 1;
-}
-
-message InstanceBatch {
-    // A maximum of 500 instance IDs can be provided in this list.
-    repeated string instanceIds = 1;
 }
