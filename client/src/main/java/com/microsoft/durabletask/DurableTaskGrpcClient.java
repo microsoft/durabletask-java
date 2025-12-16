@@ -71,11 +71,16 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     public void close() {
         if (this.managedSidecarChannel != null) {
             try {
-                this.managedSidecarChannel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+                if (!this.managedSidecarChannel.shutdown().awaitTermination(5, TimeUnit.SECONDS))
+                {
+                    this.managedSidecarChannel.shutdownNow();
+                }
             } catch (InterruptedException e) {
                 // Best effort. Also note that AutoClose documentation recommends NOT having
                 // close() methods throw InterruptedException:
                 // https://docs.oracle.com/javase/7/docs/api/java/lang/AutoCloseable.html
+                this.managedSidecarChannel.shutdownNow();
+                Thread.currentThread().interrupt();
             }
         }
     }
