@@ -58,6 +58,12 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             sidecarGrpcChannel = this.managedSidecarChannel;
         }
 
+        // Apply any interceptors that were configured in the builder
+        List<ClientInterceptor> interceptors = builder.getInterceptors();
+        if (!interceptors.isEmpty()) {
+            sidecarGrpcChannel = ClientInterceptors.intercept(sidecarGrpcChannel, interceptors);
+        }
+
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
     }
 

@@ -11,6 +11,7 @@ import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
 import com.microsoft.durabletask.OrchestrationMetadata;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
+import com.microsoft.durabletask.azurefunctions.internal.FunctionInvocationIdInterceptor;
 
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
@@ -29,6 +30,7 @@ public class DurableClientContext {
     private String taskHubName;
     private String requiredQueryStringParameters;
     private DurableTaskClient client;
+    private String functionInvocationId;
 
     /**
      * Gets the name of the client binding's task hub.
@@ -37,6 +39,18 @@ public class DurableClientContext {
      */
     public String getTaskHubName() {
         return this.taskHubName;
+    }
+
+    /**
+     * Sets the function invocation ID for correlation with host-side logs.
+     * <p>
+     * Call this method before calling {@link #getClient()} to enable correlation
+     * between client operations and host-side logs.
+     *
+     * @param invocationId the Azure Functions invocation ID
+     */
+    public void setFunctionInvocationId(String invocationId) {
+        this.functionInvocationId = invocationId;
     }
 
     /**
@@ -56,7 +70,14 @@ public class DurableClientContext {
             throw new IllegalStateException("The client context RPC base URL was invalid!", ex);
         }
 
-        this.client = new DurableTaskGrpcClientBuilder().port(rpcURL.getPort()).build();
+        DurableTaskGrpcClientBuilder builder = new DurableTaskGrpcClientBuilder().port(rpcURL.getPort());
+
+        // Add interceptor for function invocation ID correlation if set
+        if (this.functionInvocationId != null && !this.functionInvocationId.isEmpty()) {
+            builder.addInterceptor(new FunctionInvocationIdInterceptor(this.functionInvocationId));
+        }
+
+        this.client = builder.build();
         return this.client;
     }
 

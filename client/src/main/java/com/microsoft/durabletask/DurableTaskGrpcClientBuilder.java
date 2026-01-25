@@ -3,6 +3,11 @@
 package com.microsoft.durabletask;
 
 import io.grpc.Channel;
+import io.grpc.ClientInterceptor;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Builder class for constructing new {@link DurableTaskClient} objects that communicate with a sidecar process
@@ -13,6 +18,7 @@ public final class DurableTaskGrpcClientBuilder {
     int port;
     Channel channel;
     String defaultVersion;
+    List<ClientInterceptor> interceptors = new ArrayList<>();
 
     /**
      * Sets the {@link DataConverter} to use for converting serializable data payloads.
@@ -63,6 +69,32 @@ public final class DurableTaskGrpcClientBuilder {
     public DurableTaskGrpcClientBuilder defaultVersion(String defaultVersion) {
         this.defaultVersion = defaultVersion;
         return this;
+    }
+
+    /**
+     * Adds a gRPC client interceptor to be applied to all gRPC calls made by the client.
+     * <p>
+     * Interceptors can be used to add custom headers, logging, or other cross-cutting concerns
+     * to gRPC calls. Multiple interceptors can be added and will be applied in the order they
+     * were added.
+     *
+     * @param interceptor the gRPC client interceptor to add
+     * @return this builder object
+     */
+    public DurableTaskGrpcClientBuilder addInterceptor(ClientInterceptor interceptor) {
+        if (interceptor != null) {
+            this.interceptors.add(interceptor);
+        }
+        return this;
+    }
+
+    /**
+     * Gets the list of interceptors that have been added to this builder.
+     *
+     * @return an unmodifiable list of interceptors
+     */
+    List<ClientInterceptor> getInterceptors() {
+        return Collections.unmodifiableList(this.interceptors);
     }
 
     /**
