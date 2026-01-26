@@ -1,5 +1,7 @@
 ## Unreleased
 
+* Adding rewind client API ([#253](https://github.com/microsoft/durabletask-java/pull/253))
+
 ## v1.6.2
 * Fixing gRPC channel shutdown ([#249](https://github.com/microsoft/durabletask-java/pull/249))
 
