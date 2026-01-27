@@ -49,7 +49,7 @@ public class DurableClientContext implements AutoCloseable {
      *
      * @return the Durable Task client object associated with the current function invocation.
      */
-    public DurableTaskClient getClient() {
+    public synchronized DurableTaskClient getClient() {
         // Return existing client if already initialized
         if (this.client != null) {
             return this.client;
@@ -162,12 +162,14 @@ public class DurableClientContext implements AutoCloseable {
      * <p>
      * This method should be called when the function invocation is complete to prevent gRPC channel leaks.
      * If no client has been created yet (i.e., {@link #getClient()} was never called), this method does nothing.
+     * This method is idempotent and can be called multiple times safely.
      * </p>
      */
     @Override
-    public void close() {
+    public synchronized void close() {
         if (this.client != null) {
             this.client.close();
+            this.client = null;
         }
     }
 }
