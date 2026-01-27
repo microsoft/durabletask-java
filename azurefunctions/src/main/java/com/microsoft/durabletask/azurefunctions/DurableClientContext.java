@@ -22,8 +22,13 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * The binding value type for the {@literal @}DurableClientInput parameter.
+ * <p>
+ * This class implements {@link AutoCloseable} to ensure proper cleanup of underlying gRPC resources.
+ * When used with the Azure Functions Java worker, the worker should call {@link #close()} after the
+ * function invocation completes to release network resources and prevent channel leak warnings.
+ * </p>
  */
-public class DurableClientContext {
+public class DurableClientContext implements AutoCloseable {
     // These fields are populated via GSON deserialization by the Functions Java worker.
     private String rpcBaseUrl;
     private String taskHubName;
@@ -147,5 +152,19 @@ public class DurableClientContext {
         }
 
         return baseUrl + "/runtime/webhooks/durabletask/instances/" + encodedInstanceId;
+    }
+
+    /**
+     * Closes the underlying durable task client and releases any associated network resources.
+     * <p>
+     * This method should be called when the function invocation is complete to prevent gRPC channel leaks.
+     * If no client has been created yet (i.e., {@link #getClient()} was never called), this method does nothing.
+     * </p>
+     */
+    @Override
+    public void close() {
+        if (this.client != null) {
+            this.client.close();
+        }
     }
 }
