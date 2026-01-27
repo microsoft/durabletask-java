@@ -50,6 +50,11 @@ public class DurableClientContext implements AutoCloseable {
      * @return the Durable Task client object associated with the current function invocation.
      */
     public DurableTaskClient getClient() {
+        // Return existing client if already initialized
+        if (this.client != null) {
+            return this.client;
+        }
+
         if (this.rpcBaseUrl == null || this.rpcBaseUrl.length() == 0) {
             throw new IllegalStateException("The client context wasn't populated with an RPC base URL!");
         }
@@ -83,12 +88,10 @@ public class DurableClientContext implements AutoCloseable {
             HttpRequestMessage<?> request,
             String instanceId,
             Duration timeout) {
-        if (this.client == null) {
-            this.client = getClient();
-        }
+        DurableTaskClient client = getClient();
         OrchestrationMetadata orchestration;
         try {
-            orchestration = this.client.waitForInstanceCompletion(instanceId, timeout, true);
+            orchestration = client.waitForInstanceCompletion(instanceId, timeout, true);
             return request.createResponseBuilder(HttpStatus.ACCEPTED)
                     .header("Content-Type", "application/json")
                     .body(orchestration.getSerializedOutput())
