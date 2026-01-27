@@ -1,4 +1,5 @@
 ## Unreleased
+* Add client operation correlation logging: `FunctionInvocationId` is now propagated via gRPC metadata to the host for client operations, enabling correlation with host logs.
 
 ## v1.6.2
 * Fixing gRPC channel shutdown ([#249](https://github.com/microsoft/durabletask-java/pull/249))
