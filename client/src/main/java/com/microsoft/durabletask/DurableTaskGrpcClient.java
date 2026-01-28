@@ -63,7 +63,6 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
 
     DurableTaskGrpcClient(int port) {
         this.dataConverter = new JacksonDataConverter();
-        this.defaultVersion = null;
 
         // Need to keep track of this channel so we can dispose it on close()
         this.managedSidecarChannel = ManagedChannelBuilder
