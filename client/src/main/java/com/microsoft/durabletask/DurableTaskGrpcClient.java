@@ -61,6 +61,17 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
     }
 
+    DurableTaskGrpcClient(int port) {
+        this.dataConverter = new JacksonDataConverter();
+
+        // Need to keep track of this channel so we can dispose it on close()
+        this.managedSidecarChannel = ManagedChannelBuilder
+                .forAddress("localhost", port)
+                .usePlaintext()
+                .build();
+        this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(this.managedSidecarChannel);
+    }
+
     /**
      * Closes the internally managed gRPC channel, if one exists.
      * <p>

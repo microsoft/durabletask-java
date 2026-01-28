@@ -9,6 +9,7 @@ import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
+import com.microsoft.durabletask.DurableTaskGrpcClientFactory;
 import com.microsoft.durabletask.OrchestrationMetadata;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 
@@ -45,6 +46,10 @@ public class DurableClientContext {
      * @return the Durable Task client object associated with the current function invocation.
      */
     public DurableTaskClient getClient() {
+        if (this.client != null) {
+            return this.client;
+        }
+
         if (this.rpcBaseUrl == null || this.rpcBaseUrl.length() == 0) {
             throw new IllegalStateException("The client context wasn't populated with an RPC base URL!");
         }
@@ -56,7 +61,7 @@ public class DurableClientContext {
             throw new IllegalStateException("The client context RPC base URL was invalid!", ex);
         }
 
-        this.client = new DurableTaskGrpcClientBuilder().port(rpcURL.getPort()).build();
+        this.client = DurableTaskGrpcClientFactory.getClient(rpcURL.getPort());
         return this.client;
     }
 
@@ -78,9 +83,7 @@ public class DurableClientContext {
             HttpRequestMessage<?> request,
             String instanceId,
             Duration timeout) {
-        if (this.client == null) {
-            this.client = getClient();
-        }
+        this.client = getClient();
         OrchestrationMetadata orchestration;
         try {
             orchestration = this.client.waitForInstanceCompletion(instanceId, timeout, true);
