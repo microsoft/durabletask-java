@@ -14,6 +14,6 @@ public final class DurableTaskGrpcClientFactory {
     }
 
     public static DurableTaskClient getClient(int port, String defaultVersion) {
-        return portToClientMap.computeIfAbsent(port, DurableTaskGrpcClient::new);
+        return portToClientMap.computeIfAbsent(port, p -> new DurableTaskGrpcClient(p, defaultVersion));
     }
 }
