@@ -12,14 +12,16 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class DurableTaskGrpcClientFactoryTest {
 
+    private static final String DEFAULT_VERSION = null;
+
     @Test
     void getClient_samePort_returnsSameInstance() {
         // Arrange
         int port = 5001;
 
         // Act
-        DurableTaskClient client1 = DurableTaskGrpcClientFactory.getClient(port);
-        DurableTaskClient client2 = DurableTaskGrpcClientFactory.getClient(port);
+        DurableTaskClient client1 = DurableTaskGrpcClientFactory.getClient(port, DEFAULT_VERSION);
+        DurableTaskClient client2 = DurableTaskGrpcClientFactory.getClient(port, DEFAULT_VERSION);
 
         // Assert
         assertNotNull(client1, "First client should not be null");
@@ -34,8 +36,8 @@ public class DurableTaskGrpcClientFactoryTest {
         int port2 = 5003;
 
         // Act
-        DurableTaskClient client1 = DurableTaskGrpcClientFactory.getClient(port1);
-        DurableTaskClient client2 = DurableTaskGrpcClientFactory.getClient(port2);
+        DurableTaskClient client1 = DurableTaskGrpcClientFactory.getClient(port1, DEFAULT_VERSION);
+        DurableTaskClient client2 = DurableTaskGrpcClientFactory.getClient(port2, DEFAULT_VERSION);
 
         // Assert
         assertNotNull(client1, "Client for port1 should not be null");
@@ -51,14 +53,14 @@ public class DurableTaskGrpcClientFactoryTest {
         int port3 = 5006;
 
         // Act
-        DurableTaskClient client1 = DurableTaskGrpcClientFactory.getClient(port1);
-        DurableTaskClient client2 = DurableTaskGrpcClientFactory.getClient(port2);
-        DurableTaskClient client3 = DurableTaskGrpcClientFactory.getClient(port3);
-        
+        DurableTaskClient client1 = DurableTaskGrpcClientFactory.getClient(port1, DEFAULT_VERSION);
+        DurableTaskClient client2 = DurableTaskGrpcClientFactory.getClient(port2, DEFAULT_VERSION);
+        DurableTaskClient client3 = DurableTaskGrpcClientFactory.getClient(port3, DEFAULT_VERSION);
+
         // Request the same ports again
-        DurableTaskClient client1Again = DurableTaskGrpcClientFactory.getClient(port1);
-        DurableTaskClient client2Again = DurableTaskGrpcClientFactory.getClient(port2);
-        DurableTaskClient client3Again = DurableTaskGrpcClientFactory.getClient(port3);
+        DurableTaskClient client1Again = DurableTaskGrpcClientFactory.getClient(port1, DEFAULT_VERSION);
+        DurableTaskClient client2Again = DurableTaskGrpcClientFactory.getClient(port2, DEFAULT_VERSION);
+        DurableTaskClient client3Again = DurableTaskGrpcClientFactory.getClient(port3, DEFAULT_VERSION);
 
         // Assert
         // Verify each port returns the same instance
