@@ -8,7 +8,6 @@ import com.microsoft.azure.functions.HttpResponseMessage;
 
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.durabletask.DurableTaskClient;
-import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
 import com.microsoft.durabletask.DurableTaskGrpcClientFactory;
 import com.microsoft.durabletask.OrchestrationMetadata;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
