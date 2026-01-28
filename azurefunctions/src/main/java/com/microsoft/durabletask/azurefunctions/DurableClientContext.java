@@ -61,7 +61,7 @@ public class DurableClientContext {
             throw new IllegalStateException("The client context RPC base URL was invalid!", ex);
         }
 
-        this.client = DurableTaskGrpcClientFactory.getClient(rpcURL.getPort());
+        this.client = DurableTaskGrpcClientFactory.getClient(rpcURL.getPort(), null);
         return this.client;
     }
 
