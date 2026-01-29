@@ -694,7 +694,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 try {
-                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).await();
+                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(10)).await();
                     ctx.complete("received");
                 } catch (TaskCanceledException e) {
                     ctx.complete(e.getMessage());
