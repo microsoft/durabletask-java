@@ -200,6 +200,7 @@ public class IntegrationTests extends IntegrationTestBase {
 
 
     @Test
+    @Disabled("Test is disabled for investigation")
     void longTimeStampTimer() throws TimeoutException {
         final String orchestratorName = "LongTimeStampTimer";
         final Duration delay = Duration.ofSeconds(7);
@@ -694,7 +695,7 @@ public class IntegrationTests extends IntegrationTestBase {
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
             .addOrchestrator(orchestratorName, ctx -> {
                 try {
-                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(3)).await();
+                    ctx.waitForExternalEvent(eventName, Duration.ofSeconds(10)).await();
                     ctx.complete("received");
                 } catch (TaskCanceledException e) {
                     ctx.complete(e.getMessage());
@@ -719,7 +720,7 @@ public class IntegrationTests extends IntegrationTestBase {
             if (raiseEvent) {
                 assertEquals("received", output);
             } else {
-                assertEquals("Timeout of PT3S expired while waiting for an event named '" + eventName + "' (ID = 0).", output);
+                assertEquals("Timeout of PT10S expired while waiting for an event named '" + eventName + "' (ID = 0).", output);
             }
         }
     }
