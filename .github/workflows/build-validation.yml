@@ -89,11 +89,7 @@ jobs:
         done
         echo "Durable Task Emulator is ready on port 4001"
         # Give additional time for gRPC service to fully initialize after port is open
-        echo "Waiting for gRPC service to fully initialize..."
-        sleep 15
-        echo "Verifying emulator container is still healthy..."
-        docker ps | grep durabletask-emulator
-        echo "Emulator initialization complete"
+        sleep 5
 
     - name: Integration Tests with Gradle
       run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
