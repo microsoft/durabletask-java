@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.microsoft'
-version = '1.6.2'
+version = '1.6.3'
 archivesBaseName = 'durabletask-azure-functions'
 
 def protocVersion = '3.12.0'
