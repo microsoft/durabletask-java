@@ -883,11 +883,10 @@ final class TaskOrchestrationExecutor {
                             factory = TaskOrchestrationExecutor.this.orchestrationFactories.get("*");
                         }
                         if (factory == null) {
-                            throw new IllegalStateException(
-                                "No orchestration factory registered for orchestration type '" + name + "'. " +
-                                "This usually means that a worker that doesn't support this orchestration type " +
-                                "is connected to this task hub. Make sure the worker has a registered " +
-                                "orchestration for '" + name + "'.");
+                            throw new IllegalStateException(String.format(
+                                    "No orchestration factory registered for orchestration type '%s'. This usually means that a worker that doesn't support this orchestration type is connected to this task hub. Make sure the worker has a registered orchestration for '%s'.",
+                                    name,
+                                    name));
                         }
                         TaskOrchestration orchestrator = factory.create();
                         orchestrator.run(this);
