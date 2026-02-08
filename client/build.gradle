@@ -1,24 +1,24 @@
 plugins {
     id 'java-library'
-    id 'com.google.protobuf' version '0.8.16'
+    id 'com.google.protobuf' version '0.9.6'
     // Generate IntelliJ IDEA's .idea & .iml project files
     id 'idea'
     id 'maven-publish'
     id 'signing'
-    id 'com.github.spotbugs' version '5.2.1'
-    id 'org.gradle.test-retry' version '1.4.1'
+    id 'com.github.spotbugs' version '6.4.8'
+    id 'org.gradle.test-retry' version '1.6.4'
 }
 
 group 'com.microsoft'
 version = '1.6.3'
 archivesBaseName = 'durabletask-client'
 
-def grpcVersion = '1.59.0'
-def protocVersion = '3.12.0'
-def jacksonVersion = '2.15.3'
-def openTelemetryVersion = '1.25.0'
-def azureCoreVersion = '1.45.0'
-def azureIdentityVersion = '1.11.1'
+def grpcVersion = '1.78.0'
+def protocVersion = '3.25.8'
+def jacksonVersion = '2.18.3'
+def openTelemetryVersion = '1.58.0'
+def azureCoreVersion = '1.57.1'
+def azureIdentityVersion = '1.18.1'
 // When build on local, you need to set this value to your local jdk11 directory.
 // Java11 is used to compile and run all the tests.
 // Example for Windows:  C:/Program Files/Java/openjdk-11.0.12_7/
@@ -41,8 +41,9 @@ dependencies {
     implementation "io.opentelemetry:opentelemetry-api:${openTelemetryVersion}"
     implementation "io.opentelemetry:opentelemetry-context:${openTelemetryVersion}"
     
-    testImplementation(platform('org.junit:junit-bom:5.7.2'))
+    testImplementation(platform('org.junit:junit-bom:5.14.2'))
     testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
     testImplementation project(':azuremanaged')
     testImplementation "com.azure:azure-core:${azureCoreVersion}"
     testImplementation "com.azure:azure-identity:${azureIdentityVersion}"
@@ -204,9 +205,9 @@ java {
 }
 
 spotbugs {
-    toolVersion = '4.9.2'
-    effort = 'max'
-    reportLevel = 'high'
+    toolVersion = '4.9.8'
+    effort = com.github.spotbugs.snom.Effort.valueOf('MAX')
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf('HIGH')
     ignoreFailures = true
     excludeFilter = file('spotbugs-exclude.xml')
 }
