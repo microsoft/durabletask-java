@@ -19,7 +19,8 @@ dependencies {
     implementation project(':azurefunctions')
 
     implementation 'com.microsoft.azure.functions:azure-functions-java-library:3.2.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.2'
+    testImplementation platform('org.junit:junit-bom:5.14.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'io.rest-assured:rest-assured:5.5.7'
     testImplementation 'io.rest-assured:json-path:5.5.7'
