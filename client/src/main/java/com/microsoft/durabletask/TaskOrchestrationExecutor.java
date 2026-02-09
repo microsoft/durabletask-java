@@ -882,7 +882,12 @@ final class TaskOrchestrationExecutor {
                             // Try getting the default orchestrator
                             factory = TaskOrchestrationExecutor.this.orchestrationFactories.get("*");
                         }
-                        // TODO: Throw if the factory is null (orchestration by that name doesn't exist)
+                        if (factory == null) {
+                            throw new IllegalStateException(String.format(
+                                    "No orchestration factory registered for orchestration type '%s'. This usually means that a worker that doesn't support this orchestration type is connected to this task hub. Make sure the worker has a registered orchestration for '%s'.",
+                                    name,
+                                    name));
+                        }
                         TaskOrchestration orchestrator = factory.create();
                         orchestrator.run(this);
                         break;
