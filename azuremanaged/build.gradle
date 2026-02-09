@@ -8,20 +8,20 @@
 
 plugins {
     id 'java'
-    id 'com.google.protobuf' version '0.8.16'
+    id 'com.google.protobuf' version '0.9.6'
     id 'idea'
     id 'maven-publish'
     id 'signing'
-    id 'com.github.spotbugs' version '5.2.1'
+    id 'com.github.spotbugs' version '6.4.8'
 }
 
 archivesBaseName = 'durabletask-azuremanaged'
 group 'com.microsoft'
 version = '1.6.3'
 
-def grpcVersion = '1.59.0'
-def azureCoreVersion = '1.45.0'
-def azureIdentityVersion = '1.11.1'
+def grpcVersion = '1.78.0'
+def azureCoreVersion = '1.57.1'
+def azureIdentityVersion = '1.18.1'
 // When build on local, you need to set this value to your local jdk11 directory.
 // Java11 is used to compile and run all the tests.
 def PATH_TO_TEST_JAVA_RUNTIME = System.env.JDK_11 ?: System.getProperty("java.home")
@@ -40,12 +40,13 @@ dependencies {
     implementation "com.azure:azure-identity:${azureIdentityVersion}"
 
     // Test dependencies
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
-    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.0'
-    testImplementation 'org.mockito:mockito-core:5.3.1'
-    testImplementation 'org.mockito:mockito-junit-jupiter:5.3.1'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.14.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.14.2'
+    testImplementation 'org.mockito:mockito-core:5.21.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
     testImplementation "io.grpc:grpc-netty:${grpcVersion}"
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.14.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.14.2'
 }
 
 compileJava {
@@ -123,9 +124,9 @@ java {
 }
 
 spotbugs {
-    toolVersion = '4.9.2'
-    effort = 'max'
-    reportLevel = 'high'
+    toolVersion = '4.9.8'
+    effort = com.github.spotbugs.snom.Effort.valueOf('MAX')
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf('HIGH')
     ignoreFailures = true
     excludeFilter = file('spotbugs-exclude.xml')
 }

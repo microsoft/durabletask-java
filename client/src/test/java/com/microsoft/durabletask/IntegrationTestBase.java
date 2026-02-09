@@ -22,7 +22,7 @@ public class IntegrationTestBase {
     private ManagedChannel clientChannel;
 
     @AfterEach
-    private void shutdown() {
+    void shutdown() {
         if (this.server != null) {
             this.server.stop();
             this.server = null;
