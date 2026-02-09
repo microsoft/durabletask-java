@@ -1,5 +1,7 @@
 ## Unreleased
 
+* Adding rewind client API ([#253](https://github.com/microsoft/durabletask-java/pull/253))
+
 ## v1.6.3
 * Add DurableTaskGrpcClientFactory ([#256](https://github.com/microsoft/durabletask-java/pull/256))
 * Add support for running GitHub workflows manually and update flaky tests ([#258](https://github.com/microsoft/durabletask-java/pull/258))

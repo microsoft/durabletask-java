@@ -606,6 +606,114 @@ public class IntegrationTests extends IntegrationTestBase {
     }
 
     @Test
+    void rewindFailedOrchestration() throws TimeoutException {
+        final String orchestratorName = "RewindOrchestration";
+        final String activityName = "FailOnceActivity";
+        final AtomicBoolean shouldFail = new AtomicBoolean(true);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    String result = ctx.callActivity(activityName, null, String.class).await();
+                    ctx.complete(result);
+                })
+                .addActivity(activityName, ctx -> {
+                    if (shouldFail.compareAndSet(true, false)) {
+                        throw new RuntimeException("Simulated transient failure");
+                    }
+                    return "Success after rewind";
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+
+            // Wait for the orchestration to fail
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            // Rewind the failed orchestration with a reason
+            String rewindReason = "Rewinding after transient failure";
+            client.rewindInstance(instanceId, rewindReason);
+
+            // Wait for the orchestration to complete after rewind
+            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals("Success after rewind", instance.readOutputAs(String.class));
+        }
+    }
+
+    @Test
+    void rewindFailedOrchestrationWithoutReason() throws TimeoutException {
+        final String orchestratorName = "RewindOrchestrationNoReason";
+        final String activityName = "FailOnceActivityNoReason";
+        final AtomicBoolean shouldFail = new AtomicBoolean(true);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    String result = ctx.callActivity(activityName, null, String.class).await();
+                    ctx.complete(result);
+                })
+                .addActivity(activityName, ctx -> {
+                    if (shouldFail.compareAndSet(true, false)) {
+                        throw new RuntimeException("Simulated transient failure");
+                    }
+                    return "Success after rewind without reason";
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+
+            // Wait for the orchestration to fail
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            // Rewind the failed orchestration without providing a reason
+            client.rewindInstance(instanceId);
+
+            // Wait for the orchestration to complete after rewind
+            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals("Success after rewind without reason", instance.readOutputAs(String.class));
+        }
+    }
+
+    @Test
+    void rewindCompletedOrchestrationThrowsException() throws TimeoutException {
+        final String orchestratorName = "RewindCompletedOrchestration";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    ctx.complete("Completed successfully");
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+
+            // Wait for the orchestration to complete
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+
+            // Attempt to rewind a completed orchestration - should throw or be a no-op
+            // Based on API behavior, rewind is only valid for FAILED orchestrations
+            assertThrows(
+                Exception.class,
+                () -> client.rewindInstance(instanceId, "Attempting to rewind completed orchestration"),
+                "Rewinding a completed orchestration should throw an exception"
+            );
+        }
+    }
+
+    @Test
     void activityFanOut() throws IOException, TimeoutException {
         final String orchestratorName = "ActivityFanOut";
         final String activityName = "ToString";

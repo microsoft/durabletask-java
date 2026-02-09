@@ -4,6 +4,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,14 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("e2e")
 public class EndToEndTests {
+
+    @BeforeAll
+    public static void setup() {
+        RestAssured.baseURI = "http://localhost";
+        // Use port 8080 for Docker, 7071 for local func start
+        String port = System.getenv("FUNCTIONS_PORT");
+        RestAssured.port = port != null ? Integer.parseInt(port) : 8080;
+    }
 
     @Order(1)
     @Test
@@ -214,6 +223,40 @@ public class EndToEndTests {
 
         boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(5));
         assertTrue(completed);
+    }
+
+    @Test
+    public void rewindFailedOrchestration() throws InterruptedException {
+        // Reset the failure flag before starting
+        post("/api/ResetRewindFailureFlag");
+
+        // Start the orchestration - it will fail on the first activity call
+        String startOrchestrationPath = "/api/StartRewindableOrchestration";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+
+        // Wait for the orchestration to fail
+        boolean failed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(10));
+        assertTrue(failed, "Orchestration should have failed");
+
+        // Get the rewind URI and rewind the orchestration
+        String rewindPostUri = jsonPath.get("rewindPostUri");
+        rewindPostUri = rewindPostUri.replace("{text}", "Testing rewind functionality");
+        Response rewindResponse = post(rewindPostUri);
+        assertEquals(202, rewindResponse.getStatusCode(), "Rewind should return 202 Accepted");
+
+        // Wait for the orchestration to complete after rewind
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(15));
+        assertTrue(completed, "Orchestration should complete after rewind");
+
+        // Verify the output contains the expected result
+        Response statusResponse = get(statusQueryGetUri);
+        String output = statusResponse.jsonPath().get("output");
+        assertTrue(output.contains("rewound-success"), "Output should indicate successful rewind: " + output);
     }
 
     @Test
