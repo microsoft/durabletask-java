@@ -1,6 +1,6 @@
 ## Unreleased
 
-## 1.7.0
+## v1.7.0
 * Add descriptive error when orchestration type is not registered ([#261](https://github.com/microsoft/durabletask-java/pull/261))
 * Update all dependencies to latest versions ([#260](https://github.com/microsoft/durabletask-java/pull/260))
 
