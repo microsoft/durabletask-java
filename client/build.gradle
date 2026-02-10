@@ -57,7 +57,8 @@ compileTestJava {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
     options.fork = true
-    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
+    def javacExe = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'javac.exe' : 'javac'
+    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/${javacExe}"
 }
 
 task downloadProtoFiles {
