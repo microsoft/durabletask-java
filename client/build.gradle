@@ -108,7 +108,8 @@ sourceSets {
 }
 
 tasks.withType(Test) {
-    executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", 'bin/java')
+    def javaExe = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'java.exe' : 'java'
+    executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", "bin/${javaExe}")
 }
 
 test {

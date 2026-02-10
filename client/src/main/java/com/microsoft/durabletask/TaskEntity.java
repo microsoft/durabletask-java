@@ -34,7 +34,6 @@ import java.util.concurrent.ConcurrentHashMap;
  *     public void reset() { this.state = 0; }
  *     public int get() { return this.state; }
  *
- *     @Override
  *     protected Integer initializeState(TaskEntityOperation operation) {
  *         return 0;
  *     }
