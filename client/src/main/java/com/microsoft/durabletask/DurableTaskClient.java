@@ -321,4 +321,91 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param reason the reason for resuming the orchestration instance
      */
     public abstract void resumeInstance(String instanceId, @Nullable String reason);
+
+    // region Entity APIs
+
+    /**
+     * Sends a signal to a durable entity instance without waiting for a response.
+     * <p>
+     * If the target entity does not exist, it will be created automatically when it receives the signal.
+     *
+     * @param entityId      the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     */
+    public void signalEntity(EntityInstanceId entityId, String operationName) {
+        this.signalEntity(entityId, operationName, null, null);
+    }
+
+    /**
+     * Sends a signal with input to a durable entity instance without waiting for a response.
+     * <p>
+     * If the target entity does not exist, it will be created automatically when it receives the signal.
+     *
+     * @param entityId      the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input         the serializable input for the operation, or {@code null}
+     */
+    public void signalEntity(EntityInstanceId entityId, String operationName, @Nullable Object input) {
+        this.signalEntity(entityId, operationName, input, null);
+    }
+
+    /**
+     * Sends a signal with input and options to a durable entity instance without waiting for a response.
+     * <p>
+     * If the target entity does not exist, it will be created automatically when it receives the signal.
+     * Use {@link SignalEntityOptions#setScheduledTime(java.time.Instant)} to schedule the signal for
+     * delivery at a future time.
+     *
+     * @param entityId      the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input         the serializable input for the operation, or {@code null}
+     * @param options       additional options for the signal, or {@code null}
+     */
+    public abstract void signalEntity(
+            EntityInstanceId entityId,
+            String operationName,
+            @Nullable Object input,
+            @Nullable SignalEntityOptions options);
+
+    /**
+     * Fetches the metadata for a durable entity instance, excluding its state.
+     *
+     * @param entityId the entity instance ID to query
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     */
+    @Nullable
+    public EntityMetadata getEntityMetadata(EntityInstanceId entityId) {
+        return this.getEntityMetadata(entityId, false);
+    }
+
+    /**
+     * Fetches the metadata for a durable entity instance, optionally including its state.
+     *
+     * @param entityId     the entity instance ID to query
+     * @param includeState {@code true} to include the entity's serialized state in the result
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     */
+    @Nullable
+    public abstract EntityMetadata getEntityMetadata(EntityInstanceId entityId, boolean includeState);
+
+    /**
+     * Queries the durable store for entity instances matching the specified filter criteria.
+     *
+     * @param query the query filter criteria
+     * @return the query result containing matching entities and an optional continuation token
+     */
+    public abstract EntityQueryResult queryEntities(EntityQuery query);
+
+    /**
+     * Cleans up entity storage by removing empty entities and/or releasing orphaned locks.
+     * <p>
+     * This is an administrative operation that can be used to reclaim storage space and fix
+     * entity state inconsistencies.
+     *
+     * @param request the clean storage request specifying what to clean
+     * @return the result of the clean operation, including counts of removed entities and released locks
+     */
+    public abstract CleanEntityStorageResult cleanEntityStorage(CleanEntityStorageRequest request);
+
+    // endregion
 }
