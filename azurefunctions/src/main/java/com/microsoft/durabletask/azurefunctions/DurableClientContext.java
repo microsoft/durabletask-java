@@ -9,6 +9,8 @@ import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientFactory;
+import com.microsoft.durabletask.EntityInstanceId;
+import com.microsoft.durabletask.EntityMetadata;
 import com.microsoft.durabletask.OrchestrationMetadata;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 
@@ -131,6 +133,48 @@ public class DurableClientContext {
      */
     public HttpManagementPayload createHttpManagementPayload(HttpRequestMessage<?> request, String instanceId) {
         return this.getClientResponseLinks(request, instanceId);
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity.
+     *
+     * @param entityId the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the input to pass to the operation (may be {@code null})
+     */
+    public void signalEntity(EntityInstanceId entityId, String operationName, Object input) {
+        getClient().signalEntity(entityId, operationName, input);
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity with no input.
+     *
+     * @param entityId the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     */
+    public void signalEntity(EntityInstanceId entityId, String operationName) {
+        getClient().signalEntity(entityId, operationName);
+    }
+
+    /**
+     * Gets the metadata for a durable entity, including optionally its serialized state.
+     *
+     * @param entityId the entity's instance ID
+     * @param includeState whether to include the entity's serialized state in the result
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     */
+    public EntityMetadata getEntityMetadata(EntityInstanceId entityId, boolean includeState) {
+        return getClient().getEntityMetadata(entityId, includeState);
+    }
+
+    /**
+     * Gets the metadata for a durable entity without including its serialized state.
+     *
+     * @param entityId the entity's instance ID
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     */
+    public EntityMetadata getEntityMetadata(EntityInstanceId entityId) {
+        return getClient().getEntityMetadata(entityId);
     }
 
     private HttpManagementPayload getClientResponseLinks(HttpRequestMessage<?> request, String instanceId) {
