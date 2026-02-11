@@ -279,9 +279,82 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                             .build());
                         }
                     } else if (requestType == RequestCase.ENTITYREQUESTV2) {
-                        // V2 entity format is not yet supported (deferred to Phase 7)
-                        logger.log(Level.WARNING,
-                                "Received an ENTITYREQUESTV2 work-item which is not yet supported. Dropping.");
+                        EntityRequest entityRequestV2 = workItem.getEntityRequestV2();
+                        try {
+                            // Convert V2 (history-based) format to V1 (flat) format
+                            EntityBatchRequest.Builder batchBuilder = EntityBatchRequest.newBuilder()
+                                    .setInstanceId(entityRequestV2.getInstanceId());
+                            if (entityRequestV2.hasEntityState()) {
+                                batchBuilder.setEntityState(entityRequestV2.getEntityState());
+                            }
+
+                            List<OperationInfo> operationInfos = new ArrayList<>();
+                            for (HistoryEvent event : entityRequestV2.getOperationRequestsList()) {
+                                if (event.hasEntityOperationSignaled()) {
+                                    EntityOperationSignaledEvent signaled = event.getEntityOperationSignaled();
+                                    OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
+                                            .setRequestId(signaled.getRequestId())
+                                            .setOperation(signaled.getOperation());
+                                    if (signaled.hasInput()) {
+                                        opBuilder.setInput(signaled.getInput());
+                                    }
+                                    batchBuilder.addOperations(opBuilder.build());
+                                    // Fire-and-forget: no response destination
+                                    operationInfos.add(OperationInfo.newBuilder()
+                                            .setRequestId(signaled.getRequestId())
+                                            .build());
+                                } else if (event.hasEntityOperationCalled()) {
+                                    EntityOperationCalledEvent called = event.getEntityOperationCalled();
+                                    OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
+                                            .setRequestId(called.getRequestId())
+                                            .setOperation(called.getOperation());
+                                    if (called.hasInput()) {
+                                        opBuilder.setInput(called.getInput());
+                                    }
+                                    batchBuilder.addOperations(opBuilder.build());
+                                    // Two-way call: include response destination
+                                    OperationInfo.Builder infoBuilder = OperationInfo.newBuilder()
+                                            .setRequestId(called.getRequestId());
+                                    if (called.hasParentInstanceId()) {
+                                        OrchestrationInstance.Builder destBuilder = OrchestrationInstance.newBuilder()
+                                                .setInstanceId(called.getParentInstanceId().getValue());
+                                        if (called.hasParentExecutionId()) {
+                                            destBuilder.setExecutionId(StringValue.of(called.getParentExecutionId().getValue()));
+                                        }
+                                        infoBuilder.setResponseDestination(destBuilder.build());
+                                    }
+                                    operationInfos.add(infoBuilder.build());
+                                } else {
+                                    logger.log(Level.WARNING,
+                                            "Skipping unsupported history event type in ENTITYREQUESTV2: {0}",
+                                            event.getEventTypeCase());
+                                }
+                            }
+
+                            EntityBatchRequest batchRequest = batchBuilder.build();
+                            EntityBatchResult result = taskEntityExecutor.execute(batchRequest);
+
+                            // Attach completion token and operation infos for response routing
+                            EntityBatchResult.Builder responseBuilder = result.toBuilder()
+                                    .setCompletionToken(workItem.getCompletionToken());
+                            // Trim operationInfos to match actual result count
+                            int resultCount = result.getResultsCount();
+                            if (operationInfos.size() > resultCount) {
+                                responseBuilder.addAllOperationInfos(operationInfos.subList(0, resultCount));
+                            } else {
+                                responseBuilder.addAllOperationInfos(operationInfos);
+                            }
+                            this.sidecarClient.completeEntityTask(responseBuilder.build());
+                        } catch (Exception e) {
+                            logger.log(Level.WARNING,
+                                    String.format("Failed to execute V2 entity batch for '%s'. Abandoning work item.",
+                                            entityRequestV2.getInstanceId()),
+                                    e);
+                            this.sidecarClient.abandonTaskEntityWorkItem(
+                                    AbandonEntityTaskRequest.newBuilder()
+                                            .setCompletionToken(workItem.getCompletionToken())
+                                            .build());
+                        }
                     }
                     else if (requestType == RequestCase.HEALTHPING)
                     {
