@@ -29,6 +29,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
+    private final HashMap<String, TaskEntityFactory> entityFactories = new HashMap<>();
 
     private final ManagedChannel managedSidecarChannel;
     private final DataConverter dataConverter;
@@ -40,6 +41,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
+        this.entityFactories.putAll(builder.entityFactories);
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
@@ -123,11 +125,20 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 this.activityFactories,
                 this.dataConverter,
                 logger);
+        TaskEntityExecutor taskEntityExecutor = new TaskEntityExecutor(
+                this.entityFactories,
+                this.dataConverter,
+                logger);
 
         // TODO: How do we interrupt manually?
         while (true) {
             try {
-                GetWorkItemsRequest getWorkItemsRequest = GetWorkItemsRequest.newBuilder().build();
+                GetWorkItemsRequest.Builder requestBuilder = GetWorkItemsRequest.newBuilder();
+                if (!this.entityFactories.isEmpty()) {
+                    // Signal to the sidecar that this worker can handle entity work items
+                    requestBuilder.setMaxConcurrentEntityWorkItems(1);
+                }
+                GetWorkItemsRequest getWorkItemsRequest = requestBuilder.build();
                 Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(getWorkItemsRequest);
                 while (workItemStream.hasNext()) {
                     WorkItem workItem = workItemStream.next();
@@ -249,7 +260,29 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         }
 
                         this.sidecarClient.completeActivityTask(responseBuilder.build());
-                    } 
+                    } else if (requestType == RequestCase.ENTITYREQUEST) {
+                        EntityBatchRequest entityRequest = workItem.getEntityRequest();
+                        try {
+                            EntityBatchResult result = taskEntityExecutor.execute(entityRequest);
+                            EntityBatchResult responseWithToken = result.toBuilder()
+                                    .setCompletionToken(workItem.getCompletionToken())
+                                    .build();
+                            this.sidecarClient.completeEntityTask(responseWithToken);
+                        } catch (Exception e) {
+                            logger.log(Level.WARNING,
+                                    String.format("Failed to execute entity batch for '%s'. Abandoning work item.",
+                                            entityRequest.getInstanceId()),
+                                    e);
+                            this.sidecarClient.abandonTaskEntityWorkItem(
+                                    AbandonEntityTaskRequest.newBuilder()
+                                            .setCompletionToken(workItem.getCompletionToken())
+                                            .build());
+                        }
+                    } else if (requestType == RequestCase.ENTITYREQUESTV2) {
+                        // V2 entity format is not yet supported (deferred to Phase 7)
+                        logger.log(Level.WARNING,
+                                "Received an ENTITYREQUESTV2 work-item which is not yet supported. Dropping.");
+                    }
                     else if (requestType == RequestCase.HEALTHPING)
                     {
                         // No-op

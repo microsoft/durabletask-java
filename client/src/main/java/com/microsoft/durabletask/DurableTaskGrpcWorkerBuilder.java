@@ -13,6 +13,7 @@ import java.util.HashMap;
 public final class DurableTaskGrpcWorkerBuilder {
     final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
+    final HashMap<String, TaskEntityFactory> entityFactories = new HashMap<>();
     int port;
     Channel channel;
     DataConverter dataConverter;
@@ -59,6 +60,30 @@ public final class DurableTaskGrpcWorkerBuilder {
         }
 
         this.activityFactories.put(key, factory);
+        return this;
+    }
+
+    /**
+     * Adds an entity factory to be used by the constructed {@link DurableTaskGrpcWorker}.
+     *
+     * @param name    the name of the entity type
+     * @param factory the factory that creates instances of the entity
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, TaskEntityFactory factory) {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("A non-empty entity name is required.");
+        }
+        if (factory == null) {
+            throw new IllegalArgumentException("An entity factory is required.");
+        }
+
+        if (this.entityFactories.containsKey(name)) {
+            throw new IllegalArgumentException(
+                    String.format("An entity factory named %s is already registered.", name));
+        }
+
+        this.entityFactories.put(name, factory);
         return this;
     }
 
