@@ -1744,6 +1744,10 @@ final class TaskOrchestrationExecutor {
                     throw (DataConverter.DataConverterException)e;
                 }
 
+                if (e instanceof EntityOperationFailedException) {
+                    throw (EntityOperationFailedException)e;
+                }
+
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }
 

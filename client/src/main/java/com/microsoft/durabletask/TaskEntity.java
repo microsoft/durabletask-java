@@ -7,6 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -50,8 +51,9 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
      */
     protected TState state;
 
-    // Cache for resolved methods, keyed by (class, operationName)
-    private static final Map<String, Method> methodCache = new ConcurrentHashMap<>();
+    // Cache for resolved methods, keyed by (class, operationName).
+    // Uses Optional<Method> so that "not found" results are also cached.
+    private static final Map<String, Optional<Method>> methodCache = new ConcurrentHashMap<>();
 
     /**
      * Creates a new {@code TaskEntity} instance.
@@ -165,11 +167,11 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
                     continue;
                 }
                 if (m.getName().equalsIgnoreCase(operationName)) {
-                    return m;
+                    return Optional.of(m);
                 }
             }
-            return null; // ConcurrentHashMap doesn't store nulls, we'll re-search each time for misses
-        });
+            return Optional.empty();
+        }).orElse(null);
     }
 
     /**
