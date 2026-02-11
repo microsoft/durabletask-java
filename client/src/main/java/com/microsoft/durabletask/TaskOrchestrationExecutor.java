@@ -108,6 +108,12 @@ final class TaskOrchestrationExecutor {
         private boolean preserveUnprocessedEvents;
         private Object customStatus;
 
+        // Entity integration state (Phase 4)
+        private String executionId;
+        private boolean isInCriticalSection;
+        private String currentCriticalSectionId;
+        private Set<String> lockedEntityIds;
+
         public ContextImplTask(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
             this.historyEventPlayer = new OrchestrationHistoryIterator(pastEvents, newEvents);
         }
@@ -352,6 +358,184 @@ final class TaskOrchestrationExecutor {
             this.newUUIDCounter++;
             return UUIDGenerator.generate(version, hashV5, UUID.fromString(dnsNameSpace), name);
         }
+
+        // region Entity integration methods (Phase 4)
+
+        @Override
+        public void signalEntity(EntityInstanceId entityId, String operationName, Object input) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
+            Helpers.throwIfArgumentNull(entityId, "entityId");
+            Helpers.throwIfArgumentNull(operationName, "operationName");
+
+            int id = this.sequenceNumber++;
+            String requestId = this.newUUID().toString();
+            String serializedInput = this.dataConverter.serialize(input);
+
+            EntityOperationSignaledEvent.Builder signalBuilder = EntityOperationSignaledEvent.newBuilder()
+                    .setRequestId(requestId)
+                    .setOperation(operationName)
+                    .setTargetInstanceId(StringValue.of(entityId.toString()));
+            if (serializedInput != null) {
+                signalBuilder.setInput(StringValue.of(serializedInput));
+            }
+
+            this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                    .setId(id)
+                    .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                            .setEntityOperationSignaled(signalBuilder)
+                            .build())
+                    .build());
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: signaling entity '%s' operation '%s' (#%d)",
+                        this.instanceId,
+                        entityId,
+                        operationName,
+                        id));
+            }
+        }
+
+        @Override
+        public <V> Task<V> callEntity(EntityInstanceId entityId, String operationName, Object input, Class<V> returnType) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
+            Helpers.throwIfArgumentNull(entityId, "entityId");
+            Helpers.throwIfArgumentNull(operationName, "operationName");
+            Helpers.throwIfArgumentNull(returnType, "returnType");
+
+            int id = this.sequenceNumber++;
+            String requestId = this.newUUID().toString();
+            String serializedInput = this.dataConverter.serialize(input);
+
+            EntityOperationCalledEvent.Builder callBuilder = EntityOperationCalledEvent.newBuilder()
+                    .setRequestId(requestId)
+                    .setOperation(operationName)
+                    .setTargetInstanceId(StringValue.of(entityId.toString()))
+                    .setParentInstanceId(StringValue.of(this.instanceId));
+            if (this.executionId != null) {
+                callBuilder.setParentExecutionId(StringValue.of(this.executionId));
+            }
+            if (serializedInput != null) {
+                callBuilder.setInput(StringValue.of(serializedInput));
+            }
+
+            this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                    .setId(id)
+                    .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                            .setEntityOperationCalled(callBuilder)
+                            .build())
+                    .build());
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: calling entity '%s' operation '%s' (#%d) requestId=%s",
+                        this.instanceId,
+                        entityId,
+                        operationName,
+                        id,
+                        requestId));
+            }
+
+            CompletableTask<V> task = new CompletableTask<>();
+            TaskRecord<V> record = new TaskRecord<>(task, operationName, returnType);
+            Queue<TaskRecord<?>> eventQueue = this.outstandingEvents.computeIfAbsent(requestId, k -> new LinkedList<>());
+            eventQueue.add(record);
+            return task;
+        }
+
+        @Override
+        public Task<AutoCloseable> lockEntities(List<EntityInstanceId> entityIds) {
+            Helpers.throwIfOrchestratorComplete(this.isComplete);
+            Helpers.throwIfArgumentNull(entityIds, "entityIds");
+            if (entityIds.isEmpty()) {
+                throw new IllegalArgumentException("entityIds must not be empty");
+            }
+            if (this.isInCriticalSection) {
+                throw new IllegalStateException(
+                        "Cannot nest lock calls. The orchestration is already inside a critical section.");
+            }
+
+            // Sort entity IDs deterministically to prevent deadlocks
+            List<EntityInstanceId> sortedIds = new ArrayList<>(entityIds);
+            Collections.sort(sortedIds);
+
+            String criticalSectionId = this.newUUID().toString();
+
+            // Build lock set as string list
+            List<String> lockSet = new ArrayList<>(sortedIds.size());
+            for (EntityInstanceId eid : sortedIds) {
+                lockSet.add(eid.toString());
+            }
+
+            // Send a lock request for each entity in sorted order
+            for (int position = 0; position < sortedIds.size(); position++) {
+                int id = this.sequenceNumber++;
+                EntityLockRequestedEvent.Builder lockBuilder = EntityLockRequestedEvent.newBuilder()
+                        .setCriticalSectionId(criticalSectionId)
+                        .addAllLockSet(lockSet)
+                        .setPosition(position)
+                        .setParentInstanceId(StringValue.of(this.instanceId));
+
+                this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                        .setId(id)
+                        .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                                .setEntityLockRequested(lockBuilder)
+                                .build())
+                        .build());
+            }
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: requesting locks on %d entities, criticalSectionId=%s",
+                        this.instanceId,
+                        sortedIds.size(),
+                        criticalSectionId));
+            }
+
+            // Create a waiter keyed by criticalSectionId
+            CompletableTask<AutoCloseable> lockTask = new CompletableTask<>();
+            TaskRecord<AutoCloseable> record = new TaskRecord<>(lockTask, "(lock)", AutoCloseable.class);
+            Queue<TaskRecord<?>> eventQueue = this.outstandingEvents.computeIfAbsent(criticalSectionId, k -> new LinkedList<>());
+            eventQueue.add(record);
+
+            // Wrap the result so that when the lock is granted, we return an AutoCloseable
+            // that releases all locks on close()
+            return lockTask.thenApply(ignored -> (AutoCloseable) () -> {
+                // Release all locks
+                for (EntityInstanceId lockedEntity : sortedIds) {
+                    int unlockId = this.sequenceNumber++;
+                    EntityUnlockSentEvent.Builder unlockBuilder = EntityUnlockSentEvent.newBuilder()
+                            .setCriticalSectionId(criticalSectionId)
+                            .setParentInstanceId(StringValue.of(this.instanceId))
+                            .setTargetInstanceId(StringValue.of(lockedEntity.toString()));
+
+                    this.pendingActions.put(unlockId, OrchestratorAction.newBuilder()
+                            .setId(unlockId)
+                            .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                                    .setEntityUnlockSent(unlockBuilder)
+                                    .build())
+                            .build());
+                }
+
+                this.isInCriticalSection = false;
+                this.currentCriticalSectionId = null;
+                this.lockedEntityIds = null;
+
+                if (!this.isReplaying) {
+                    this.logger.fine(() -> String.format(
+                            "%s: released locks for criticalSectionId=%s",
+                            this.instanceId,
+                            criticalSectionId));
+                }
+            });
+        }
+
+        @Override
+        public boolean isInCriticalSection() {
+            return this.isInCriticalSection;
+        }
+
+        // endregion
 
         @Override
         public void sendEvent(String instanceId, String eventName, Object eventData) {
@@ -606,6 +790,153 @@ final class TaskOrchestrationExecutor {
                 task.completeExceptionally(ex);
             }
         }
+
+        // region Entity event handlers (Phase 4)
+
+        private void handleEntityOperationSignaled(HistoryEvent e) {
+            int taskId = e.getEventId();
+            OrchestratorAction taskAction = this.pendingActions.remove(taskId);
+            if (taskAction == null) {
+                String message = String.format(
+                        "Non-deterministic orchestrator detected: a history event for entity signal with sequence ID %d was replayed but the current orchestrator implementation didn't schedule this signal.",
+                        taskId);
+                throw new NonDeterministicOrchestratorException(message);
+            }
+        }
+
+        private void handleEntityOperationCalled(HistoryEvent e) {
+            int taskId = e.getEventId();
+            OrchestratorAction taskAction = this.pendingActions.remove(taskId);
+            if (taskAction == null) {
+                String message = String.format(
+                        "Non-deterministic orchestrator detected: a history event for entity call with sequence ID %d was replayed but the current orchestrator implementation didn't schedule this call.",
+                        taskId);
+                throw new NonDeterministicOrchestratorException(message);
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private void handleEntityOperationCompleted(HistoryEvent e) {
+            EntityOperationCompletedEvent completedEvent = e.getEntityOperationCompleted();
+            String requestId = completedEvent.getRequestId();
+
+            Queue<TaskRecord<?>> outstandingQueue = this.outstandingEvents.get(requestId);
+            if (outstandingQueue == null) {
+                this.logger.warning("Discarding entity operation completed event with requestId=" + requestId + ": no waiter found");
+                return;
+            }
+
+            TaskRecord<?> record = outstandingQueue.remove();
+            if (outstandingQueue.isEmpty()) {
+                this.outstandingEvents.remove(requestId);
+            }
+
+            String rawResult = completedEvent.hasOutput() ? completedEvent.getOutput().getValue() : null;
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: Entity operation completed for requestId=%s with output: %s",
+                        this.instanceId,
+                        requestId,
+                        rawResult != null ? rawResult : "(null)"));
+            }
+
+            CompletableTask task = record.getTask();
+            try {
+                Object result = this.dataConverter.deserialize(rawResult, record.getDataType());
+                task.complete(result);
+            } catch (Exception ex) {
+                task.completeExceptionally(ex);
+            }
+        }
+
+        private void handleEntityOperationFailed(HistoryEvent e) {
+            EntityOperationFailedEvent failedEvent = e.getEntityOperationFailed();
+            String requestId = failedEvent.getRequestId();
+
+            Queue<TaskRecord<?>> outstandingQueue = this.outstandingEvents.get(requestId);
+            if (outstandingQueue == null) {
+                this.logger.warning("Discarding entity operation failed event with requestId=" + requestId + ": no waiter found");
+                return;
+            }
+
+            TaskRecord<?> record = outstandingQueue.remove();
+            if (outstandingQueue.isEmpty()) {
+                this.outstandingEvents.remove(requestId);
+            }
+
+            FailureDetails details = new FailureDetails(failedEvent.getFailureDetails());
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: Entity operation failed for requestId=%s: %s",
+                        this.instanceId,
+                        requestId,
+                        details.getErrorMessage()));
+            }
+
+            CompletableTask<?> task = record.getTask();
+            // Parse entity ID from the task name if needed; use a generic entity ID for the exception
+            EntityOperationFailedException exception = new EntityOperationFailedException(
+                    EntityInstanceId.fromString("@unknown@unknown"),
+                    record.getTaskName(),
+                    details);
+            task.completeExceptionally(exception);
+        }
+
+        private void handleEntityLockRequested(HistoryEvent e) {
+            int taskId = e.getEventId();
+            OrchestratorAction taskAction = this.pendingActions.remove(taskId);
+            if (taskAction == null) {
+                String message = String.format(
+                        "Non-deterministic orchestrator detected: a history event for entity lock request with sequence ID %d was replayed but the current orchestrator implementation didn't issue this lock request.",
+                        taskId);
+                throw new NonDeterministicOrchestratorException(message);
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private void handleEntityLockGranted(HistoryEvent e) {
+            EntityLockGrantedEvent lockGrantedEvent = e.getEntityLockGranted();
+            String criticalSectionId = lockGrantedEvent.getCriticalSectionId();
+
+            Queue<TaskRecord<?>> outstandingQueue = this.outstandingEvents.get(criticalSectionId);
+            if (outstandingQueue == null) {
+                this.logger.warning("Discarding entity lock granted event with criticalSectionId=" + criticalSectionId + ": no waiter found");
+                return;
+            }
+
+            TaskRecord<?> record = outstandingQueue.remove();
+            if (outstandingQueue.isEmpty()) {
+                this.outstandingEvents.remove(criticalSectionId);
+            }
+
+            this.isInCriticalSection = true;
+            this.currentCriticalSectionId = criticalSectionId;
+
+            if (!this.isReplaying) {
+                this.logger.fine(() -> String.format(
+                        "%s: Entity lock granted for criticalSectionId=%s",
+                        this.instanceId,
+                        criticalSectionId));
+            }
+
+            CompletableTask task = record.getTask();
+            task.complete(null); // The actual AutoCloseable is created via thenApply in lockEntities()
+        }
+
+        private void handleEntityUnlockSent(HistoryEvent e) {
+            int taskId = e.getEventId();
+            OrchestratorAction taskAction = this.pendingActions.remove(taskId);
+            if (taskAction == null) {
+                String message = String.format(
+                        "Non-deterministic orchestrator detected: a history event for entity unlock with sequence ID %d was replayed but the current orchestrator implementation didn't issue this unlock.",
+                        taskId);
+                throw new NonDeterministicOrchestratorException(message);
+            }
+        }
+
+        // endregion
 
         private void handleEventWhileSuspended (HistoryEvent historyEvent){
             if (historyEvent.getEventTypeCase() != HistoryEvent.EventTypeCase.EXECUTIONSUSPENDED) {
@@ -873,6 +1204,9 @@ final class TaskOrchestrationExecutor {
                         this.setName(name);
                         String instanceId = startedEvent.getOrchestrationInstance().getInstanceId();
                         this.setInstanceId(instanceId);
+                        if (startedEvent.getOrchestrationInstance().hasExecutionId()) {
+                            this.executionId = startedEvent.getOrchestrationInstance().getExecutionId().getValue();
+                        }
                         String input = startedEvent.getInput().getValue();
                         this.setInput(input);
                         String version = startedEvent.getVersion().getValue();
@@ -922,8 +1256,9 @@ final class TaskOrchestrationExecutor {
                     case SUBORCHESTRATIONINSTANCEFAILED:
                         this.handleSubOrchestrationFailed(e);
                         break;
-//                case EVENTSENT:
-//                    break;
+                    case EVENTSENT:
+                        // No action needed — sendEvent is fire-and-forget with no replay validation
+                        break;
                     case EVENTRAISED:
                         this.handleEventRaised(e);
                         break;
@@ -938,6 +1273,28 @@ final class TaskOrchestrationExecutor {
                         break;
                     case EXECUTIONRESUMED:
                         this.handleExecutionResumed(e);
+                        break;
+                    // Entity event cases (Phase 4)
+                    case ENTITYOPERATIONSIGNALED:
+                        this.handleEntityOperationSignaled(e);
+                        break;
+                    case ENTITYOPERATIONCALLED:
+                        this.handleEntityOperationCalled(e);
+                        break;
+                    case ENTITYOPERATIONCOMPLETED:
+                        this.handleEntityOperationCompleted(e);
+                        break;
+                    case ENTITYOPERATIONFAILED:
+                        this.handleEntityOperationFailed(e);
+                        break;
+                    case ENTITYLOCKREQUESTED:
+                        this.handleEntityLockRequested(e);
+                        break;
+                    case ENTITYLOCKGRANTED:
+                        this.handleEntityLockGranted(e);
+                        break;
+                    case ENTITYUNLOCKSENT:
+                        this.handleEntityUnlockSent(e);
                         break;
                     default:
                         throw new IllegalStateException("Don't know how to handle history type " + e.getEventTypeCase());

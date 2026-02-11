@@ -9,6 +9,7 @@ import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import javax.annotation.Nonnull;
 
 /**
  * Used by orchestrators to perform actions such as scheduling tasks, durable timers, waiting for external events,
@@ -557,6 +558,114 @@ public interface TaskOrchestrationContext {
             throw new RuntimeException("An unexpected exception was throw while waiting for an external event.", e);
         }
     }
+
+    // region Entity integration methods
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity.
+     * <p>
+     * Signals are one-way messages that do not return a result. The target entity will execute the specified
+     * operation asynchronously. If the entity does not exist, it will be created automatically.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     */
+    default void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName) {
+        this.signalEntity(entityId, operationName, null);
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity with the specified input.
+     * <p>
+     * Signals are one-way messages that do not return a result. The target entity will execute the specified
+     * operation asynchronously. If the entity does not exist, it will be created automatically.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     */
+    void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input);
+
+    /**
+     * Calls an operation on a durable entity and waits for the result.
+     * <p>
+     * Unlike {@link #signalEntity}, this method is a two-way call that returns a result. The calling orchestration
+     * will block until the entity operation completes and returns a response.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     * @param returnType the expected class type of the entity operation output
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input, @Nonnull Class<V> returnType);
+
+    /**
+     * Calls an operation on a durable entity and waits for it to complete (no return value).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     */
+    default Task<Void> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName) {
+        return this.callEntity(entityId, operationName, null, Void.class);
+    }
+
+    /**
+     * Calls an operation on a durable entity with input and waits for it to complete (no return value).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     */
+    default Task<Void> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input) {
+        return this.callEntity(entityId, operationName, input, Void.class);
+    }
+
+    /**
+     * Calls an operation on a durable entity and waits for the result (no input).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param returnType the expected class type of the entity operation output
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    default <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nonnull Class<V> returnType) {
+        return this.callEntity(entityId, operationName, null, returnType);
+    }
+
+    /**
+     * Acquires one or more entity locks for the duration of a critical section.
+     * <p>
+     * Entity locks are used to coordinate access and prevent conflicts when multiple orchestrations need
+     * to access the same entities. The returned {@link AutoCloseable} must be closed to release the locks.
+     * <p>
+     * Entity IDs are sorted deterministically before acquiring locks to prevent deadlocks.
+     * Nesting of lock calls is not supported and will throw an {@link IllegalStateException}.
+     * <p>
+     * Example usage:
+     * <pre>{@code
+     * try (AutoCloseable lock = ctx.lockEntities(entityIds).await()) {
+     *     // Perform operations on the locked entities
+     *     ctx.callEntity(entityId, "transfer", amount).await();
+     * }
+     * }</pre>
+     *
+     * @param entityIds the list of entity instance IDs to lock; must not be empty
+     * @return a {@link Task} that completes with an {@link AutoCloseable} when all locks are acquired
+     */
+    Task<AutoCloseable> lockEntities(@Nonnull List<EntityInstanceId> entityIds);
+
+    /**
+     * Gets a value indicating whether this orchestration is currently executing inside a critical section
+     * that was created by {@link #lockEntities}.
+     *
+     * @return {@code true} if the orchestration is inside a critical section, otherwise {@code false}
+     */
+    boolean isInCriticalSection();
+
+    // endregion
 
     /**
      * Assigns a custom status value to the current orchestration.
