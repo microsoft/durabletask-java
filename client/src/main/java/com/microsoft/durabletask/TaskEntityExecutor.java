@@ -84,7 +84,6 @@ final class TaskEntityExecutor {
 
         // Process each operation
         List<OperationResult> results = new ArrayList<>();
-        int actionIdCounter = 0;
 
         // Create a single entity instance for the entire batch
         ITaskEntity entity;
@@ -195,7 +194,7 @@ final class TaskEntityExecutor {
         // Build the final result
         EntityBatchResult.Builder resultBuilder = EntityBatchResult.newBuilder()
                 .addAllResults(results)
-                .addAllActions(context.getCommittedActions(actionIdCounter));
+                .addAllActions(context.getCommittedActions(0));
 
         // Set the final entity state
         String finalState = entityState.getSerializedState();

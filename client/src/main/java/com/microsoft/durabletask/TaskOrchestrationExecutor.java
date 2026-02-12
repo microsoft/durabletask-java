@@ -113,6 +113,7 @@ final class TaskOrchestrationExecutor {
         private boolean isInCriticalSection;
         private String currentCriticalSectionId;
         private Set<String> lockedEntityIds;
+        private final Map<String, Set<String>> pendingLockSets = new HashMap<>();
 
         public ContextImplTask(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
             this.historyEventPlayer = new OrchestrationHistoryIterator(pastEvents, newEvents);
@@ -403,6 +404,15 @@ final class TaskOrchestrationExecutor {
             Helpers.throwIfArgumentNull(operationName, "operationName");
             Helpers.throwIfArgumentNull(returnType, "returnType");
 
+            // Validate critical section: calls must target locked entities to prevent deadlocks
+            if (this.isInCriticalSection && this.lockedEntityIds != null
+                    && !this.lockedEntityIds.contains(entityId.toString())) {
+                throw new IllegalStateException(String.format(
+                        "Cannot call entity '%s' from within a critical section because it is not locked. " +
+                        "Only locked entities can be called inside a critical section to prevent deadlocks.",
+                        entityId));
+            }
+
             int id = this.sequenceNumber++;
             String requestId = this.newUUID().toString();
             String serializedInput = this.dataConverter.serialize(input);
@@ -437,7 +447,7 @@ final class TaskOrchestrationExecutor {
             }
 
             CompletableTask<V> task = new CompletableTask<>();
-            TaskRecord<V> record = new TaskRecord<>(task, operationName, returnType);
+            TaskRecord<V> record = new TaskRecord<>(task, operationName, returnType, entityId);
             Queue<TaskRecord<?>> eventQueue = this.outstandingEvents.computeIfAbsent(requestId, k -> new LinkedList<>());
             eventQueue.add(record);
             return task;
@@ -483,6 +493,10 @@ final class TaskOrchestrationExecutor {
                                 .build())
                         .build());
             }
+
+            // Store the lock set so handleEntityLockGranted can populate lockedEntityIds
+            Set<String> lockSetForStorage = new HashSet<>(lockSet);
+            this.pendingLockSets.put(criticalSectionId, lockSetForStorage);
 
             if (!this.isReplaying) {
                 this.logger.fine(() -> String.format(
@@ -876,9 +890,11 @@ final class TaskOrchestrationExecutor {
             }
 
             CompletableTask<?> task = record.getTask();
-            // Parse entity ID from the task name if needed; use a generic entity ID for the exception
+            EntityInstanceId failedEntityId = record.getEntityId() != null
+                    ? record.getEntityId()
+                    : EntityInstanceId.fromString("@unknown@unknown");
             EntityOperationFailedException exception = new EntityOperationFailedException(
-                    EntityInstanceId.fromString("@unknown@unknown"),
+                    failedEntityId,
                     record.getTaskName(),
                     details);
             task.completeExceptionally(exception);
@@ -913,6 +929,7 @@ final class TaskOrchestrationExecutor {
 
             this.isInCriticalSection = true;
             this.currentCriticalSectionId = criticalSectionId;
+            this.lockedEntityIds = this.pendingLockSets.remove(criticalSectionId);
 
             if (!this.isReplaying) {
                 this.logger.fine(() -> String.format(
@@ -1306,11 +1323,17 @@ final class TaskOrchestrationExecutor {
             private final CompletableTask<V> task;
             private final String taskName;
             private final Class<V> dataType;
+            private final EntityInstanceId entityId;
 
             public TaskRecord(CompletableTask<V> task, String taskName, Class<V> dataType) {
+                this(task, taskName, dataType, null);
+            }
+
+            public TaskRecord(CompletableTask<V> task, String taskName, Class<V> dataType, EntityInstanceId entityId) {
                 this.task = task;
                 this.taskName = taskName;
                 this.dataType = dataType;
+                this.entityId = entityId;
             }
 
             public CompletableTask<V> getTask() {
@@ -1323,6 +1346,10 @@ final class TaskOrchestrationExecutor {
 
             public Class<V> getDataType() {
                 return this.dataType;
+            }
+
+            public EntityInstanceId getEntityId() {
+                return this.entityId;
             }
         }
 

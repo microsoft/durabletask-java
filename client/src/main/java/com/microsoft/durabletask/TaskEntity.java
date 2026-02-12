@@ -106,29 +106,28 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
         }
 
         Object result;
-        try {
-            // Step 2: Try reflection dispatch on this entity class
-            Method method = findMethod(this.getClass(), operation.getName());
-            if (method != null) {
-                result = invokeMethod(method, this, operation);
-            } else if (this.state != null) {
-                // Step 3: Try state dispatch
-                Method stateMethod = findMethod(this.state.getClass(), operation.getName());
-                if (stateMethod != null) {
-                    result = invokeMethod(stateMethod, this.state, operation);
-                } else {
-                    // Step 4: Implicit delete
-                    result = handleImplicitOperations(operation);
-                }
+
+        // Step 2: Try reflection dispatch on this entity class
+        Method method = findMethod(this.getClass(), operation.getName());
+        if (method != null) {
+            result = invokeMethod(method, this, operation);
+        } else if (this.state != null) {
+            // Step 3: Try state dispatch
+            Method stateMethod = findMethod(this.state.getClass(), operation.getName());
+            if (stateMethod != null) {
+                result = invokeMethod(stateMethod, this.state, operation);
             } else {
-                // Step 4: Implicit delete (no state loaded)
+                // Step 4: Implicit delete
                 result = handleImplicitOperations(operation);
             }
-        } finally {
-            // Step 5: Save state back regardless of dispatch path
-            if (stateType != null) {
-                operation.getState().setState(this.state);
-            }
+        } else {
+            // Step 4: Implicit delete (no state loaded)
+            result = handleImplicitOperations(operation);
+        }
+
+        // Step 5: Save state back only on success (the executor handles rollback on failure)
+        if (stateType != null) {
+            operation.getState().setState(this.state);
         }
 
         return result;
