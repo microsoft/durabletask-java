@@ -2,14 +2,14 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'signing'
-    id 'com.github.spotbugs' version '5.2.1'
+    id 'com.github.spotbugs' version '6.4.8'
 }
 
 group 'com.microsoft'
-version = '1.6.3'
+version = '1.7.0'
 archivesBaseName = 'durabletask-azure-functions'
 
-def protocVersion = '3.12.0'
+def protocVersion = '3.25.8'
 
 repositories {
     maven {
@@ -19,9 +19,9 @@ repositories {
 
 dependencies {
     api project(':client')
-    implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '3.0.0'
+    implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '3.2.3'
     implementation "com.google.protobuf:protobuf-java:${protocVersion}"
-    compileOnly "com.microsoft.azure.functions:azure-functions-java-spi:1.0.0"
+    compileOnly "com.microsoft.azure.functions:azure-functions-java-spi:1.1.0"
 }
 
 sourceCompatibility = JavaVersion.VERSION_1_8
@@ -88,9 +88,9 @@ java {
 }
 
 spotbugs {
-    toolVersion = '4.9.2'
-    effort = 'max'
-    reportLevel = 'high'
+    toolVersion = '4.9.8'
+    effort = com.github.spotbugs.snom.Effort.valueOf('MAX')
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf('HIGH')
     ignoreFailures = true
     excludeFilter = file('spotbugs-exclude.xml')
 }
