@@ -5,6 +5,7 @@ package com.microsoft.durabletask;
 import javax.annotation.Nullable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
@@ -153,6 +154,10 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
         String cacheKey = targetClass.getName() + "#" + operationName.toLowerCase();
         return methodCache.computeIfAbsent(cacheKey, k -> {
             for (Method m : targetClass.getMethods()) {
+                // Skip static methods — only instance methods should be dispatchable
+                if (Modifier.isStatic(m.getModifiers())) {
+                    continue;
+                }
                 // Skip methods from Object
                 if (m.getDeclaringClass() == Object.class) {
                     continue;
@@ -163,6 +168,12 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
                 }
                 // Skip methods from ITaskEntity interface
                 if (m.getDeclaringClass() == ITaskEntity.class) {
+                    continue;
+                }
+                // Skip methods from JDK packages to prevent unintended state dispatch
+                // (e.g., Integer.intValue(), String.length()) when state type is a JDK class
+                String declaringPackage = m.getDeclaringClass().getPackageName();
+                if (declaringPackage.startsWith("java.") || declaringPackage.startsWith("javax.")) {
                     continue;
                 }
                 if (m.getName().equalsIgnoreCase(operationName)) {

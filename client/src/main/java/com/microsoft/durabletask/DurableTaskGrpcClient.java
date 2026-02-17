@@ -403,7 +403,9 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
 
         if (input != null) {
             String serializedInput = this.dataConverter.serialize(input);
-            builder.setInput(StringValue.of(serializedInput));
+            if (serializedInput != null) {
+                builder.setInput(StringValue.of(serializedInput));
+            }
         }
 
         if (options != null && options.getScheduledTime() != null) {
