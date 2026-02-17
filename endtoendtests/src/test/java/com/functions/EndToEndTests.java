@@ -248,7 +248,6 @@ public class EndToEndTests {
 
         // Wait for the orchestration to complete after rewind
         Set<String> continueStates = new HashSet<>();
-        continueStates.add("Pending");
         continueStates.add("Running");
         boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(15));
         assertTrue(completed, "Orchestration should complete after rewind");
