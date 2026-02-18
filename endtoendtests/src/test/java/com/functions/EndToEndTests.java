@@ -32,7 +32,16 @@ public class EndToEndTests {
         RestAssured.baseURI = "http://localhost";
         // Use port 8080 for Docker, 7071 for local func start
         String port = System.getenv("FUNCTIONS_PORT");
-        RestAssured.port = port != null ? Integer.parseInt(port) : 8080;
+        if (port != null) {
+            try {
+                RestAssured.port = Integer.parseInt(port);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                    "FUNCTIONS_PORT environment variable must be a valid integer, but was: '" + port + "'", e);
+            }
+        } else {
+            RestAssured.port = 8080;
+        }
     }
 
     @Order(1)
