@@ -311,7 +311,8 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * <p>
      * This method can only be used on orchestration instances that are in a <code>Failed</code> state.
      * When rewound, the orchestration instance will restart from the point of failure as if the failure
-     * never occurred.
+     * never occurred. It rewinds the orchestration by replaying any
+     * Failed Activities and Failed suborchestrations that themselves have Failed Activities
      *
      * @param instanceId the ID of the orchestration instance to rewind
      * @param reason the reason for rewinding the orchestration instance

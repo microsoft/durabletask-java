@@ -419,6 +419,8 @@ public class IntegrationTests extends IntegrationTestBase {
         final String childOrchestratorName = "ChildOrchestration";
         final String activityName = "FailingActivity";
         final String failureMessage = "Simulated activity failure in sub-orchestration";
+        final String expectedOutput = "Success after rewind";
+        final AtomicBoolean shouldFail = new AtomicBoolean(true);
 
         DurableTaskGrpcWorker worker = this.createWorkerBuilder()
                 .addOrchestrator(parentOrchestratorName, ctx -> {
@@ -430,13 +432,18 @@ public class IntegrationTests extends IntegrationTestBase {
                     ctx.complete(result);
                 })
                 .addActivity(activityName, ctx -> {
-                    throw new RuntimeException(failureMessage);
+                    if (shouldFail.compareAndSet(true, false)) {
+                        throw new RuntimeException(failureMessage);
+                    }
+                    return expectedOutput;
                 })
                 .buildAndStart();
 
         DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(parentOrchestratorName);
+
+            // Wait for the orchestration to fail due to the activity failure in the sub-orchestration
             OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
@@ -444,6 +451,15 @@ public class IntegrationTests extends IntegrationTestBase {
             FailureDetails details = instance.getFailureDetails();
             assertNotNull(details);
             assertTrue(details.getErrorMessage().contains(failureMessage));
+
+            // Rewind the failed orchestration
+            client.rewindInstance(instanceId, "Rewinding sub-orchestration with failed activity");
+
+            // Wait for the orchestration to complete after rewind
+            instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals(expectedOutput, instance.readOutputAs(String.class));
         }
     }
 
