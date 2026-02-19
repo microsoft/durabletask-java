@@ -344,6 +344,17 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
+    public void rewindInstance(String instanceId, @Nullable String reason) {
+        Helpers.throwIfArgumentNull(instanceId, "instanceId");
+        RewindInstanceRequest.Builder rewindRequestBuilder = RewindInstanceRequest.newBuilder();
+        rewindRequestBuilder.setInstanceId(instanceId);
+        if (reason != null) {
+            rewindRequestBuilder.setReason(StringValue.of(reason));
+        }
+        this.sidecarClient.rewindInstance(rewindRequestBuilder.build());
+    }
+
+    @Override
     public void suspendInstance(String instanceId, @Nullable String reason) {
         SuspendRequest.Builder suspendRequestBuilder = SuspendRequest.newBuilder();
         suspendRequestBuilder.setInstanceId(instanceId);
