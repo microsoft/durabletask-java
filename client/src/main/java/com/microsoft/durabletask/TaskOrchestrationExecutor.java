@@ -31,6 +31,7 @@ final class TaskOrchestrationExecutor {
     private final Logger logger;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final ExceptionPropertiesProvider exceptionPropertiesProvider;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
@@ -38,11 +39,22 @@ final class TaskOrchestrationExecutor {
             Duration maximumTimerInterval,
             Logger logger,
             DurableTaskGrpcWorkerVersioningOptions versioningOptions) {
+        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions, null);
+    }
+
+    public TaskOrchestrationExecutor(
+            HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
+            DataConverter dataConverter,
+            Duration maximumTimerInterval,
+            Logger logger,
+            DurableTaskGrpcWorkerVersioningOptions versioningOptions,
+            ExceptionPropertiesProvider exceptionPropertiesProvider) {
         this.orchestrationFactories = orchestrationFactories;
         this.dataConverter = dataConverter;
         this.maximumTimerInterval = maximumTimerInterval;
         this.logger = logger;
         this.versioningOptions = versioningOptions;
+        this.exceptionPropertiesProvider = exceptionPropertiesProvider;
     }
 
     public TaskOrchestratorResult execute(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
@@ -68,7 +80,7 @@ final class TaskOrchestrationExecutor {
             // The orchestrator threw an unhandled exception - fail it
             // TODO: What's the right way to log this?
             logger.warning("The orchestrator failed with an unhandled exception: " + e.toString());
-            context.fail(new FailureDetails(e));
+            context.fail(FailureDetails.fromException(e, this.exceptionPropertiesProvider));
         }
 
         if ((context.continuedAsNew && !context.isComplete) || (completed && context.pendingActions.isEmpty() && !context.waitingForEvents())) {
