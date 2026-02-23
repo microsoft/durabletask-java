@@ -58,8 +58,34 @@ public final class FailureDetails {
              exception.getMessage(),
              getFullStackTrace(exception),
              false,
-             exception.getCause() != null ? fromExceptionRecursive(exception.getCause()) : null,
+             exception.getCause() != null ? fromExceptionRecursive(exception.getCause(), null) : null,
              null);
+    }
+
+    /**
+     * Creates a {@code FailureDetails} from an exception, optionally using the provided
+     * {@link ExceptionPropertiesProvider} to extract custom properties.
+     *
+     * @param exception the exception that caused the failure
+     * @param provider  the provider for extracting custom properties, or {@code null}
+     * @return a new {@code FailureDetails} instance
+     */
+    static FailureDetails fromException(Exception exception, @Nullable ExceptionPropertiesProvider provider) {
+        Map<String, Object> properties = null;
+        if (provider != null) {
+            try {
+                properties = provider.getExceptionProperties(exception);
+            } catch (Exception ignored) {
+                // Don't let provider errors mask the original failure
+            }
+        }
+        return new FailureDetails(
+                exception.getClass().getName(),
+                exception.getMessage(),
+                getFullStackTrace(exception),
+                false,
+                exception.getCause() != null ? fromExceptionRecursive(exception.getCause(), provider) : null,
+                properties);
     }
 
     FailureDetails(TaskFailureDetails proto) {
@@ -195,17 +221,27 @@ public final class FailureDetails {
     }
 
     @Nullable
-    private static FailureDetails fromExceptionRecursive(@Nullable Throwable exception) {
+    private static FailureDetails fromExceptionRecursive(
+            @Nullable Throwable exception,
+            @Nullable ExceptionPropertiesProvider provider) {
         if (exception == null) {
             return null;
+        }
+        Map<String, Object> properties = null;
+        if (provider != null && exception instanceof Exception) {
+            try {
+                properties = provider.getExceptionProperties((Exception) exception);
+            } catch (Exception ignored) {
+                // Don't let provider errors mask the original failure
+            }
         }
         return new FailureDetails(
                 exception.getClass().getName(),
                 exception.getMessage(),
                 getFullStackTrace(exception),
                 false,
-                exception.getCause() != null ? fromExceptionRecursive(exception.getCause()) : null,
-                null);
+                exception.getCause() != null ? fromExceptionRecursive(exception.getCause(), provider) : null,
+                properties);
     }
 
     @Nullable

@@ -386,6 +386,112 @@ public class FailureDetailsTest {
     }
 
     @Test
+    void fromException_withProvider_extractsProperties() {
+        ExceptionPropertiesProvider provider = exception -> {
+            if (exception instanceof IllegalArgumentException) {
+                Map<String, Object> props = new HashMap<>();
+                props.put("paramName", exception.getMessage());
+                props.put("severity", 3);
+                props.put("isCritical", true);
+                return props;
+            }
+            return null;
+        };
+
+        IllegalArgumentException ex = new IllegalArgumentException("userId");
+
+        FailureDetails details = FailureDetails.fromException(ex, provider);
+
+        assertEquals("java.lang.IllegalArgumentException", details.getErrorType());
+        assertEquals("userId", details.getErrorMessage());
+        assertNotNull(details.getProperties());
+        assertEquals(3, details.getProperties().size());
+        assertEquals("userId", details.getProperties().get("paramName"));
+        assertEquals(3, details.getProperties().get("severity"));
+        assertEquals(true, details.getProperties().get("isCritical"));
+    }
+
+    @Test
+    void fromException_withProvider_propertiesOnInnerCauseToo() {
+        ExceptionPropertiesProvider provider = exception -> {
+            Map<String, Object> props = new HashMap<>();
+            props.put("exceptionType", exception.getClass().getSimpleName());
+            return props;
+        };
+
+        IOException inner = new IOException("disk full");
+        RuntimeException outer = new RuntimeException("failed", inner);
+
+        FailureDetails details = FailureDetails.fromException(outer, provider);
+
+        assertNotNull(details.getProperties());
+        assertEquals("RuntimeException", details.getProperties().get("exceptionType"));
+
+        assertNotNull(details.getInnerFailure());
+        assertNotNull(details.getInnerFailure().getProperties());
+        assertEquals("IOException", details.getInnerFailure().getProperties().get("exceptionType"));
+    }
+
+    @Test
+    void fromException_withProvider_returnsNull_noProperties() {
+        ExceptionPropertiesProvider provider = exception -> null;
+
+        RuntimeException ex = new RuntimeException("test");
+
+        FailureDetails details = FailureDetails.fromException(ex, provider);
+
+        assertNull(details.getProperties());
+    }
+
+    @Test
+    void fromException_withNullProvider_noProperties() {
+        RuntimeException ex = new RuntimeException("test");
+
+        FailureDetails details = FailureDetails.fromException(ex, null);
+
+        assertEquals("java.lang.RuntimeException", details.getErrorType());
+        assertEquals("test", details.getErrorMessage());
+        assertNull(details.getProperties());
+    }
+
+    @Test
+    void fromException_providerThrows_gracefullyIgnored() {
+        ExceptionPropertiesProvider provider = exception -> {
+            throw new RuntimeException("provider error");
+        };
+
+        IllegalStateException ex = new IllegalStateException("original error");
+
+        FailureDetails details = FailureDetails.fromException(ex, provider);
+
+        assertEquals("java.lang.IllegalStateException", details.getErrorType());
+        assertEquals("original error", details.getErrorMessage());
+        assertNull(details.getProperties());
+    }
+
+    @Test
+    void fromException_withProvider_roundTripsViaProto() {
+        ExceptionPropertiesProvider provider = exception -> {
+            Map<String, Object> props = new HashMap<>();
+            props.put("errorCode", "VALIDATION_FAILED");
+            props.put("retryCount", 3);
+            props.put("isCritical", true);
+            return props;
+        };
+
+        IllegalArgumentException ex = new IllegalArgumentException("bad input");
+        FailureDetails details = FailureDetails.fromException(ex, provider);
+
+        TaskFailureDetails proto = details.toProto();
+        FailureDetails roundTripped = new FailureDetails(proto);
+
+        assertNotNull(roundTripped.getProperties());
+        assertEquals("VALIDATION_FAILED", roundTripped.getProperties().get("errorCode"));
+        assertEquals(3.0, roundTripped.getProperties().get("retryCount"));
+        assertEquals(true, roundTripped.getProperties().get("isCritical"));
+    }
+
+    @Test
     void constructFromProto_withProperties_containsNullKey() {
         // Properties map with a null-valued entry should be preserved
         TaskFailureDetails proto = TaskFailureDetails.newBuilder()

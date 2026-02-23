@@ -57,7 +57,8 @@ compileTestJava {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
     options.fork = true
-    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
+    def javacName = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'javac.exe' : 'javac'
+    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/${javacName}"
 }
 
 task downloadProtoFiles {
@@ -90,7 +91,9 @@ protobuf {
     }
     generateProtoTasks {
         all()*.plugins { grpc {} }
-        all()*.dependsOn downloadProtoFiles
+        if (project.gradle.startParameter.taskNames.any { it.contains('downloadProtoFiles') }) {
+            all()*.dependsOn downloadProtoFiles
+        }
     }
 }
 
@@ -107,7 +110,8 @@ sourceSets {
 }
 
 tasks.withType(Test) {
-    executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", 'bin/java')
+    def javaName = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'java.exe' : 'java'
+    executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", "bin/${javaName}")
 }
 
 test {
