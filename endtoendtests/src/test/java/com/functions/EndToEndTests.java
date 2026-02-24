@@ -256,8 +256,10 @@ public class EndToEndTests {
         assertEquals(202, rewindResponse.getStatusCode(), "Rewind should return 202 Accepted");
 
         // Wait for the orchestration to complete after rewind
+        // Include "Failed" because the rewind may not take effect immediately
         Set<String> continueStates = new HashSet<>();
         continueStates.add("Running");
+        continueStates.add("Failed");
         boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(15));
         assertTrue(completed, "Orchestration should complete after rewind");
 
