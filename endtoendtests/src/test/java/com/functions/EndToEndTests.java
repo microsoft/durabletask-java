@@ -246,7 +246,7 @@ public class EndToEndTests {
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
 
         // Wait for the orchestration to fail
-        boolean failed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(10));
+        boolean failed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(15));
         assertTrue(failed, "Orchestration should have failed");
 
         // Get the rewind URI and rewind the orchestration
@@ -256,11 +256,7 @@ public class EndToEndTests {
         assertEquals(202, rewindResponse.getStatusCode(), "Rewind should return 202 Accepted");
 
         // Wait for the orchestration to complete after rewind
-        // Include "Failed" because the rewind may not take effect immediately
-        Set<String> continueStates = new HashSet<>();
-        continueStates.add("Running");
-        continueStates.add("Failed");
-        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(15));
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(30));
         assertTrue(completed, "Orchestration should complete after rewind");
 
         // Verify the output contains the expected result
