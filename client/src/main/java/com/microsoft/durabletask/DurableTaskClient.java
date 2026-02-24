@@ -299,6 +299,10 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * When rewound, the orchestration instance will restart from the point of failure as if the failure
      * never occurred. It rewinds the orchestration by replaying any
      * Failed Activities and Failed suborchestrations that themselves have Failed Activities
+     * <p>
+     * <b>Note:</b> Rewind requires a backend that supports it. When using Azure Functions with the
+     * Durable Task extension, rewind is fully supported. The standalone {@code GrpcDurableTaskWorker}
+     * does not currently support orchestration processing for rewind.
      *
      * @param instanceId the ID of the orchestration instance to rewind
      */
@@ -313,6 +317,10 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * When rewound, the orchestration instance will restart from the point of failure as if the failure
      * never occurred. It rewinds the orchestration by replaying any
      * Failed Activities and Failed suborchestrations that themselves have Failed Activities
+     * <p>
+     * <b>Note:</b> Rewind requires a backend that supports it. When using Azure Functions with the
+     * Durable Task extension, rewind is fully supported. The standalone {@code GrpcDurableTaskWorker}
+     * does not currently support orchestration processing for rewind.
      *
      * @param instanceId the ID of the orchestration instance to rewind
      * @param reason the reason for rewinding the orchestration instance
