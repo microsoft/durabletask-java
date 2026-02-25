@@ -371,7 +371,15 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         if (reason != null) {
             rewindRequestBuilder.setReason(StringValue.of(reason));
         }
-        this.sidecarClient.rewindInstance(rewindRequestBuilder.build());
+        try {
+            this.sidecarClient.rewindInstance(rewindRequestBuilder.build());
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.FAILED_PRECONDITION) {
+                throw new IllegalStateException(
+                        "Orchestration instance '" + instanceId + "' is not in a failed state and cannot be rewound.", e);
+            }
+            throw e;
+        }
     }
 
     @Override

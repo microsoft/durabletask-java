@@ -14,7 +14,6 @@ import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
 import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
-import io.grpc.StatusRuntimeException;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -106,7 +105,7 @@ public class RewindTest {
         try {
             client.rewindInstance(instanceId, "Testing rewind on non-failed orchestration");
             context.getLogger().info("Rewind request sent for non-failed instance: " + instanceId);
-        } catch (StatusRuntimeException e) {
+        } catch (IllegalStateException e) {
             context.getLogger().info("Rewind on non-failed instance was rejected (expected): " + e.getMessage());
         }
 
