@@ -32,6 +32,10 @@ targetCompatibility = '1.8'
 
 compileJava.options.encoding = 'UTF-8'
 
+test {
+    useJUnitPlatform()
+}
+
 task endToEndTest(type: Test) {
     useJUnitPlatform {
         includeTags 'e2e'
