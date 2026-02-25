@@ -11,13 +11,16 @@ import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
 import com.microsoft.durabletask.DurableTaskClient;
+import com.microsoft.durabletask.OrchestrationMetadata;
 import com.microsoft.durabletask.TaskOrchestrationContext;
 import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
 import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
 
+import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -30,7 +33,9 @@ public class RewindTest {
     private static final AtomicBoolean shouldFail = new AtomicBoolean(true);
 
     /**
-     * HTTP trigger to start the rewindable orchestration.
+     * HTTP trigger that starts a rewindable orchestration, waits for it to fail,
+     * then rewinds it using client.rewindInstance(). Returns the check status response
+     * so the caller can poll for the orchestration to complete after the rewind.
      */
     @FunctionName("StartRewindableOrchestration")
     public HttpResponseMessage startRewindableOrchestration(
@@ -42,6 +47,22 @@ public class RewindTest {
         DurableTaskClient client = durableContext.getClient();
         String instanceId = client.scheduleNewOrchestrationInstance("RewindableOrchestration");
         context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+
+        // Wait for the orchestration to reach a terminal state (expected: Failed)
+        try {
+            OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId, Duration.ofSeconds(30), false);
+            context.getLogger().info("Orchestration reached terminal state: " + metadata.getRuntimeStatus());
+        } catch (TimeoutException e) {
+            context.getLogger().severe("Orchestration did not reach terminal state in time.");
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Orchestration did not fail within the expected time.")
+                    .build();
+        }
+
+        // Rewind the failed orchestration using the client method
+        client.rewindInstance(instanceId, "Testing rewind functionality");
+        context.getLogger().info("Rewind request sent for instance: " + instanceId);
+
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
 

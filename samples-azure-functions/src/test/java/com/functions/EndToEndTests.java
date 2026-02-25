@@ -234,23 +234,14 @@ public class EndToEndTests {
         // Reset the failure flag before starting
         post("/api/ResetRewindFailureFlag");
 
-        // Start the orchestration - it will fail on the first activity call
+        // Start the orchestration - the trigger waits for failure and calls
+        // client.rewindInstance() internally before returning
         String startOrchestrationPath = "/api/StartRewindableOrchestration";
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
 
-        // Wait for the orchestration to fail
-        boolean failed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(10));
-        assertTrue(failed, "Orchestration should have failed");
-
-        // Get the rewind URI and rewind the orchestration
-        String rewindPostUri = jsonPath.get("rewindPostUri");
-        rewindPostUri = rewindPostUri.replace("{text}", "Testing rewind functionality");
-        Response rewindResponse = post(rewindPostUri);
-        assertEquals(202, rewindResponse.getStatusCode(), "Rewind should return 202 Accepted");
-
-        // Wait for the orchestration to complete after rewind
+        // The trigger already called client.rewindInstance(), so just poll for completion
         Set<String> continueStates = new HashSet<>();
         continueStates.add("Pending");
         continueStates.add("Running");

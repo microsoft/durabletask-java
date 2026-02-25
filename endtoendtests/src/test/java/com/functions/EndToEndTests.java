@@ -236,26 +236,14 @@ public class EndToEndTests {
 
     @Test
     public void rewindFailedOrchestration() throws InterruptedException {
-        // Reset the failure flag before starting
-        post("/api/ResetRewindFailureFlag");
-
-        // Start the orchestration - it will fail on the first activity call
+        // Start the orchestration - the trigger waits for failure and calls
+        // client.rewindInstance() internally before returning
         String startOrchestrationPath = "/api/StartRewindableOrchestration";
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
 
-        // Wait for the orchestration to fail
-        boolean failed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(15));
-        assertTrue(failed, "Orchestration should have failed");
-
-        // Get the rewind URI and rewind the orchestration
-        String rewindPostUri = jsonPath.get("rewindPostUri");
-        rewindPostUri = rewindPostUri.replace("{text}", "Testing rewind functionality");
-        Response rewindResponse = post(rewindPostUri);
-        assertEquals(202, rewindResponse.getStatusCode(), "Rewind should return 202 Accepted");
-
-        // Wait for the orchestration to complete after rewind
+        // The trigger already called client.rewindInstance(), so just poll for completion
         boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(30));
         assertTrue(completed, "Orchestration should complete after rewind");
 
@@ -267,21 +255,14 @@ public class EndToEndTests {
 
     @Test
     public void rewindNonFailedOrchestration() throws InterruptedException {
-        // Start a normal orchestration and wait for it to complete
-        String startOrchestrationPath = "/api/StartOrchestration";
+        // Start a non-failing orchestration - the trigger waits for completion
+        // and then calls client.rewindInstance() internally before returning
+        String startOrchestrationPath = "/api/StartRewindNonFailedOrchestration";
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
 
-        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(15));
-        assertTrue(completed, "Orchestration should complete before rewind attempt");
-
-        // Attempt to rewind the completed (non-failed) orchestration
-        String rewindPostUri = jsonPath.get("rewindPostUri");
-        rewindPostUri = rewindPostUri.replace("{text}", "Testing rewind on non-failed orchestration");
-        post(rewindPostUri);
-
-        // Wait a few seconds to allow any potential state change
+        // Wait a few seconds to allow any potential state change from the rewind attempt
         Thread.sleep(5000);
 
         // Verify the orchestration remains in Completed state (rewind should have no effect)
@@ -293,26 +274,14 @@ public class EndToEndTests {
 
     @Test
     public void rewindSubOrchestrationFailure() throws InterruptedException {
-        // Reset the sub-orchestration failure flag before starting
-        post("/api/ResetSubRewindFailureFlag");
-
-        // Start the parent orchestration - the sub-orchestration's activity will fail
+        // Start the parent orchestration - the trigger waits for the sub-orchestration
+        // to fail, then calls client.rewindInstance() internally before returning
         String startOrchestrationPath = "/api/StartRewindableSubOrchestration";
         Response response = post(startOrchestrationPath);
         JsonPath jsonPath = response.jsonPath();
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
 
-        // Wait for the parent orchestration to fail (due to sub-orchestration failure)
-        boolean failed = pollingCheck(statusQueryGetUri, "Failed", null, Duration.ofSeconds(15));
-        assertTrue(failed, "Parent orchestration should have failed due to sub-orchestration failure");
-
-        // Rewind the parent orchestration
-        String rewindPostUri = jsonPath.get("rewindPostUri");
-        rewindPostUri = rewindPostUri.replace("{text}", "Testing rewind with sub-orchestration failure");
-        Response rewindResponse = post(rewindPostUri);
-        assertEquals(202, rewindResponse.getStatusCode(), "Rewind should return 202 Accepted");
-
-        // Wait for the parent orchestration to complete after rewind
+        // The trigger already called client.rewindInstance(), so just poll for completion
         boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(30));
         assertTrue(completed, "Parent orchestration should complete after rewind");
 
