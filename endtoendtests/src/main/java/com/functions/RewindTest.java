@@ -14,6 +14,7 @@ import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
 import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
+import io.grpc.StatusRuntimeException;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -99,9 +100,15 @@ public class RewindTest {
                     .build();
         }
 
-        // Attempt to rewind the non-failed orchestration using the client method
-        client.rewindInstance(instanceId, "Testing rewind on non-failed orchestration");
-        context.getLogger().info("Rewind request sent for non-failed instance: " + instanceId);
+        // Attempt to rewind the non-failed orchestration using the client method.
+        // This is expected to be a no-op or may throw if the sidecar rejects it,
+        // so we catch any exception and still return the check status response.
+        try {
+            client.rewindInstance(instanceId, "Testing rewind on non-failed orchestration");
+            context.getLogger().info("Rewind request sent for non-failed instance: " + instanceId);
+        } catch (StatusRuntimeException e) {
+            context.getLogger().info("Rewind on non-failed instance was rejected (expected): " + e.getMessage());
+        }
 
         return durableContext.createCheckStatusResponse(request, instanceId);
     }
