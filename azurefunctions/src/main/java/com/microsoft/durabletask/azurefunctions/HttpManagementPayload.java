@@ -94,4 +94,22 @@ public class HttpManagementPayload {
         return restartPostUri;
     }
 
+    /**
+     * Gets the HTTP POST instance suspend endpoint.
+     *
+     * @return The HTTP URL for posting instance suspend commands.
+     */
+    public String getSuspendPostUri() {
+        return this.suspendPostUri;
+    }
+
+    /**
+     * Gets the HTTP POST instance resume endpoint.
+     *
+     * @return The HTTP URL for posting instance resume commands.
+     */
+    public String getResumePostUri() {
+        return this.resumePostUri;
+    }
+
 }
