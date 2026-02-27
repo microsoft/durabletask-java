@@ -33,7 +33,9 @@ targetCompatibility = '1.8'
 compileJava.options.encoding = 'UTF-8'
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'e2e'
+    }
 }
 
 task endToEndTest(type: Test) {
