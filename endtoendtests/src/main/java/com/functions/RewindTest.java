@@ -100,8 +100,8 @@ public class RewindTest {
         }
 
         // Attempt to rewind the non-failed orchestration using the client method.
-        // This is expected to be a no-op or may throw if the sidecar rejects it,
-        // so we catch any exception and still return the check status response.
+        // The sidecar rejects this with FAILED_PRECONDITION since the instance is not
+        // in a Failed state. The client translates this to an IllegalStateException.
         try {
             client.rewindInstance(instanceId, "Testing rewind on non-failed orchestration");
             context.getLogger().info("Rewind request sent for non-failed instance: " + instanceId);
