@@ -270,20 +270,16 @@ public class EndToEndTests {
     @Test
     public void rewindNonFailedOrchestration() throws InterruptedException {
         // Start a non-failing orchestration - the trigger waits for completion
-        // and then calls client.rewindInstance() internally before returning
+        // and then calls client.rewindInstance() internally before returning.
+        // The rewind should be rejected with IllegalStateException since the
+        // instance is not in a Failed state.
         String startOrchestrationPath = "/api/StartRewindNonFailedOrchestration";
         Response response = post(startOrchestrationPath);
-        JsonPath jsonPath = response.jsonPath();
-        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
-
-        // Wait a few seconds to allow any potential state change from the rewind attempt
-        Thread.sleep(5000);
-
-        // Verify the orchestration remains in Completed state (rewind should have no effect)
-        Response statusResponse = get(statusQueryGetUri);
-        String status = statusResponse.jsonPath().get("runtimeStatus");
-        assertEquals("Completed", status,
-                "Orchestration should remain Completed after rewind attempt on a non-failed instance");
+        assertEquals(200, response.getStatusCode(),
+                "Expected 200 OK indicating the IllegalStateException was caught. Body: " + response.getBody().asString());
+        String body = response.getBody().asString();
+        assertTrue(body.contains("is not in a failed state") && body.contains("cannot be rewound"),
+                "Response should contain the precondition error message, but was: " + body);
     }
 
     @Test

@@ -71,8 +71,10 @@ public class RewindTest {
 
     /**
      * HTTP trigger that starts a non-failing orchestration, waits for it to complete,
-     * then attempts to rewind it using client.rewindInstance(). Returns the check status
-     * response so the caller can verify the orchestration remains in the Completed state.
+     * then attempts to rewind it using client.rewindInstance(). The sidecar should reject
+     * the rewind with FAILED_PRECONDITION (translated to IllegalStateException) since
+     * the instance is not in a Failed state. Returns 200 with the exception message on
+     * expected rejection, or 500 if the rewind unexpectedly succeeded.
      */
     @FunctionName("StartRewindNonFailedOrchestration")
     public HttpResponseMessage startRewindNonFailedOrchestration(
@@ -104,12 +106,16 @@ public class RewindTest {
         // in a Failed state. The client translates this to an IllegalStateException.
         try {
             client.rewindInstance(instanceId, "Testing rewind on non-failed orchestration");
-            context.getLogger().info("Rewind request sent for non-failed instance: " + instanceId);
+            // If we get here, the rewind did not throw as expected
+            return request.createResponseBuilder(com.microsoft.azure.functions.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("IllegalStateException was not thrown for non-failed instance")
+                    .build();
         } catch (IllegalStateException e) {
             context.getLogger().info("Rewind on non-failed instance was rejected (expected): " + e.getMessage());
+            return request.createResponseBuilder(com.microsoft.azure.functions.HttpStatus.OK)
+                    .body(e.getMessage())
+                    .build();
         }
-
-        return durableContext.createCheckStatusResponse(request, instanceId);
     }
 
     /**
