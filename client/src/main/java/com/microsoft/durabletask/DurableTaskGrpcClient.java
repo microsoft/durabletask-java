@@ -374,6 +374,10 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         try {
             this.sidecarClient.rewindInstance(rewindRequestBuilder.build());
         } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
+                throw new IllegalArgumentException(
+                        "No orchestration instance with ID '" + instanceId + "' was found.", e);
+            }
             if (e.getStatus().getCode() == Status.Code.FAILED_PRECONDITION) {
                 throw new IllegalStateException(
                         "Orchestration instance '" + instanceId + "' is not in a failed state and cannot be rewound.", e);

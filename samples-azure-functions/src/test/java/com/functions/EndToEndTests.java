@@ -230,6 +230,20 @@ public class EndToEndTests {
     }
 
     @Test
+    public void rewindNonExistentOrchestration() throws InterruptedException {
+        // Attempt to rewind a non-existent orchestration instance.
+        // The trigger calls client.rewindInstance() with a fake instance ID and
+        // expects an IllegalArgumentException (from gRPC NOT_FOUND status).
+        String startOrchestrationPath = "/api/StartRewindNonExistentOrchestration";
+        Response response = post(startOrchestrationPath);
+        assertEquals(200, response.getStatusCode(),
+                "Expected 200 OK indicating the IllegalArgumentException was caught. Body: " + response.getBody().asString());
+        String body = response.getBody().asString();
+        assertTrue(body.contains("No orchestration instance with ID") && body.contains("was found"),
+                "Response should contain the not-found error message, but was: " + body);
+    }
+
+    @Test
     public void rewindFailedOrchestration() throws InterruptedException {
         // Reset the failure flag before starting
         post("/api/ResetRewindFailureFlag");

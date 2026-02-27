@@ -229,6 +229,35 @@ public class RewindTest {
     }
 
     /**
+     * HTTP trigger that attempts to rewind a non-existent orchestration instance.
+     * This should result in an IllegalArgumentException being thrown by the client
+     * when the server returns a NOT_FOUND gRPC status.
+     */
+    @FunctionName("StartRewindNonExistentOrchestration")
+    public HttpResponseMessage startRewindNonExistentOrchestration(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET, HttpMethod.POST}, authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        context.getLogger().info("Attempting to rewind a non-existent orchestration instance.");
+
+        DurableTaskClient client = durableContext.getClient();
+        String nonExistentInstanceId = "non-existent-instance-" + System.currentTimeMillis();
+
+        try {
+            client.rewindInstance(nonExistentInstanceId, "Testing rewind on non-existent instance");
+            // If we get here, the rewind did not throw as expected
+            return request.createResponseBuilder(com.microsoft.azure.functions.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("IllegalArgumentException was not thrown")
+                    .build();
+        } catch (IllegalArgumentException e) {
+            context.getLogger().info("Rewind on non-existent instance threw expected exception: " + e.getMessage());
+            return request.createResponseBuilder(com.microsoft.azure.functions.HttpStatus.OK)
+                    .body(e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
      * HTTP trigger to reset the sub-orchestration failure flag.
      */
     @FunctionName("ResetSubRewindFailureFlag")
