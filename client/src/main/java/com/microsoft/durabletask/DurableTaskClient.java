@@ -293,6 +293,41 @@ public abstract class DurableTaskClient implements AutoCloseable {
     public abstract String restartInstance(String instanceId, boolean restartWithNewInstanceId);
 
     /**
+     * Rewinds a failed orchestration instance to the last known good state and replays from there.
+     * <p>
+     * This method can only be used on orchestration instances that are in a <code>Failed</code> state.
+     * When rewound, the orchestration instance will restart from the point of failure as if the failure
+     * never occurred. It rewinds the orchestration by replaying any
+     * Failed Activities and Failed suborchestrations that themselves have Failed Activities
+     * <p>
+     * <b>Note:</b> Rewind requires a backend that supports it. When using Azure Functions with the
+     * Durable Task extension, rewind is fully supported. The standalone {@code GrpcDurableTaskWorker}
+     * does not currently support orchestration processing for rewind.
+     *
+     * @param instanceId the ID of the orchestration instance to rewind
+     */
+    public void rewindInstance(String instanceId) {
+        this.rewindInstance(instanceId, null);
+    }
+
+    /**
+     * Rewinds a failed orchestration instance to the last known good state and replays from there.
+     * <p>
+     * This method can only be used on orchestration instances that are in a <code>Failed</code> state.
+     * When rewound, the orchestration instance will restart from the point of failure as if the failure
+     * never occurred. It rewinds the orchestration by replaying any
+     * Failed Activities and Failed suborchestrations that themselves have Failed Activities
+     * <p>
+     * <b>Note:</b> Rewind requires a backend that supports it. When using Azure Functions with the
+     * Durable Task extension, rewind is fully supported. The standalone {@code GrpcDurableTaskWorker}
+     * does not currently support orchestration processing for rewind.
+     *
+     * @param instanceId the ID of the orchestration instance to rewind
+     * @param reason the reason for rewinding the orchestration instance
+     */
+    public abstract void rewindInstance(String instanceId, @Nullable String reason);
+
+    /**
      * Suspends a running orchestration instance.
      * @param instanceId the ID of the orchestration instance to suspend
      */
