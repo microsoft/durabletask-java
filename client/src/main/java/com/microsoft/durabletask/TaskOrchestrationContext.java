@@ -571,7 +571,7 @@ public interface TaskOrchestrationContext {
      * @param operationName the name of the operation to invoke on the entity
      */
     default void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName) {
-        this.signalEntity(entityId, operationName, null);
+        this.signalEntity(entityId, operationName, null, null);
     }
 
     /**
@@ -584,7 +584,22 @@ public interface TaskOrchestrationContext {
      * @param operationName the name of the operation to invoke on the entity
      * @param input the serializable input to pass to the entity operation, or {@code null}
      */
-    void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input);
+    default void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input) {
+        this.signalEntity(entityId, operationName, input, null);
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity with the specified input and options.
+     * <p>
+     * Signals are one-way messages that do not return a result. The target entity will execute the specified
+     * operation asynchronously. If the entity does not exist, it will be created automatically.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     * @param options signal options such as scheduled delivery time, or {@code null}
+     */
+    void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input, @Nullable SignalEntityOptions options);
 
     /**
      * Calls an operation on a durable entity and waits for the result.
@@ -600,6 +615,22 @@ public interface TaskOrchestrationContext {
      * @return a {@link Task} that completes when the entity operation completes
      */
     <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input, @Nonnull Class<V> returnType);
+
+    /**
+     * Calls an operation on a durable entity and waits for the result, with options.
+     * <p>
+     * Unlike {@link #signalEntity}, this method is a two-way call that returns a result. The calling orchestration
+     * will block until the entity operation completes and returns a response.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     * @param returnType the expected class type of the entity operation output
+     * @param options call options such as timeout, or {@code null}
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input, @Nonnull Class<V> returnType, @Nullable CallEntityOptions options);
 
     /**
      * Calls an operation on a durable entity and waits for it to complete (no return value).
@@ -658,12 +689,31 @@ public interface TaskOrchestrationContext {
     Task<AutoCloseable> lockEntities(@Nonnull List<EntityInstanceId> entityIds);
 
     /**
+     * Acquires one or more entity locks for the duration of a critical section (varargs overload).
+     *
+     * @param entityIds the entity instance IDs to lock; must not be empty
+     * @return a {@link Task} that completes with an {@link AutoCloseable} when all locks are acquired
+     */
+    default Task<AutoCloseable> lockEntities(@Nonnull EntityInstanceId... entityIds) {
+        return this.lockEntities(Arrays.asList(entityIds));
+    }
+
+    /**
      * Gets a value indicating whether this orchestration is currently executing inside a critical section
      * that was created by {@link #lockEntities}.
      *
      * @return {@code true} if the orchestration is inside a critical section, otherwise {@code false}
      */
     boolean isInCriticalSection();
+
+    /**
+     * Gets the list of entity instance IDs that are currently locked by this orchestration.
+     * <p>
+     * Returns an empty list if the orchestration is not inside a critical section.
+     *
+     * @return an unmodifiable list of locked entity instance IDs
+     */
+    List<EntityInstanceId> getLockedEntities();
 
     // endregion
 

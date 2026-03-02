@@ -82,4 +82,28 @@ public final class CleanEntityStorageRequest {
     public boolean isReleaseOrphanedLocks() {
         return this.releaseOrphanedLocks;
     }
+
+    /**
+     * Sets whether the client should automatically continue cleaning with continuation tokens
+     * until all entities have been processed. When {@code true}, the client will loop internally,
+     * accumulating results across multiple pages.
+     *
+     * @param continueUntilComplete {@code true} to automatically continue until complete
+     * @return this {@code CleanEntityStorageRequest} for chaining
+     */
+    public CleanEntityStorageRequest setContinueUntilComplete(boolean continueUntilComplete) {
+        this.continueUntilComplete = continueUntilComplete;
+        return this;
+    }
+
+    /**
+     * Gets whether the client should automatically continue cleaning until all entities are processed.
+     *
+     * @return {@code true} if the client will automatically continue until complete
+     */
+    public boolean isContinueUntilComplete() {
+        return this.continueUntilComplete;
+    }
+
+    private boolean continueUntilComplete;
 }

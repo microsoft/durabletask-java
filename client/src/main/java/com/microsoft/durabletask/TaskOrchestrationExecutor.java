@@ -363,7 +363,7 @@ final class TaskOrchestrationExecutor {
         // region Entity integration methods (Phase 4)
 
         @Override
-        public void signalEntity(EntityInstanceId entityId, String operationName, Object input) {
+        public void signalEntity(EntityInstanceId entityId, String operationName, Object input, SignalEntityOptions options) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(entityId, "entityId");
             Helpers.throwIfArgumentNull(operationName, "operationName");
@@ -378,6 +378,9 @@ final class TaskOrchestrationExecutor {
                     .setTargetInstanceId(StringValue.of(entityId.toString()));
             if (serializedInput != null) {
                 signalBuilder.setInput(StringValue.of(serializedInput));
+            }
+            if (options != null && options.getScheduledTime() != null) {
+                signalBuilder.setScheduledTime(DataConverter.getTimestampFromInstant(options.getScheduledTime()));
             }
 
             this.pendingActions.put(id, OrchestratorAction.newBuilder()
@@ -399,6 +402,11 @@ final class TaskOrchestrationExecutor {
 
         @Override
         public <V> Task<V> callEntity(EntityInstanceId entityId, String operationName, Object input, Class<V> returnType) {
+            return this.callEntity(entityId, operationName, input, returnType, null);
+        }
+
+        @Override
+        public <V> Task<V> callEntity(EntityInstanceId entityId, String operationName, Object input, Class<V> returnType, CallEntityOptions options) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
             Helpers.throwIfArgumentNull(entityId, "entityId");
             Helpers.throwIfArgumentNull(operationName, "operationName");
@@ -547,6 +555,18 @@ final class TaskOrchestrationExecutor {
         @Override
         public boolean isInCriticalSection() {
             return this.isInCriticalSection;
+        }
+
+        @Override
+        public List<EntityInstanceId> getLockedEntities() {
+            if (!this.isInCriticalSection || this.lockedEntityIds == null || this.lockedEntityIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+            List<EntityInstanceId> result = new ArrayList<>(this.lockedEntityIds.size());
+            for (String id : this.lockedEntityIds) {
+                result.add(EntityInstanceId.fromString(id));
+            }
+            return Collections.unmodifiableList(result);
         }
 
         // endregion

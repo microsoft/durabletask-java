@@ -6,7 +6,9 @@ import javax.annotation.Nullable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,6 +54,14 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
      */
     protected TState state;
 
+    /**
+     * Controls whether operations can be dispatched to methods on the state object.
+     * When {@code true} (the default), if no matching method is found on the entity class itself,
+     * the framework will look for a matching method on the state object.
+     * When {@code false}, only methods on the entity class are considered.
+     */
+    private boolean allowStateDispatch = true;
+
     // Cache for resolved methods, keyed by (class, operationName).
     // Uses Optional<Method> so that "not found" results are also cached.
     private static final Map<String, Optional<Method>> methodCache = new ConcurrentHashMap<>();
@@ -60,6 +70,28 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
      * Creates a new {@code TaskEntity} instance.
      */
     protected TaskEntity() {
+    }
+
+    /**
+     * Gets whether state dispatch is allowed.
+     *
+     * @return {@code true} if operations can be dispatched to state object methods
+     */
+    protected boolean getAllowStateDispatch() {
+        return this.allowStateDispatch;
+    }
+
+    /**
+     * Sets whether operations can be dispatched to methods on the state object.
+     * <p>
+     * When {@code true} (the default), if no matching method is found on the entity class itself,
+     * the framework will look for a matching method on the state object.
+     * When {@code false}, only methods on the entity class are considered.
+     *
+     * @param allowStateDispatch {@code true} to allow state dispatch, {@code false} to disable
+     */
+    protected void setAllowStateDispatch(boolean allowStateDispatch) {
+        this.allowStateDispatch = allowStateDispatch;
     }
 
     /**
@@ -112,8 +144,8 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
         Method method = findMethod(this.getClass(), operation.getName());
         if (method != null) {
             result = invokeMethod(method, this, operation);
-        } else if (this.state != null) {
-            // Step 3: Try state dispatch
+        } else if (this.allowStateDispatch && this.state != null) {
+            // Step 3: Try state dispatch (only if allowStateDispatch is true)
             Method stateMethod = findMethod(this.state.getClass(), operation.getName());
             if (stateMethod != null) {
                 result = invokeMethod(stateMethod, this.state, operation);
@@ -153,6 +185,7 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
     private static Method findMethod(Class<?> targetClass, String operationName) {
         String cacheKey = targetClass.getName() + "#" + operationName.toLowerCase();
         return methodCache.computeIfAbsent(cacheKey, k -> {
+            List<Method> matches = new ArrayList<>();
             for (Method m : targetClass.getMethods()) {
                 // Skip static methods — only instance methods should be dispatchable
                 if (Modifier.isStatic(m.getModifiers())) {
@@ -177,10 +210,15 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
                     continue;
                 }
                 if (m.getName().equalsIgnoreCase(operationName)) {
-                    return Optional.of(m);
+                    matches.add(m);
                 }
             }
-            return Optional.empty();
+            if (matches.size() > 1) {
+                throw new IllegalStateException(
+                        "Ambiguous match: multiple methods named '" + operationName + "' found on " +
+                        targetClass.getName() + ". Entity operation methods must have unique names.");
+            }
+            return matches.isEmpty() ? Optional.empty() : Optional.of(matches.get(0));
         }).orElse(null);
     }
 

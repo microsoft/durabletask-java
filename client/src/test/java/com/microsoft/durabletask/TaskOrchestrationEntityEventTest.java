@@ -8,6 +8,7 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -206,7 +207,7 @@ public class TaskOrchestrationEntityEventTest {
                 assertTrue(msg.hasEntityOperationSignaled());
                 EntityOperationSignaledEvent signal = msg.getEntityOperationSignaled();
                 assertEquals("add", signal.getOperation());
-                assertEquals("@Counter@c1", signal.getTargetInstanceId().getValue());
+                assertEquals("@counter@c1", signal.getTargetInstanceId().getValue());
                 hasSignal = true;
             }
             if (action.hasCompleteOrchestration()) {
@@ -279,7 +280,7 @@ public class TaskOrchestrationEntityEventTest {
                 assertTrue(msg.hasEntityOperationCalled());
                 EntityOperationCalledEvent call = msg.getEntityOperationCalled();
                 assertEquals("get", call.getOperation());
-                assertEquals("@Counter@c1", call.getTargetInstanceId().getValue());
+                assertEquals("@counter@c1", call.getTargetInstanceId().getValue());
                 hasCall = true;
             }
         }
@@ -542,6 +543,208 @@ public class TaskOrchestrationEntityEventTest {
 
         assertThrows(IllegalStateException.class, () ->
                 executor.execute(pastEvents, newEvents));
+    }
+
+    // endregion
+
+    // region SignalEntityOptions / CallEntityOptions / getLockedEntities / varargs lockEntities tests
+
+    @Test
+    void signalEntity_withScheduledTime_setsScheduledTimeOnAction() {
+        final String orchestratorName = "SignalScheduledTimeTest";
+        Instant scheduledTime = Instant.parse("2025-06-15T12:00:00Z");
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            SignalEntityOptions options = new SignalEntityOptions().setScheduledTime(scheduledTime);
+            ctx.signalEntity(entityId, "add", 5, options);
+            ctx.complete("done");
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasScheduledSignal = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage()) {
+                SendEntityMessageAction msg = action.getSendEntityMessage();
+                if (msg.hasEntityOperationSignaled()) {
+                    EntityOperationSignaledEvent signal = msg.getEntityOperationSignaled();
+                    assertTrue(signal.hasScheduledTime(), "Expected scheduledTime to be set");
+                    assertEquals(scheduledTime.getEpochSecond(), signal.getScheduledTime().getSeconds());
+                    hasScheduledSignal = true;
+                }
+            }
+        }
+        assertTrue(hasScheduledSignal, "Expected a signal action with scheduledTime");
+    }
+
+    @Test
+    void signalEntity_withNullOptions_noScheduledTime() {
+        final String orchestratorName = "SignalNullOptionsTest";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            ctx.signalEntity(entityId, "add", 5, null);
+            ctx.complete("done");
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationSignaled()) {
+                EntityOperationSignaledEvent signal = action.getSendEntityMessage().getEntityOperationSignaled();
+                assertFalse(signal.hasScheduledTime(), "Expected no scheduledTime when options are null");
+            }
+        }
+    }
+
+    @Test
+    void callEntity_withOptions_producesAction() {
+        final String orchestratorName = "CallWithOptionsTest";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            CallEntityOptions options = new CallEntityOptions().setTimeout(Duration.ofSeconds(30));
+            int value = ctx.callEntity(entityId, "get", null, int.class, options).await();
+            ctx.complete(value);
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasCall = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                EntityOperationCalledEvent call = action.getSendEntityMessage().getEntityOperationCalled();
+                assertEquals("get", call.getOperation());
+                assertEquals("@counter@c1", call.getTargetInstanceId().getValue());
+                hasCall = true;
+            }
+        }
+        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+    }
+
+    @Test
+    void getLockedEntities_insideCriticalSection_returnsLockedIds() {
+        final String orchestratorName = "GetLockedEntitiesTest";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            ctx.lockEntities(Arrays.asList(entityId)).await();
+            // Inside critical section, getLockedEntities should return the locked entities
+            List<EntityInstanceId> locked = ctx.getLockedEntities();
+            assertFalse(locked.isEmpty(), "Expected locked entities inside critical section");
+            assertEquals("counter", locked.get(0).getName());
+            assertEquals("c1", locked.get(0).getKey());
+            ctx.complete("done");
+        });
+
+        // First execution: orchestrator calls lockEntities, which produces a lock request action
+        List<HistoryEvent> pastEvents1 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+
+        // Extract the criticalSectionId from the lock request action
+        String criticalSectionId = null;
+        for (OrchestratorAction action : result1.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityLockRequested()) {
+                criticalSectionId = action.getSendEntityMessage().getEntityLockRequested().getCriticalSectionId();
+                break;
+            }
+        }
+        assertNotNull(criticalSectionId, "Expected a lock request action with criticalSectionId");
+
+        // Second execution: replay with the lock request in past, grant in new events
+        List<HistoryEvent> pastEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"),
+                entityLockRequestedEvent(0),
+                orchestratorCompleted());
+        List<HistoryEvent> newEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                entityLockGrantedEvent(criticalSectionId),
+                orchestratorCompleted());
+
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result2.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete after lock granted");
+    }
+
+    @Test
+    void getLockedEntities_outsideCriticalSection_returnsEmpty() {
+        final String orchestratorName = "GetLockedEntitiesEmptyTest";
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            List<EntityInstanceId> locked = ctx.getLockedEntities();
+            assertTrue(locked.isEmpty(), "Expected empty locked entities outside critical section");
+            ctx.complete("done");
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete");
+    }
+
+    @Test
+    void lockEntities_varargs_producesLockAction() {
+        final String orchestratorName = "VarargsLockTest";
+        EntityInstanceId entityId1 = new EntityInstanceId("Counter", "c1");
+        EntityInstanceId entityId2 = new EntityInstanceId("Counter", "c2");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            // Use varargs overload
+            ctx.lockEntities(entityId1, entityId2).await();
+            ctx.complete("locked");
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasLockRequest = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityLockRequested()) {
+                hasLockRequest = true;
+            }
+        }
+        assertTrue(hasLockRequest, "Expected an entityLockRequest action from varargs lockEntities");
     }
 
     // endregion

@@ -6,6 +6,7 @@ import io.grpc.Channel;
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Locale;
 
 /**
  * Builder object for constructing customized {@link DurableTaskGrpcWorker} instances.
@@ -78,12 +79,13 @@ public final class DurableTaskGrpcWorkerBuilder {
             throw new IllegalArgumentException("An entity factory is required.");
         }
 
-        if (this.entityFactories.containsKey(name)) {
+        String key = name.toLowerCase(Locale.ROOT);
+        if (this.entityFactories.containsKey(key)) {
             throw new IllegalArgumentException(
                     String.format("An entity factory named %s is already registered.", name));
         }
 
-        this.entityFactories.put(name, factory);
+        this.entityFactories.put(key, factory);
         return this;
     }
 

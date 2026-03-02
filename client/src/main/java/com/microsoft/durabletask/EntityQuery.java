@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
 import java.time.Instant;
+import java.util.Locale;
 
 /**
  * Represents a query filter for fetching durable entity metadata from the store.
@@ -28,11 +29,31 @@ public final class EntityQuery {
 
     /**
      * Sets a prefix filter on entity instance IDs.
+     * <p>
+     * If the value does not start with {@code @}, it is treated as a raw entity name and will be
+     * normalized to the internal format {@code @entityname} (lowercased) to match how entity
+     * instance IDs are stored.
      *
      * @param instanceIdStartsWith the instance ID prefix to filter by, or {@code null} for no filter
      * @return this {@code EntityQuery} for chaining
      */
     public EntityQuery setInstanceIdStartsWith(@Nullable String instanceIdStartsWith) {
+        if (instanceIdStartsWith != null && !instanceIdStartsWith.startsWith("@")) {
+            // Normalize: treat as raw entity name, prepend '@' and lowercase
+            instanceIdStartsWith = "@" + instanceIdStartsWith.toLowerCase(Locale.ROOT);
+        } else if (instanceIdStartsWith != null) {
+            // Already in @name format, but ensure the entity name portion is lowercased
+            // Format is @entityName or @entityName@key
+            int secondAt = instanceIdStartsWith.indexOf('@', 1);
+            if (secondAt > 0) {
+                // Has key part: lowercase only the name between first and second @
+                instanceIdStartsWith = "@" + instanceIdStartsWith.substring(1, secondAt).toLowerCase(Locale.ROOT)
+                        + instanceIdStartsWith.substring(secondAt);
+            } else {
+                // Only @name, lowercase the name portion
+                instanceIdStartsWith = "@" + instanceIdStartsWith.substring(1).toLowerCase(Locale.ROOT);
+            }
+        }
         this.instanceIdStartsWith = instanceIdStartsWith;
         return this;
     }

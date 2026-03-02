@@ -134,6 +134,43 @@ public class TaskEntityTest {
         }
     }
 
+    /**
+     * Entity that disables state dispatch.
+     */
+    static class NoStateDispatchEntity extends TaskEntity<MyState> {
+        public NoStateDispatchEntity() {
+            setAllowStateDispatch(false);
+        }
+
+        @Override
+        protected Class<MyState> getStateType() {
+            return MyState.class;
+        }
+    }
+
+    /**
+     * Entity with overloaded methods (ambiguous match).
+     */
+    static class AmbiguousEntity extends TaskEntity<Integer> {
+        public void add(int amount) {
+            this.state += amount;
+        }
+
+        public void add(String label) {
+            // overloaded — should trigger ambiguous match error
+        }
+
+        @Override
+        protected Integer initializeState(TaskEntityOperation operation) {
+            return 0;
+        }
+
+        @Override
+        protected Class<Integer> getStateType() {
+            return Integer.class;
+        }
+    }
+
     // endregion
 
     // region Helper methods
@@ -228,7 +265,7 @@ public class TaskEntityTest {
         EntityWithContextParam entity = new EntityWithContextParam();
         Object result = entity.runAsync(createOperation("info"));
         assertNotNull(result);
-        assertTrue(result.toString().contains("TestEntity"));
+        assertTrue(result.toString().contains("testentity"));
         assertTrue(result.toString().contains("testKey"));
     }
 
@@ -283,6 +320,39 @@ public class TaskEntityTest {
 
         // State should have been incremented
         assertEquals(1, entity.state.getValue());
+    }
+
+    @Test
+    void stateDispatch_disabledWithAllowStateDispatchFalse() {
+        NoStateDispatchEntity entity = new NoStateDispatchEntity();
+        DataConverter converter = new JacksonDataConverter();
+        String serializedState = converter.serialize(new MyState());
+
+        // "increment" exists on MyState but not on NoStateDispatchEntity.
+        // With allowStateDispatch=false, it should throw UnsupportedOperationException.
+        assertThrows(UnsupportedOperationException.class, () -> {
+            entity.runAsync(createOperation("increment", null, serializedState));
+        });
+    }
+
+    @Test
+    void stateDispatch_enabledByDefault() throws Exception {
+        // StateDispatchEntity has allowStateDispatch=true (default)
+        StateDispatchEntity entity = new StateDispatchEntity();
+        assertTrue(entity.getAllowStateDispatch());
+    }
+
+    // endregion
+
+    // region Ambiguous match tests
+
+    @Test
+    void ambiguousMatch_throwsIllegalStateException() {
+        AmbiguousEntity entity = new AmbiguousEntity();
+        // "add" has two overloads: add(int) and add(String) — should throw
+        assertThrows(IllegalStateException.class, () -> {
+            entity.runAsync(createOperation("add", 5));
+        });
     }
 
     // endregion

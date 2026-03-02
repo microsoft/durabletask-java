@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -198,6 +199,72 @@ public class EntityIntegrationTests extends IntegrationTestBase {
         Integer state = metadata.readStateAs(Integer.class);
         assertNotNull(state);
         assertEquals(100, state);
+    }
+
+    // endregion
+
+    // region Case-insensitive entity name tests
+
+    @Test
+    void signalEntity_caseInsensitiveName_entityProcessesSignal() throws TimeoutException, InterruptedException {
+        final String entityName = "Counter";
+        // Use mixed case for the entity ID — should still work since names are lowercased
+        EntityInstanceId entityId = new EntityInstanceId("COUNTER", "counter-case-test");
+
+        this.createWorkerBuilder()
+                .addEntity(entityName, CounterEntity::new)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+
+        client.signalEntity(entityId, "add", 25);
+        Thread.sleep(5000);
+
+        EntityMetadata metadata = client.getEntityMetadata(entityId, true);
+        assertNotNull(metadata, "Entity metadata should not be null");
+
+        Integer state = metadata.readStateAs(Integer.class);
+        assertNotNull(state, "Entity state should not be null");
+        assertEquals(25, state, "Entity state should be 25 after adding 25");
+    }
+
+    // endregion
+
+    // region Lock entities + getLockedEntities tests
+
+    @Test
+    void orchestration_lockAndCallEntity_succeeds() throws TimeoutException, InterruptedException {
+        final String entityName = "Counter";
+        final String orchestratorName = "LockEntityOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-lock-test");
+
+        this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    AutoCloseable lock = ctx.lockEntities(Arrays.asList(entityId)).await();
+                    // Verify we are in a critical section with locked entities
+                    assertTrue(ctx.isInCriticalSection());
+                    assertFalse(ctx.getLockedEntities().isEmpty());
+                    // Call the locked entity
+                    ctx.signalEntity(entityId, "add", 10);
+                    try {
+                        lock.close();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                    ctx.complete("lock-success");
+                })
+                .addEntity(entityName, CounterEntity::new)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+
+        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+        OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId, defaultTimeout, true);
+
+        assertNotNull(instance);
+        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+        assertEquals("lock-success", instance.readOutputAs(String.class));
     }
 
     // endregion

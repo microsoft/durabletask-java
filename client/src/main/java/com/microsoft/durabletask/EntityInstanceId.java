@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import javax.annotation.Nonnull;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -26,10 +27,13 @@ public final class EntityInstanceId implements Comparable<EntityInstanceId> {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("Entity name must not be null or empty.");
         }
+        if (name.contains("@")) {
+            throw new IllegalArgumentException("Entity name must not contain '@'.");
+        }
         if (key == null || key.isEmpty()) {
             throw new IllegalArgumentException("Entity key must not be null or empty.");
         }
-        this.name = name;
+        this.name = name.toLowerCase(Locale.ROOT);
         this.key = key;
     }
 

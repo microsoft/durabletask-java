@@ -115,7 +115,7 @@ public class TaskEntityExecutorTest {
 
     private TaskEntityExecutor createExecutor(String entityName, TaskEntityFactory factory) {
         HashMap<String, TaskEntityFactory> factories = new HashMap<>();
-        factories.put(entityName, factory);
+        factories.put(entityName.toLowerCase(java.util.Locale.ROOT), factory);
         return new TaskEntityExecutor(factories, dataConverter, logger);
     }
 
@@ -316,7 +316,7 @@ public class TaskEntityExecutorTest {
 
         assertTrue(result.hasFailureDetails());
         assertEquals(IllegalStateException.class.getName(), result.getFailureDetails().getErrorType());
-        assertTrue(result.getFailureDetails().getErrorMessage().contains("NonExistent"));
+        assertTrue(result.getFailureDetails().getErrorMessage().contains("nonexistent"));
     }
 
     @Test
@@ -356,7 +356,7 @@ public class TaskEntityExecutorTest {
         assertTrue(result.getActions(0).hasSendSignal());
 
         SendSignalAction signalAction = result.getActions(0).getSendSignal();
-        assertEquals("@Counter@target1", signalAction.getInstanceId());
+        assertEquals("@counter@target1", signalAction.getInstanceId());
         assertEquals("add", signalAction.getName());
     }
 

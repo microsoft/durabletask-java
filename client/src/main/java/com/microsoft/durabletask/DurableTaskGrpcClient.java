@@ -482,25 +482,34 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     public CleanEntityStorageResult cleanEntityStorage(CleanEntityStorageRequest request) {
         Helpers.throwIfArgumentNull(request, "request");
 
-        com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CleanEntityStorageRequest.Builder builder =
-                com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CleanEntityStorageRequest.newBuilder()
-                        .setRemoveEmptyEntities(request.isRemoveEmptyEntities())
-                        .setReleaseOrphanedLocks(request.isReleaseOrphanedLocks());
+        int totalEmptyEntitiesRemoved = 0;
+        int totalOrphanedLocksReleased = 0;
+        String continuationToken = request.getContinuationToken();
 
-        if (request.getContinuationToken() != null) {
-            builder.setContinuationToken(StringValue.of(request.getContinuationToken()));
-        }
+        do {
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CleanEntityStorageRequest.Builder builder =
+                    com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CleanEntityStorageRequest.newBuilder()
+                            .setRemoveEmptyEntities(request.isRemoveEmptyEntities())
+                            .setReleaseOrphanedLocks(request.isReleaseOrphanedLocks());
 
-        CleanEntityStorageResponse response = this.sidecarClient.cleanEntityStorage(builder.build());
+            if (continuationToken != null) {
+                builder.setContinuationToken(StringValue.of(continuationToken));
+            }
 
-        String continuationToken = response.hasContinuationToken()
-                ? response.getContinuationToken().getValue()
-                : null;
+            CleanEntityStorageResponse response = this.sidecarClient.cleanEntityStorage(builder.build());
+
+            totalEmptyEntitiesRemoved += response.getEmptyEntitiesRemoved();
+            totalOrphanedLocksReleased += response.getOrphanedLocksReleased();
+
+            continuationToken = response.hasContinuationToken()
+                    ? response.getContinuationToken().getValue()
+                    : null;
+        } while (request.isContinueUntilComplete() && continuationToken != null);
 
         return new CleanEntityStorageResult(
                 continuationToken,
-                response.getEmptyEntitiesRemoved(),
-                response.getOrphanedLocksReleased());
+                totalEmptyEntitiesRemoved,
+                totalOrphanedLocksReleased);
     }
 
     private EntityMetadata toEntityMetadata(

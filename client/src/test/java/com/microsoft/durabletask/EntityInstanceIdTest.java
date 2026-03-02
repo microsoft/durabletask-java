@@ -20,7 +20,7 @@ public class EntityInstanceIdTest {
     @Test
     void constructor_validNameAndKey() {
         EntityInstanceId id = new EntityInstanceId("Counter", "myCounter");
-        assertEquals("Counter", id.getName());
+        assertEquals("counter", id.getName());
         assertEquals("myCounter", id.getKey());
     }
 
@@ -47,13 +47,13 @@ public class EntityInstanceIdTest {
     @Test
     void toString_format() {
         EntityInstanceId id = new EntityInstanceId("Counter", "myCounter");
-        assertEquals("@Counter@myCounter", id.toString());
+        assertEquals("@counter@myCounter", id.toString());
     }
 
     @Test
     void fromString_validFormat() {
         EntityInstanceId id = EntityInstanceId.fromString("@Counter@myCounter");
-        assertEquals("Counter", id.getName());
+        assertEquals("counter", id.getName());
         assertEquals("myCounter", id.getKey());
     }
 
@@ -61,7 +61,7 @@ public class EntityInstanceIdTest {
     void fromString_keyContainsAtSymbol() {
         // The key can contain @ symbols — only the first two @ delimiters matter
         EntityInstanceId id = EntityInstanceId.fromString("@Counter@key@with@ats");
-        assertEquals("Counter", id.getName());
+        assertEquals("counter", id.getName());
         assertEquals("key@with@ats", id.getKey());
     }
 
@@ -123,7 +123,59 @@ public class EntityInstanceIdTest {
     @Test
     void equals_differentType_notEqual() {
         EntityInstanceId id = new EntityInstanceId("Counter", "c1");
-        assertNotEquals("@Counter@c1", id);
+        assertNotEquals("@counter@c1", id);
+    }
+
+    // --- Gap 1: Case-insensitive name matching ---
+
+    @Test
+    void constructor_nameIsLowercased() {
+        EntityInstanceId id = new EntityInstanceId("Counter", "c1");
+        assertEquals("counter", id.getName());
+    }
+
+    @Test
+    void equals_differentCaseName_areEqual() {
+        EntityInstanceId id1 = new EntityInstanceId("Counter", "c1");
+        EntityInstanceId id2 = new EntityInstanceId("counter", "c1");
+        assertEquals(id1, id2);
+        assertEquals(id1.hashCode(), id2.hashCode());
+    }
+
+    @Test
+    void equals_mixedCaseName_areEqual() {
+        EntityInstanceId id1 = new EntityInstanceId("COUNTER", "c1");
+        EntityInstanceId id2 = new EntityInstanceId("counter", "c1");
+        assertEquals(id1, id2);
+    }
+
+    @Test
+    void toString_nameIsLowercased() {
+        EntityInstanceId id = new EntityInstanceId("MyEntity", "key1");
+        assertEquals("@myentity@key1", id.toString());
+    }
+
+    @Test
+    void fromString_nameIsLowercased() {
+        EntityInstanceId id = EntityInstanceId.fromString("@MyEntity@key1");
+        assertEquals("myentity", id.getName());
+    }
+
+    // --- Gap 2: Validate @ not present in name ---
+
+    @Test
+    void constructor_nameContainsAt_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new EntityInstanceId("my@entity", "key"));
+    }
+
+    @Test
+    void constructor_nameStartsWithAt_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new EntityInstanceId("@entity", "key"));
+    }
+
+    @Test
+    void constructor_nameEndsWithAt_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new EntityInstanceId("entity@", "key"));
     }
 
     @Test
@@ -134,6 +186,9 @@ public class EntityInstanceIdTest {
 
         // Same values
         assertEquals(0, a.compareTo(new EntityInstanceId("A", "1")));
+
+        // Same values different case
+        assertEquals(0, a.compareTo(new EntityInstanceId("a", "1")));
 
         // Sort by name first
         assertTrue(a.compareTo(b) < 0);
@@ -154,9 +209,11 @@ public class EntityInstanceIdTest {
         List<EntityInstanceId> ids = Arrays.asList(c1, b2, c3, a1);
         Collections.sort(ids);
 
-        assertEquals(a1, ids.get(0));
-        assertEquals(b2, ids.get(1));
-        assertEquals(c1, ids.get(2));
-        assertEquals(c3, ids.get(3));
+        assertEquals("account", ids.get(0).getName());
+        assertEquals("bankaccount", ids.get(1).getName());
+        assertEquals("counter", ids.get(2).getName());
+        assertEquals("1", ids.get(2).getKey());
+        assertEquals("counter", ids.get(3).getName());
+        assertEquals("3", ids.get(3).getKey());
     }
 }
