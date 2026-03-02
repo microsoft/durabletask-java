@@ -364,6 +364,29 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     }
 
     @Override
+    public void rewindInstance(String instanceId, @Nullable String reason) {
+        Helpers.throwIfArgumentNull(instanceId, "instanceId");
+        RewindInstanceRequest.Builder rewindRequestBuilder = RewindInstanceRequest.newBuilder();
+        rewindRequestBuilder.setInstanceId(instanceId);
+        if (reason != null) {
+            rewindRequestBuilder.setReason(StringValue.of(reason));
+        }
+        try {
+            this.sidecarClient.rewindInstance(rewindRequestBuilder.build());
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
+                throw new IllegalArgumentException(
+                        "No orchestration instance with ID '" + instanceId + "' was found.", e);
+            }
+            if (e.getStatus().getCode() == Status.Code.FAILED_PRECONDITION) {
+                throw new IllegalStateException(
+                        "Orchestration instance '" + instanceId + "' is not in a failed state and cannot be rewound.", e);
+            }
+            throw e;
+        }
+    }
+
+    @Override
     public String restartInstance(String instanceId, boolean restartWithNewInstanceId) {
         OrchestrationMetadata metadata = this.getInstanceMetadata(instanceId, true);
         if (!metadata.isInstanceFound()) {

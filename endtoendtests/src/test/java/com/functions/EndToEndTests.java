@@ -4,6 +4,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,23 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("e2e")
 public class EndToEndTests {
+
+    @BeforeAll
+    public static void setup() {
+        RestAssured.baseURI = "http://localhost";
+        // Use port 8080 for Docker, 7071 for local func start
+        String port = System.getenv("FUNCTIONS_PORT");
+        if (port != null) {
+            try {
+                RestAssured.port = Integer.parseInt(port);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                    "FUNCTIONS_PORT environment variable must be a valid integer, but was: '" + port + "'", e);
+            }
+        } else {
+            RestAssured.port = 8080;
+        }
+    }
 
     @Order(1)
     @Test
@@ -214,6 +232,74 @@ public class EndToEndTests {
 
         boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(5));
         assertTrue(completed);
+    }
+
+    @Test
+    public void rewindFailedOrchestration() throws InterruptedException {
+        // Start the orchestration - the trigger waits for failure and calls
+        // client.rewindInstance() internally before returning
+        String startOrchestrationPath = "/api/StartRewindableOrchestration";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+
+        // The trigger already called client.rewindInstance(), so just poll for completion
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(30));
+        assertTrue(completed, "Orchestration should complete after rewind");
+
+        // Verify the output contains the expected result
+        Response statusResponse = get(statusQueryGetUri);
+        String output = statusResponse.jsonPath().get("output");
+        assertTrue(output.contains("rewound-success"), "Output should indicate successful rewind: " + output);
+    }
+
+    @Test
+    public void rewindNonExistentOrchestration() throws InterruptedException {
+        // Attempt to rewind a non-existent orchestration instance.
+        // The trigger calls client.rewindInstance() with a fake instance ID and
+        // expects an IllegalArgumentException (from gRPC NOT_FOUND status).
+        String startOrchestrationPath = "/api/StartRewindNonExistentOrchestration";
+        Response response = post(startOrchestrationPath);
+        assertEquals(200, response.getStatusCode(),
+                "Expected 200 OK indicating the IllegalArgumentException was caught. Body: " + response.getBody().asString());
+        String body = response.getBody().asString();
+        assertTrue(body.contains("No orchestration instance with ID") && body.contains("was found"),
+                "Response should contain the not-found error message, but was: " + body);
+    }
+
+    @Test
+    public void rewindNonFailedOrchestration() throws InterruptedException {
+        // Start a non-failing orchestration - the trigger waits for completion
+        // and then calls client.rewindInstance() internally before returning.
+        // The rewind should be rejected with IllegalStateException since the
+        // instance is not in a Failed state.
+        String startOrchestrationPath = "/api/StartRewindNonFailedOrchestration";
+        Response response = post(startOrchestrationPath);
+        assertEquals(200, response.getStatusCode(),
+                "Expected 200 OK indicating the IllegalStateException was caught. Body: " + response.getBody().asString());
+        String body = response.getBody().asString();
+        assertTrue(body.contains("is not in a failed state") && body.contains("cannot be rewound"),
+                "Response should contain the precondition error message, but was: " + body);
+    }
+
+    @Test
+    public void rewindSubOrchestrationFailure() throws InterruptedException {
+        // Start the parent orchestration - the trigger waits for the sub-orchestration
+        // to fail, then calls client.rewindInstance() internally before returning
+        String startOrchestrationPath = "/api/StartRewindableSubOrchestration";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+
+        // The trigger already called client.rewindInstance(), so just poll for completion
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", null, Duration.ofSeconds(30));
+        assertTrue(completed, "Parent orchestration should complete after rewind");
+
+        // Verify the output contains the expected result from the sub-orchestration
+        Response statusResponse = get(statusQueryGetUri);
+        String output = statusResponse.jsonPath().get("output");
+        assertTrue(output.contains("sub-rewound-success"),
+                "Output should indicate successful sub-orchestration rewind: " + output);
     }
 
     @Test

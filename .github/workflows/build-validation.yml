@@ -156,8 +156,8 @@ jobs:
       - name: Archive test report
         uses: actions/upload-artifact@v4
         with:
-          name: Integration test report
-          path: client/build/reports/tests/endToEndTest
+          name: E2E test report
+          path: endtoendtests/build/reports/tests/endToEndTest
 
   functions-sample-tests:
 
@@ -195,5 +195,5 @@ jobs:
       - name: Archive test report
         uses: actions/upload-artifact@v4
         with:
-          name: Integration test report
-          path: client/build/reports/tests/endToEndTest
+          name: Functions Sample test report
+          path: samples-azure-functions/build/reports/tests/sampleTest
