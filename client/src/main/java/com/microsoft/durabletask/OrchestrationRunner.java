@@ -8,9 +8,14 @@ import com.microsoft.durabletask.DurableTaskGrpcWorkerVersioningOptions.VersionF
 import com.microsoft.durabletask.DurableTaskGrpcWorkerVersioningOptions.VersionMatchStrategy;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.context.Scope;
+
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -146,10 +151,37 @@ public final class OrchestrationRunner {
                 logger,
                 versioningOptions);
 
+        // Extract trace context from ExecutionStartedEvent in the history
+        OrchestratorService.TraceContext orchTraceCtx = java.util.stream.Stream.concat(
+                orchestratorRequest.getPastEventsList().stream(),
+                orchestratorRequest.getNewEventsList().stream())
+            .filter(event -> event.getEventTypeCase() == OrchestratorService.HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
+            .filter(event -> event.getExecutionStarted().hasParentTraceContext())
+            .map(event -> event.getExecutionStarted().getParentTraceContext())
+            .findFirst()
+            .orElse(null);
+        Map<String, String> orchSpanAttrs = new HashMap<>();
+        orchSpanAttrs.put("durabletask.task.instance_id", orchestratorRequest.getInstanceId());
+        Span orchestrationSpan = TracingHelper.startSpan(
+                "orchestration:" + orchestratorRequest.getInstanceId(),
+                orchTraceCtx,
+                SpanKind.INTERNAL,
+                orchSpanAttrs);
+        Scope orchestrationScope = orchestrationSpan.makeCurrent();
+
         // TODO: Error handling
-        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
-                orchestratorRequest.getPastEventsList(),
-                orchestratorRequest.getNewEventsList());
+        TaskOrchestratorResult taskOrchestratorResult;
+        try {
+            taskOrchestratorResult = taskOrchestrationExecutor.execute(
+                    orchestratorRequest.getPastEventsList(),
+                    orchestratorRequest.getNewEventsList());
+        } catch (Throwable e) {
+            TracingHelper.endSpan(orchestrationSpan, e);
+            orchestrationScope.close();
+            throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+        }
+        orchestrationScope.close();
+        TracingHelper.endSpan(orchestrationSpan, null);
 
         OrchestratorService.OrchestratorResponse response = OrchestratorService.OrchestratorResponse.newBuilder()
                 .setInstanceId(orchestratorRequest.getInstanceId())

@@ -11,6 +11,9 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 import com.microsoft.durabletask.util.VersionUtils;
 
 import io.grpc.*;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.context.Scope;
 
 import java.time.Duration;
 import java.util.*;
@@ -173,9 +176,36 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
                         if (!versioningFailed) {
-                            TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
-                                orchestratorRequest.getPastEventsList(),
-                                orchestratorRequest.getNewEventsList());
+                            // Extract trace context from ExecutionStartedEvent in the history
+                            TraceContext orchTraceCtx = Stream.concat(
+                                    orchestratorRequest.getPastEventsList().stream(),
+                                    orchestratorRequest.getNewEventsList().stream())
+                                .filter(event -> event.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
+                                .filter(event -> event.getExecutionStarted().hasParentTraceContext())
+                                .map(event -> event.getExecutionStarted().getParentTraceContext())
+                                .findFirst()
+                                .orElse(null);
+                            Map<String, String> orchSpanAttrs = new HashMap<>();
+                            orchSpanAttrs.put("durabletask.task.instance_id", orchestratorRequest.getInstanceId());
+                            Span orchestrationSpan = TracingHelper.startSpan(
+                                    "orchestration:" + orchestratorRequest.getInstanceId(),
+                                    orchTraceCtx,
+                                    SpanKind.INTERNAL,
+                                    orchSpanAttrs);
+                            Scope orchestrationScope = orchestrationSpan.makeCurrent();
+
+                            TaskOrchestratorResult taskOrchestratorResult;
+                            try {
+                                taskOrchestratorResult = taskOrchestrationExecutor.execute(
+                                    orchestratorRequest.getPastEventsList(),
+                                    orchestratorRequest.getNewEventsList());
+                            } catch (Throwable e) {
+                                TracingHelper.endSpan(orchestrationSpan, e);
+                                orchestrationScope.close();
+                                throw e;
+                            }
+                            orchestrationScope.close();
+                            TracingHelper.endSpan(orchestrationSpan, null);
 
                             OrchestratorResponse response = OrchestratorResponse.newBuilder()
                                     .setInstanceId(orchestratorRequest.getInstanceId())
@@ -218,6 +248,21 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         }                        
                     } else if (requestType == RequestCase.ACTIVITYREQUEST) {
                         ActivityRequest activityRequest = workItem.getActivityRequest();
+                        String activityInstanceId = activityRequest.getOrchestrationInstance().getInstanceId();
+
+                        // Start a tracing span for this activity execution
+                        TraceContext activityTraceCtx = activityRequest.hasParentTraceContext()
+                                ? activityRequest.getParentTraceContext() : null;
+                        Map<String, String> spanAttributes = new HashMap<>();
+                        spanAttributes.put("durabletask.task.instance_id", activityInstanceId);
+                        spanAttributes.put("durabletask.task.name", activityRequest.getName());
+                        spanAttributes.put("durabletask.task.task_id", String.valueOf(activityRequest.getTaskId()));
+                        Span activitySpan = TracingHelper.startSpan(
+                                "activity:" + activityRequest.getName(),
+                                activityTraceCtx,
+                                SpanKind.INTERNAL,
+                                spanAttributes);
+                        Scope activityScope = activitySpan.makeCurrent();
 
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         String output = null;
@@ -228,15 +273,20 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 activityRequest.getInput().getValue(),
                                 activityRequest.getTaskId());
                         } catch (Throwable e) {
+                            TracingHelper.endSpan(activitySpan, e);
+                            activitySpan = null;
                             failureDetails = TaskFailureDetails.newBuilder()
                                 .setErrorType(e.getClass().getName())
                                 .setErrorMessage(e.getMessage())
                                 .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
                                 .build();
+                        } finally {
+                            activityScope.close();
+                            TracingHelper.endSpan(activitySpan, null);
                         }
 
                         ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
-                                .setInstanceId(activityRequest.getOrchestrationInstance().getInstanceId())
+                                .setInstanceId(activityInstanceId)
                                 .setTaskId(activityRequest.getTaskId())
                                 .setCompletionToken(workItem.getCompletionToken());
 

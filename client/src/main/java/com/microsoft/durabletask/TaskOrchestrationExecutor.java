@@ -107,6 +107,7 @@ final class TaskOrchestrationExecutor {
         private Object continuedAsNewInput;
         private boolean preserveUnprocessedEvents;
         private Object customStatus;
+        private TraceContext parentTraceContext;
 
         public ContextImplTask(List<HistoryEvent> pastEvents, List<HistoryEvent> newEvents) {
             this.historyEventPlayer = new OrchestrationHistoryIterator(pastEvents, newEvents);
@@ -297,6 +298,9 @@ final class TaskOrchestrationExecutor {
             if (serializedInput != null) {
                 scheduleTaskBuilder.setInput(StringValue.of(serializedInput));
             }
+            if (this.parentTraceContext != null) {
+                scheduleTaskBuilder.setParentTraceContext(this.parentTraceContext);
+            }
 
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
@@ -406,6 +410,10 @@ final class TaskOrchestrationExecutor {
                 instanceId = this.newUUID().toString();
             }
             createSubOrchestrationActionBuilder.setInstanceId(instanceId);
+
+            if (this.parentTraceContext != null) {
+                createSubOrchestrationActionBuilder.setParentTraceContext(this.parentTraceContext);
+            }
 
             if (options instanceof NewSubOrchestrationInstanceOptions && ((NewSubOrchestrationInstanceOptions)options).getVersion() != null) {
                 NewSubOrchestrationInstanceOptions subOrchestrationOptions = (NewSubOrchestrationInstanceOptions) options;
@@ -877,6 +885,9 @@ final class TaskOrchestrationExecutor {
                         this.setInput(input);
                         String version = startedEvent.getVersion().getValue();
                         this.setVersion(version);
+                        if (startedEvent.hasParentTraceContext()) {
+                            this.parentTraceContext = startedEvent.getParentTraceContext();
+                        }
                         TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
                         if (factory == null) {
                             // Try getting the default orchestrator
