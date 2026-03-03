@@ -20,8 +20,8 @@ public class EntityQueryResultTest {
     @Test
     void constructor_setsEntitiesAndToken() {
         List<EntityMetadata> entities = Arrays.asList(
-                new EntityMetadata("@counter@c1", java.time.Instant.EPOCH, 0, null, null, dataConverter),
-                new EntityMetadata("@counter@c2", java.time.Instant.EPOCH, 0, null, null, dataConverter));
+                new EntityMetadata("@counter@c1", java.time.Instant.EPOCH, 0, null, null, false, dataConverter),
+                new EntityMetadata("@counter@c2", java.time.Instant.EPOCH, 0, null, null, false, dataConverter));
 
         EntityQueryResult result = new EntityQueryResult(entities, "nextPage");
 
@@ -40,7 +40,7 @@ public class EntityQueryResultTest {
     @Test
     void getEntities_returnsProvidedList() {
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@c1", java.time.Instant.EPOCH, 0, null, "42", dataConverter);
+                "@counter@c1", java.time.Instant.EPOCH, 0, null, "42", true, dataConverter);
         EntityQueryResult result = new EntityQueryResult(Collections.singletonList(metadata), null);
 
         assertEquals(1, result.getEntities().size());

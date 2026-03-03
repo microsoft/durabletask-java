@@ -526,6 +526,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 protoEntity.getBacklogQueueSize(),
                 lockedBy,
                 serializedState,
+                protoEntity.hasSerializedState(),
                 this.dataConverter);
     }
 

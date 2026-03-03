@@ -14,6 +14,7 @@ public final class EntityMetadata {
     private final int backlogQueueSize;
     private final String lockedBy;
     private final String serializedState;
+    private final boolean includesState;
     private final DataConverter dataConverter;
 
     /**
@@ -24,6 +25,7 @@ public final class EntityMetadata {
      * @param backlogQueueSize the number of operations waiting in the entity's backlog queue
      * @param lockedBy         the orchestration instance ID that currently holds a lock on this entity, or {@code null}
      * @param serializedState  the serialized entity state, or {@code null} if state was not fetched
+     * @param includesState    {@code true} if the state was requested and is included in this metadata
      * @param dataConverter    the data converter used to deserialize state
      */
     EntityMetadata(
@@ -32,12 +34,14 @@ public final class EntityMetadata {
             int backlogQueueSize,
             @Nullable String lockedBy,
             @Nullable String serializedState,
+            boolean includesState,
             DataConverter dataConverter) {
         this.instanceId = instanceId;
         this.lastModifiedTime = lastModifiedTime;
         this.backlogQueueSize = backlogQueueSize;
         this.lockedBy = lockedBy;
         this.serializedState = serializedState;
+        this.includesState = includesState;
         this.dataConverter = dataConverter;
     }
 
@@ -96,6 +100,19 @@ public final class EntityMetadata {
     @Nullable
     public String getSerializedState() {
         return this.serializedState;
+    }
+
+    /**
+     * Gets whether this metadata response includes the entity state.
+     * <p>
+     * Queries can exclude the state of the entity from the metadata that is retrieved.
+     * When this returns {@code false}, {@link #getSerializedState()} and {@link #readStateAs(Class)}
+     * will return {@code null}.
+     *
+     * @return {@code true} if state was requested and included in this metadata
+     */
+    public boolean isIncludesState() {
+        return this.includesState;
     }
 
     /**

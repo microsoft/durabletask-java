@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import io.grpc.Channel;
 
+import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Locale;
@@ -88,6 +89,90 @@ public final class DurableTaskGrpcWorkerBuilder {
 
         this.entityFactories.put(key, factory);
         return this;
+    }
+
+    /**
+     * Registers an entity type for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The entity class must implement {@link ITaskEntity} and have a public no-argument constructor.
+     * A new instance of the entity is created for each operation batch using reflection.
+     * <p>
+     * The entity name is derived from the simple class name of the provided type.
+     *
+     * @param entityClass the entity class to register; must implement {@link ITaskEntity}
+     * @return this builder object
+     * @throws IllegalArgumentException if the class does not implement {@link ITaskEntity}
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(Class<? extends ITaskEntity> entityClass) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null.");
+        }
+        String name = entityClass.getSimpleName();
+        return this.addEntity(name, entityClass);
+    }
+
+    /**
+     * Registers an entity type with a specific name for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The entity class must implement {@link ITaskEntity} and have a public no-argument constructor.
+     * A new instance of the entity is created for each operation batch using reflection.
+     *
+     * @param name        the name of the entity type
+     * @param entityClass the entity class to register; must implement {@link ITaskEntity}
+     * @return this builder object
+     * @throws IllegalArgumentException if the class does not implement {@link ITaskEntity}
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, Class<? extends ITaskEntity> entityClass) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null.");
+        }
+        if (!ITaskEntity.class.isAssignableFrom(entityClass)) {
+            throw new IllegalArgumentException(
+                    String.format("Type %s does not implement ITaskEntity.", entityClass.getName()));
+        }
+        return this.addEntity(name, () -> {
+            try {
+                return entityClass.getDeclaredConstructor().newInstance();
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw new RuntimeException(
+                        String.format("Failed to create instance of entity type %s. Ensure it has a public no-argument constructor.", entityClass.getName()), e);
+            }
+        });
+    }
+
+    /**
+     * Registers an entity singleton for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The same entity instance is reused for every operation batch. This is useful for stateless entities
+     * or entities that manage their own lifecycle.
+     * <p>
+     * The entity name is derived from the simple class name of the provided entity instance.
+     *
+     * @param entity the entity instance to register
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(ITaskEntity entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity must not be null.");
+        }
+        String name = entity.getClass().getSimpleName();
+        return this.addEntity(name, () -> entity);
+    }
+
+    /**
+     * Registers an entity singleton with a specific name for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The same entity instance is reused for every operation batch.
+     *
+     * @param name   the name of the entity type
+     * @param entity the entity instance to register
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, ITaskEntity entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity must not be null.");
+        }
+        return this.addEntity(name, () -> entity);
     }
 
     /**

@@ -397,6 +397,47 @@ public abstract class DurableTaskClient implements AutoCloseable {
     public abstract EntityQueryResult queryEntities(EntityQuery query);
 
     /**
+     * Returns an auto-paginating iterable over entity instances matching the specified filter criteria.
+     * <p>
+     * This method automatically handles pagination when iterating over results. It fetches pages
+     * from the store on demand, making it convenient when you want to process all matching entities
+     * without manually managing continuation tokens.
+     * <p>
+     * You can iterate over individual items:
+     * <pre>{@code
+     * for (EntityMetadata entity : client.getEntities(query)) {
+     *     System.out.println(entity.getEntityInstanceId());
+     * }
+     * }</pre>
+     * <p>
+     * Or iterate page by page for more control:
+     * <pre>{@code
+     * for (EntityQueryResult page : client.getEntities(query).byPage()) {
+     *     for (EntityMetadata entity : page.getEntities()) {
+     *         System.out.println(entity.getEntityInstanceId());
+     *     }
+     * }
+     * }</pre>
+     *
+     * @param query the query filter criteria
+     * @return a pageable iterable over all matching entities
+     */
+    public EntityQueryPageable getEntities(EntityQuery query) {
+        return new EntityQueryPageable(query, this::queryEntities);
+    }
+
+    /**
+     * Returns an auto-paginating iterable over all entity instances.
+     * <p>
+     * This is a convenience overload equivalent to {@code getEntities(new EntityQuery())}.
+     *
+     * @return a pageable iterable over all entities
+     */
+    public EntityQueryPageable getEntities() {
+        return getEntities(new EntityQuery());
+    }
+
+    /**
      * Cleans up entity storage by removing empty entities and/or releasing orphaned locks.
      * <p>
      * This is an administrative operation that can be used to reclaim storage space and fix

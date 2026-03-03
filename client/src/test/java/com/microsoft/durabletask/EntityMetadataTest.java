@@ -19,7 +19,7 @@ public class EntityMetadataTest {
     void getters_returnConstructorValues() {
         Instant now = Instant.now();
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@myKey", now, 5, "orch-123", "42", dataConverter);
+                "@counter@myKey", now, 5, "orch-123", "42", true, dataConverter);
 
         assertEquals("@counter@myKey", metadata.getInstanceId());
         assertEquals(now, metadata.getLastModifiedTime());
@@ -31,7 +31,7 @@ public class EntityMetadataTest {
     @Test
     void getEntityInstanceId_parsesCorrectly() {
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@myKey", Instant.EPOCH, 0, null, null, dataConverter);
+                "@counter@myKey", Instant.EPOCH, 0, null, null, false, dataConverter);
 
         EntityInstanceId entityId = metadata.getEntityInstanceId();
         assertEquals("counter", entityId.getName());
@@ -41,7 +41,7 @@ public class EntityMetadataTest {
     @Test
     void readStateAs_deserializesIntegerState() {
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@c1", Instant.EPOCH, 0, null, "42", dataConverter);
+                "@counter@c1", Instant.EPOCH, 0, null, "42", true, dataConverter);
 
         Integer state = metadata.readStateAs(Integer.class);
         assertNotNull(state);
@@ -51,7 +51,7 @@ public class EntityMetadataTest {
     @Test
     void readStateAs_deserializesStringState() {
         EntityMetadata metadata = new EntityMetadata(
-                "@myEntity@k1", Instant.EPOCH, 0, null, "\"hello\"", dataConverter);
+                "@myEntity@k1", Instant.EPOCH, 0, null, "\"hello\"", true, dataConverter);
 
         String state = metadata.readStateAs(String.class);
         assertEquals("hello", state);
@@ -60,7 +60,7 @@ public class EntityMetadataTest {
     @Test
     void readStateAs_nullState_returnsNull() {
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@c1", Instant.EPOCH, 0, null, null, dataConverter);
+                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
 
         Integer state = metadata.readStateAs(Integer.class);
         assertNull(state);
@@ -69,14 +69,28 @@ public class EntityMetadataTest {
     @Test
     void lockedBy_nullWhenNotLocked() {
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@c1", Instant.EPOCH, 0, null, null, dataConverter);
+                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
         assertNull(metadata.getLockedBy());
     }
 
     @Test
     void backlogQueueSize_zero() {
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@c1", Instant.EPOCH, 0, null, null, dataConverter);
+                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
         assertEquals(0, metadata.getBacklogQueueSize());
+    }
+
+    @Test
+    void includesState_true_whenStateIncluded() {
+        EntityMetadata metadata = new EntityMetadata(
+                "@counter@c1", Instant.EPOCH, 0, null, "42", true, dataConverter);
+        assertTrue(metadata.isIncludesState());
+    }
+
+    @Test
+    void includesState_false_whenStateNotIncluded() {
+        EntityMetadata metadata = new EntityMetadata(
+                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
+        assertFalse(metadata.isIncludesState());
     }
 }
