@@ -55,7 +55,7 @@ final class TracingPattern {
                 .addSpanProcessor(BatchSpanProcessor.builder(spanExporter).build())
                 .build();
 
-        OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder()
+        OpenTelemetrySdk.builder()
                 .setTracerProvider(tracerProvider)
                 .buildAndRegisterGlobal();
 
