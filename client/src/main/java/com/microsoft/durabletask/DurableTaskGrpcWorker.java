@@ -220,7 +220,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
                                 // Use the ExecutionStartedEvent timestamp as the orchestration span start time
                                 Instant spanStartTime = null;
-                                if (startedHistoryEvent != null && startedHistoryEvent.hasTimestamp()) {
+                                if (startedHistoryEvent.hasTimestamp()) {
                                     spanStartTime = DataConverter.getInstantFromTimestamp(
                                             startedHistoryEvent.getTimestamp());
                                 }
