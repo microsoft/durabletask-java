@@ -293,7 +293,7 @@ public class TracingHelperTest {
 
     @Test
     void emitTimerSpan_createsInternalSpanWithFireAt() {
-        TracingHelper.emitTimerSpan("MyOrchestration", "instance-1", 5, "2026-01-01T00:00:00Z", null);
+        TracingHelper.emitTimerSpan("MyOrchestration", "instance-1", 5, "2026-01-01T00:00:00Z", null, null);
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();
         assertEquals(1, spans.size());
@@ -305,6 +305,40 @@ public class TracingHelperTest {
         assertEquals("instance-1", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.instance_id")));
         assertEquals("5", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.task_id")));
         assertEquals("2026-01-01T00:00:00Z", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.fire_at")));
+    }
+
+    @Test
+    void emitTimerSpan_withStartTime_setsStartTimestamp() {
+        java.time.Instant startTime = java.time.Instant.parse("2026-01-01T00:00:00Z");
+        TracingHelper.emitTimerSpan("MyOrchestration", "instance-1", 5, "2026-01-01T00:01:00Z", null, startTime);
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertEquals(1, spans.size());
+        SpanData sd = spans.get(0);
+        assertEquals("orchestration:MyOrchestration:timer", sd.getName());
+        // The start time should be set to the provided startTime
+        long startEpochNanos = startTime.getEpochSecond() * 1_000_000_000L + startTime.getNano();
+        assertEquals(startEpochNanos, sd.getStartEpochNanos());
+    }
+
+    @Test
+    void emitRetroactiveClientSpan_createsClientSpanWithStartTime() {
+        java.time.Instant startTime = java.time.Instant.parse("2026-01-01T00:00:00Z");
+        TracingHelper.emitRetroactiveClientSpan(
+                "activity:GetWeather", null, TracingHelper.TYPE_ACTIVITY,
+                "GetWeather", "instance-1", 3, startTime);
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertEquals(1, spans.size());
+        SpanData sd = spans.get(0);
+        assertEquals("activity:GetWeather", sd.getName());
+        assertEquals(SpanKind.CLIENT, sd.getKind());
+        assertEquals("activity", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.type")));
+        assertEquals("GetWeather", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.name")));
+        assertEquals("instance-1", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.instance_id")));
+        assertEquals("3", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.task_id")));
+        long startEpochNanos = startTime.getEpochSecond() * 1_000_000_000L + startTime.getNano();
+        assertEquals(startEpochNanos, sd.getStartEpochNanos());
     }
 
     @Test

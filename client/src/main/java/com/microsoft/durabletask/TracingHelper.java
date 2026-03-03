@@ -61,12 +61,22 @@ final class TracingHelper {
      */
     @Nullable
     static TraceContext getCurrentTraceContext() {
-        Span currentSpan = Span.current();
-        if (currentSpan == null || !currentSpan.getSpanContext().isValid()) {
+        return getCurrentTraceContext(Span.current());
+    }
+
+    /**
+     * Captures a specific OpenTelemetry span's context as a protobuf {@code TraceContext}.
+     *
+     * @param span The span to capture context from, may be {@code null}.
+     * @return A {@code TraceContext} proto, or {@code null} if the span has no valid context.
+     */
+    @Nullable
+    static TraceContext getCurrentTraceContext(@Nullable Span span) {
+        if (span == null || !span.getSpanContext().isValid()) {
             return null;
         }
 
-        SpanContext spanContext = currentSpan.getSpanContext();
+        SpanContext spanContext = span.getSpanContext();
 
         // Construct the traceparent according to the W3C Trace Context specification
         // https://www.w3.org/TR/trace-context/#traceparent-header
@@ -295,21 +305,68 @@ final class TracingHelper {
     }
 
     /**
-     * Emits a short-lived span for a durable timer that has fired.
-     * Matches .NET SDK's {@code EmitTraceActivityForTimer}.
+     * Emits a retroactive Client-kind span that covers the time from task scheduling to completion.
+     * Matches .NET SDK pattern where client spans are emitted at completion time with
+     * {@code startTime} from the original TaskScheduled/SubOrchestrationCreated event timestamp.
+     *
+     * @param spanName       The span name (e.g. "activity:GetWeather").
+     * @param parentContext  The parent trace context (orchestration context), may be {@code null}.
+     * @param type           The durabletask.type value (e.g. "activity" or "orchestration").
+     * @param taskName       The task name attribute value.
+     * @param instanceId     The orchestration instance ID.
+     * @param taskId         The task sequence ID.
+     * @param startTime      The scheduling timestamp (span start time), may be {@code null}.
+     */
+    static void emitRetroactiveClientSpan(
+            String spanName,
+            @Nullable TraceContext parentContext,
+            String type,
+            String taskName,
+            @Nullable String instanceId,
+            int taskId,
+            @Nullable java.time.Instant startTime) {
+        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
+        SpanBuilder spanBuilder = tracer.spanBuilder(spanName)
+                .setSpanKind(SpanKind.CLIENT)
+                .setAttribute(ATTR_TYPE, type)
+                .setAttribute(ATTR_TASK_NAME, taskName)
+                .setAttribute(ATTR_TASK_ID, String.valueOf(taskId));
+
+        if (instanceId != null) {
+            spanBuilder.setAttribute(ATTR_INSTANCE_ID, instanceId);
+        }
+
+        Context parentCtx = extractTraceContext(parentContext);
+        if (parentCtx != null) {
+            spanBuilder.setParent(parentCtx);
+        }
+
+        if (startTime != null) {
+            spanBuilder.setStartTimestamp(startTime);
+        }
+
+        Span span = spanBuilder.startSpan();
+        span.end();
+    }
+
+    /**
+     * Emits a timer span with duration from creation time to now.
+     * Matches .NET SDK's {@code EmitTraceActivityForTimer} which spans from startTime to disposal time.
      *
      * @param orchestrationName The name of the orchestration that created the timer.
      * @param instanceId        The orchestration instance ID.
      * @param timerId           The timer event ID.
      * @param fireAt            The ISO-8601 formatted fire time.
      * @param parentContext     The parent trace context, may be {@code null}.
+     * @param startTime         The timer creation time (span start), may be {@code null}.
      */
     static void emitTimerSpan(
             String orchestrationName,
             @Nullable String instanceId,
             int timerId,
             @Nullable String fireAt,
-            @Nullable TraceContext parentContext) {
+            @Nullable TraceContext parentContext,
+            @Nullable java.time.Instant startTime) {
         Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
         SpanBuilder spanBuilder = tracer.spanBuilder(
                 TYPE_ORCHESTRATION + ":" + orchestrationName + ":" + TYPE_TIMER)
@@ -321,6 +378,10 @@ final class TracingHelper {
         Context parentCtx = extractTraceContext(parentContext);
         if (parentCtx != null) {
             spanBuilder.setParent(parentCtx);
+        }
+
+        if (startTime != null) {
+            spanBuilder.setStartTimestamp(startTime);
         }
 
         if (instanceId != null) {

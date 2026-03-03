@@ -181,7 +181,8 @@ public final class OrchestrationRunner {
         try {
             taskOrchestratorResult = taskOrchestrationExecutor.execute(
                     orchestratorRequest.getPastEventsList(),
-                    orchestratorRequest.getNewEventsList());
+                    orchestratorRequest.getNewEventsList(),
+                    TracingHelper.getCurrentTraceContext(orchestrationSpan));
         } catch (Exception e) {
             orchestrationError = e;
             throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);

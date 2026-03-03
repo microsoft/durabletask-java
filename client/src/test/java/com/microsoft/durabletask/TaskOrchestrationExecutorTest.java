@@ -65,7 +65,7 @@ public class TaskOrchestrationExecutorTest {
         List<HistoryEvent> newEvents = Collections.emptyList();
 
         // Act
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         // Assert: the result should contain a CompleteOrchestrationAction with FAILED status
         // and a failure message mentioning the unknown orchestration name
@@ -137,7 +137,7 @@ public class TaskOrchestrationExecutorTest {
         );
 
         // Act
-        TaskOrchestratorResult result = executor.execute(Collections.emptyList(), newEvents);
+        TaskOrchestratorResult result = executor.execute(Collections.emptyList(), newEvents, null);
 
         // Assert: find the ScheduleTaskAction and verify it has parentTraceContext set
         List<OrchestratorAction> actions = new ArrayList<>(result.getActions());
@@ -204,7 +204,7 @@ public class TaskOrchestrationExecutorTest {
         );
 
         // Act
-        TaskOrchestratorResult result = executor.execute(Collections.emptyList(), newEvents);
+        TaskOrchestratorResult result = executor.execute(Collections.emptyList(), newEvents, null);
 
         // Assert: find the CreateSubOrchestrationAction and verify it has parentTraceContext
         List<OrchestratorAction> actions = new ArrayList<>(result.getActions());
@@ -265,7 +265,7 @@ public class TaskOrchestrationExecutorTest {
         );
 
         // Act
-        TaskOrchestratorResult result = executor.execute(Collections.emptyList(), newEvents);
+        TaskOrchestratorResult result = executor.execute(Collections.emptyList(), newEvents, null);
 
         // Assert: actions should not have trace context when none was provided
         List<OrchestratorAction> actions = new ArrayList<>(result.getActions());
