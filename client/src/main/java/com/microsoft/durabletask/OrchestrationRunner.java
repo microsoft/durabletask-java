@@ -177,17 +177,18 @@ public final class OrchestrationRunner {
 
         // TODO: Error handling
         TaskOrchestratorResult taskOrchestratorResult;
+        Throwable orchestrationError = null;
         try {
             taskOrchestratorResult = taskOrchestrationExecutor.execute(
                     orchestratorRequest.getPastEventsList(),
                     orchestratorRequest.getNewEventsList());
         } catch (Exception e) {
-            TracingHelper.endSpan(orchestrationSpan, e);
+            orchestrationError = e;
             throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
         } finally {
-            orchestrationScope.close();
+            if (orchestrationScope != null) orchestrationScope.close();
+            TracingHelper.endSpan(orchestrationSpan, orchestrationError);
         }
-        TracingHelper.endSpan(orchestrationSpan, null);
 
         OrchestratorService.OrchestratorResponse response = OrchestratorService.OrchestratorResponse.newBuilder()
                 .setInstanceId(orchestratorRequest.getInstanceId())

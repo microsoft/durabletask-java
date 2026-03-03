@@ -286,14 +286,14 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         String output = null;
                         TaskFailureDetails failureDetails = null;
+                        Throwable activityError = null;
                         try {
                             output = taskActivityExecutor.execute(
                                 activityRequest.getName(),
                                 activityRequest.getInput().getValue(),
                                 activityRequest.getTaskId());
                         } catch (Throwable e) {
-                            TracingHelper.endSpan(activitySpan, e);
-                            activitySpan = null;
+                            activityError = e;
                             failureDetails = TaskFailureDetails.newBuilder()
                                 .setErrorType(e.getClass().getName())
                                 .setErrorMessage(e.getMessage())
@@ -301,7 +301,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 .build();
                         } finally {
                             activityScope.close();
-                            TracingHelper.endSpan(activitySpan, null);
+                            TracingHelper.endSpan(activitySpan, activityError);
                         }
 
                         ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
