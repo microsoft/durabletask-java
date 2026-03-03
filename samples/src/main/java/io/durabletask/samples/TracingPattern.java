@@ -20,6 +20,7 @@ import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
@@ -89,62 +90,48 @@ final class TracingPattern {
                 .createWorkerBuilder(connectionString)
                 .addOrchestration(new TaskOrchestrationFactory() {
                     @Override
-                    public String getName() { return "TracingOrchestration"; }
+                    public String getName() { return "FanOutFanIn"; }
 
                     @Override
                     public TaskOrchestration create() {
                         return ctx -> {
-                            String input = ctx.getInput(String.class);
-                            // Trace context is automatically propagated to activities via parentTraceContext
-                            String reversed = ctx.callActivity("Reverse", input, String.class).await();
-                            String upper = ctx.callActivity("Capitalize", reversed, String.class).await();
-                            // Sub-orchestration also receives the trace context
-                            String result = ctx.callSubOrchestrator(
-                                    "ChildOrchestration", upper, String.class).await();
-                            ctx.complete(result);
-                        };
-                    }
-                })
-                .addOrchestration(new TaskOrchestrationFactory() {
-                    @Override
-                    public String getName() { return "ChildOrchestration"; }
+                            // Fan-out: schedule multiple parallel activities
+                            List<Task<String>> parallelTasks = new java.util.ArrayList<>();
+                            String[] cities = {"Seattle", "Tokyo", "London", "Paris", "Sydney"};
+                            for (String city : cities) {
+                                parallelTasks.add(
+                                    ctx.callActivity("GetWeather", city, String.class));
+                            }
 
-                    @Override
-                    public TaskOrchestration create() {
-                        return ctx -> {
-                            String input = ctx.getInput(String.class);
-                            String result = ctx.callActivity("AddSuffix", input, String.class).await();
-                            ctx.complete(result);
+                            // Fan-in: wait for all activities to complete
+                            List<String> results = ctx.allOf(parallelTasks).await();
+
+                            // Aggregate results
+                            String summary = ctx.callActivity(
+                                    "CreateSummary", String.join(", ", results), String.class).await();
+
+                            ctx.complete(summary);
                         };
                     }
                 })
                 .addActivity(new TaskActivityFactory() {
-                    @Override public String getName() { return "Reverse"; }
+                    @Override public String getName() { return "GetWeather"; }
                     @Override public TaskActivity create() {
                         return ctx -> {
-                            String input = ctx.getInput(String.class);
-                            logger.info("[Reverse] Processing: " + input);
-                            return new StringBuilder(input).reverse().toString();
+                            String city = ctx.getInput(String.class);
+                            logger.info("[GetWeather] Getting weather for: " + city);
+                            try { Thread.sleep(20); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                            return city + "=72F";
                         };
                     }
                 })
                 .addActivity(new TaskActivityFactory() {
-                    @Override public String getName() { return "Capitalize"; }
+                    @Override public String getName() { return "CreateSummary"; }
                     @Override public TaskActivity create() {
                         return ctx -> {
                             String input = ctx.getInput(String.class);
-                            logger.info("[Capitalize] Processing: " + input);
-                            return input.toUpperCase();
-                        };
-                    }
-                })
-                .addActivity(new TaskActivityFactory() {
-                    @Override public String getName() { return "AddSuffix"; }
-                    @Override public TaskActivity create() {
-                        return ctx -> {
-                            String input = ctx.getInput(String.class);
-                            logger.info("[AddSuffix] Processing: " + input);
-                            return input + "-traced";
+                            logger.info("[CreateSummary] Creating summary for: " + input);
+                            return "Weather Report: " + input;
                         };
                     }
                 })
@@ -160,8 +147,8 @@ final class TracingPattern {
                 .createClientBuilder(connectionString).build();
 
         // Create a parent span — the SDK automatically propagates W3C trace context
-        Span orchestrationSpan = tracer.spanBuilder("create_orchestration:TracingOrchestration")
-                .setAttribute("durabletask.task.name", "TracingOrchestration")
+        Span orchestrationSpan = tracer.spanBuilder("create_orchestration:FanOutFanIn")
+                .setAttribute("durabletask.task.name", "FanOutFanIn")
                 .setAttribute("durabletask.type", "orchestration")
                 .startSpan();
 
@@ -169,10 +156,10 @@ final class TracingPattern {
 
         String instanceId;
         try (Scope scope = orchestrationSpan.makeCurrent()) {
-            logger.info("Scheduling orchestration...");
+            logger.info("Scheduling FanOutFanIn orchestration...");
             instanceId = client.scheduleNewOrchestrationInstance(
-                    "TracingOrchestration",
-                    new NewOrchestrationInstanceOptions().setInput("Hello, tracing!"));
+                    "FanOutFanIn",
+                    new NewOrchestrationInstanceOptions().setInput("weather-request"));
             orchestrationSpan.setAttribute("durabletask.task.instance_id", instanceId);
             logger.info("Started orchestration: " + instanceId);
         }

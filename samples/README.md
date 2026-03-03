@@ -39,31 +39,29 @@ docker run -d --name jaeger \
 
 ## What the Sample Does
 
-The `TracingPattern` sample:
+The `TracingPattern` sample demonstrates the **Fan-Out/Fan-In** pattern with distributed tracing:
 
 1. Configures OpenTelemetry with an OTLP exporter pointing to Jaeger
 2. Connects a worker and client to the DTS emulator using a connection string
-3. Creates a parent span (`create_orchestration:TracingOrchestration`) and schedules an orchestration
-4. The orchestration chains three activities (`Reverse`, `Capitalize`, `AddSuffix`) and a sub-orchestration (`ChildOrchestration`)
+3. Creates a parent span (`create_orchestration:FanOutFanIn`) and schedules an orchestration
+4. The orchestration fans out 5 parallel `GetWeather` activities (Seattle, Tokyo, London, Paris, Sydney), fans in the results, then calls `CreateSummary` to aggregate
 5. The SDK automatically propagates trace context through the full execution chain
 
 ## Screenshots
 
 ### Jaeger — Trace Search Results
 
-Shows the trace from `durabletask-java-tracing-sample` service with 10 spans covering the full orchestration lifecycle.
+Shows the trace from `durabletask-java-tracing-sample` service with spans covering the full fan-out/fan-in orchestration lifecycle.
 
 ![Jaeger trace search results](images/jaeger-trace-list-full.png)
 
 ### Jaeger — Trace Detail
 
-Full span hierarchy showing parent-child relationships:
-- `create_orchestration:TracingOrchestration` (parent)
-  - `orchestration:TracingOrchestration` (orchestration replays)
-    - `activity:Reverse`
-    - `activity:Capitalize`
-  - `orchestration:ChildOrchestration` (sub-orchestration)
-    - `activity:AddSuffix`
+Full span hierarchy showing the fan-out/fan-in pattern:
+- `create_orchestration:FanOutFanIn` (parent)
+  - `orchestration:FanOutFanIn` (orchestration execution)
+    - `activity:GetWeather` ×5 (parallel fan-out)
+    - `activity:CreateSummary` (fan-in aggregation)
 
 ![Jaeger trace detail](images/jaeger-full-trace-detail.png)
 
@@ -71,7 +69,7 @@ Full span hierarchy showing parent-child relationships:
 
 Activity span showing attributes aligned with the .NET SDK schema:
 - `durabletask.type=activity`
-- `durabletask.task.name=Reverse`
+- `durabletask.task.name=GetWeather`
 - `durabletask.task.instance_id=<orchestrationId>`
 - `durabletask.task.task_id=0`
 - `otel.scope.name=Microsoft.DurableTask`
@@ -81,7 +79,7 @@ Activity span showing attributes aligned with the .NET SDK schema:
 
 ### DTS Dashboard — Completed Orchestrations
 
-Both `TracingOrchestration` and `ChildOrchestration` completed successfully.
+The `FanOutFanIn` orchestration completed successfully with all activities.
 
 ![DTS Dashboard](images/dts-dashboard-completed.png)
 
