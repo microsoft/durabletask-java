@@ -126,6 +126,10 @@ final class TracingHelper {
         SpanContext remoteContext = SpanContext.createFromRemoteParent(
                 traceId, spanId, TraceFlags.fromByte(flags), traceState);
 
+        if (!remoteContext.isValid()) {
+            return null;
+        }
+
         return Context.current().with(Span.wrap(remoteContext));
     }
 
