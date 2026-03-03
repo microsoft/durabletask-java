@@ -59,13 +59,25 @@ Shows the trace from `durabletask-java-tracing-sample` service with 10 spans cov
 
 Full span hierarchy showing parent-child relationships:
 - `create_orchestration:TracingOrchestration` (parent)
-  - `orchestration:<instanceId>` (orchestration replays)
+  - `orchestration:TracingOrchestration` (orchestration replays)
     - `activity:Reverse`
     - `activity:Capitalize`
-  - `orchestration:<childInstanceId>` (ChildOrchestration)
+  - `orchestration:ChildOrchestration` (sub-orchestration)
     - `activity:AddSuffix`
 
 ![Jaeger trace detail](images/jaeger-full-trace-detail.png)
+
+### Jaeger — Span Attributes
+
+Activity span showing attributes aligned with the .NET SDK schema:
+- `durabletask.type=activity`
+- `durabletask.task.name=Reverse`
+- `durabletask.task.instance_id=<orchestrationId>`
+- `durabletask.task.task_id=0`
+- `otel.scope.name=Microsoft.DurableTask`
+- `span.kind=server`
+
+![Jaeger span detail](images/jaeger-span-detail.png)
 
 ### DTS Dashboard — Completed Orchestrations
 
