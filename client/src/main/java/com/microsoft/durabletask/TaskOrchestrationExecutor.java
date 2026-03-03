@@ -441,8 +441,6 @@ final class TaskOrchestrationExecutor {
                 createSubOrchestrationActionBuilder.setVersion(StringValue.of(this.getDefaultVersion()));
             }
 
-            // Need final copy for lambda capture
-            final String subInstanceId = instanceId;
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
 
