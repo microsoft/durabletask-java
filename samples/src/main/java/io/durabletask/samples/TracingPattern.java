@@ -95,6 +95,9 @@ final class TracingPattern {
                     @Override
                     public TaskOrchestration create() {
                         return ctx -> {
+                            // Timer: wait briefly (demonstrates timer span)
+                            ctx.createTimer(Duration.ofSeconds(1)).await();
+
                             // Fan-out: schedule multiple parallel activities
                             List<Task<String>> parallelTasks = new java.util.ArrayList<>();
                             String[] cities = {"Seattle", "Tokyo", "London", "Paris", "Sydney"};

@@ -293,7 +293,7 @@ public class TracingHelperTest {
 
     @Test
     void emitTimerSpan_createsInternalSpanWithFireAt() {
-        TracingHelper.emitTimerSpan("MyOrchestration", "instance-1", 5, "2026-01-01T00:00:00Z");
+        TracingHelper.emitTimerSpan("MyOrchestration", "instance-1", 5, "2026-01-01T00:00:00Z", null);
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();
         assertEquals(1, spans.size());

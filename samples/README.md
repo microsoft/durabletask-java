@@ -44,7 +44,7 @@ The `TracingPattern` sample demonstrates the **Fan-Out/Fan-In** pattern with dis
 1. Configures OpenTelemetry with an OTLP exporter pointing to Jaeger
 2. Connects a worker and client to the DTS emulator using a connection string
 3. Creates a parent span (`create_orchestration:FanOutFanIn`) and schedules an orchestration
-4. The orchestration fans out 5 parallel `GetWeather` activities (Seattle, Tokyo, London, Paris, Sydney), fans in the results, then calls `CreateSummary` to aggregate
+4. The orchestration waits on a 1-second **durable timer**, then fans out 5 parallel `GetWeather` activities (Seattle, Tokyo, London, Paris, Sydney), fans in the results, then calls `CreateSummary` to aggregate
 5. The SDK automatically propagates trace context through the full execution chain
 
 ## Screenshots
@@ -60,22 +60,23 @@ Shows the trace from `durabletask-java-tracing-sample` service with spans coveri
 Full span hierarchy showing the fan-out/fan-in pattern with paired Client+Server spans (matching .NET SDK):
 - `create_orchestration:FanOutFanIn` (root, internal)
   - `orchestration:FanOutFanIn` (server — orchestration execution)
+    - `orchestration:FanOutFanIn:timer` (internal — durable timer wait)
     - `activity:GetWeather` ×5 (client — scheduling) → `activity:GetWeather` ×5 (server — execution)
     - `activity:CreateSummary` (client) → `activity:CreateSummary` (server)
 
-14 spans total, Depth 3 — aligned with the .NET SDK trace structure.
+15 spans total, Depth 3 — aligned with the .NET SDK trace structure.
 
 ![Jaeger trace detail](images/jaeger-full-trace-detail.png)
 
-### Jaeger — Span Attributes
+### Jaeger — Span Attributes (Timer)
 
-Activity span showing attributes aligned with the .NET SDK schema:
-- `durabletask.type=activity`
-- `durabletask.task.name=GetWeather`
+Timer span showing attributes aligned with the .NET SDK schema:
+- `durabletask.type=timer`
+- `durabletask.task.name=FanOutFanIn`
+- `durabletask.fire_at=2026-03-03T21:13:15.142Z`
 - `durabletask.task.instance_id=<orchestrationId>`
-- `durabletask.task.task_id=0`
 - `otel.scope.name=Microsoft.DurableTask`
-- `span.kind=server`
+- `span.kind=internal`
 
 ![Jaeger span detail](images/jaeger-span-detail.png)
 

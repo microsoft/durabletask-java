@@ -278,12 +278,14 @@ final class TracingHelper {
      * @param instanceId        The orchestration instance ID.
      * @param timerId           The timer event ID.
      * @param fireAt            The ISO-8601 formatted fire time.
+     * @param parentContext     The parent trace context, may be {@code null}.
      */
     static void emitTimerSpan(
             String orchestrationName,
             @Nullable String instanceId,
             int timerId,
-            @Nullable String fireAt) {
+            @Nullable String fireAt,
+            @Nullable TraceContext parentContext) {
         Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
         SpanBuilder spanBuilder = tracer.spanBuilder(
                 TYPE_ORCHESTRATION + ":" + orchestrationName + ":" + TYPE_TIMER)
@@ -291,6 +293,11 @@ final class TracingHelper {
                 .setAttribute(ATTR_TYPE, TYPE_TIMER)
                 .setAttribute(ATTR_TASK_NAME, orchestrationName)
                 .setAttribute(ATTR_TASK_ID, String.valueOf(timerId));
+
+        Context parentCtx = extractTraceContext(parentContext);
+        if (parentCtx != null) {
+            spanBuilder.setParent(parentCtx);
+        }
 
         if (instanceId != null) {
             spanBuilder.setAttribute(ATTR_INSTANCE_ID, instanceId);

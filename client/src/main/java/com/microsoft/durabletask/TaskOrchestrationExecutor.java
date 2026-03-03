@@ -397,7 +397,7 @@ final class TaskOrchestrationExecutor {
                         id,
                         serializedEventData != null ? serializedEventData : "(null)"));
 
-                // Emit an event span matching .NET SDK's StartTraceActivityForEventRaisedFromWorker
+                // Emit an event span  StartTraceActivityForEventRaisedFromWorker
                 TracingHelper.emitEventRaisedFromWorkerSpan(eventName, this.instanceId, instanceId);
             }
         }
@@ -744,7 +744,8 @@ final class TaskOrchestrationExecutor {
                         this.getName(),
                         this.instanceId,
                         timerEventId,
-                        fireAt);
+                        fireAt,
+                        this.parentTraceContext);
             }
 
             CompletableTask<?> task = record.getTask();
