@@ -15,7 +15,7 @@ import java.util.function.Function;
  * It fetches pages from the store on demand and yields individual {@link EntityMetadata}
  * items to the caller.
  * <p>
- * Use {@link DurableTaskClient#getEntities(EntityQuery)} to obtain an instance of this class.
+ * Use {@link DurableEntityClient#getAllEntities(EntityQuery)} to obtain an instance of this class.
  *
  * <h3>Example: iterate over all entities</h3>
  * <pre>{@code
@@ -23,14 +23,14 @@ import java.util.function.Function;
  *     .setInstanceIdStartsWith("counter")
  *     .setIncludeState(true);
  *
- * for (EntityMetadata entity : client.getEntities(query)) {
+ * for (EntityMetadata entity : client.getEntities().getAllEntities(query)) {
  *     System.out.println(entity.getEntityInstanceId());
  * }
  * }</pre>
  *
  * <h3>Example: iterate page by page</h3>
  * <pre>{@code
- * for (EntityQueryResult page : client.getEntities(query).byPage()) {
+ * for (EntityQueryResult page : client.getEntities().getAllEntities(query).byPage()) {
  *     System.out.println("Got " + page.getEntities().size() + " entities");
  *     for (EntityMetadata entity : page.getEntities()) {
  *         System.out.println(entity.getEntityInstanceId());

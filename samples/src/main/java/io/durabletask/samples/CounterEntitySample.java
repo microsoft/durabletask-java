@@ -68,14 +68,14 @@ final class CounterEntitySample {
         System.out.printf("Counter value: %s%n", result.readOutputAs(Integer.class));
 
         // Query entity state directly
-        EntityMetadata entityMetadata = client.getEntityMetadata(
+        EntityMetadata entityMetadata = client.getEntities().getEntityMetadata(
                 new EntityInstanceId("Counter", "myCounter"), true);
         if (entityMetadata != null) {
             System.out.printf("Entity state: %s%n", entityMetadata.readStateAs(Integer.class));
         }
 
         // Signal the entity to reset
-        client.signalEntity(new EntityInstanceId("Counter", "myCounter"), "reset");
+        client.getEntities().signalEntity(new EntityInstanceId("Counter", "myCounter"), "reset");
         System.out.println("Sent reset signal to counter entity.");
 
         worker.stop();

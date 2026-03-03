@@ -109,9 +109,9 @@ final class BankAccountSample {
         System.out.printf("Transfer result: %s%n", result.readOutputAs(String.class));
 
         // Step 3: Query final account balances
-        EntityMetadata accountA = client.getEntityMetadata(
+        EntityMetadata accountA = client.getEntities().getEntityMetadata(
                 new EntityInstanceId("BankAccount", "account-A"), true);
-        EntityMetadata accountB = client.getEntityMetadata(
+        EntityMetadata accountB = client.getEntities().getEntityMetadata(
                 new EntityInstanceId("BankAccount", "account-B"), true);
 
         if (accountA != null) {

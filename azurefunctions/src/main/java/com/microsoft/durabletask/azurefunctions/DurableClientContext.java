@@ -9,6 +9,7 @@ import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientFactory;
+import com.microsoft.durabletask.DurableEntityClient;
 import com.microsoft.durabletask.EntityInstanceId;
 import com.microsoft.durabletask.EntityMetadata;
 import com.microsoft.durabletask.EntityQuery;
@@ -140,6 +141,17 @@ public class DurableClientContext {
     }
 
     /**
+     * Gets the entity client for interacting with durable entities.
+     * <p>
+     * This mirrors the .NET SDK's {@code DurableTaskClient.Entities} property.
+     *
+     * @return the {@link DurableEntityClient} for this client
+     */
+    public DurableEntityClient getEntities() {
+        return getClient().getEntities();
+    }
+
+    /**
      * Sends a fire-and-forget signal to a durable entity.
      *
      * @param entityId the target entity's instance ID
@@ -147,7 +159,7 @@ public class DurableClientContext {
      * @param input the input to pass to the operation (may be {@code null})
      */
     public void signalEntity(EntityInstanceId entityId, String operationName, Object input) {
-        getClient().signalEntity(entityId, operationName, input);
+        getClient().getEntities().signalEntity(entityId, operationName, input);
     }
 
     /**
@@ -157,7 +169,7 @@ public class DurableClientContext {
      * @param operationName the name of the operation to invoke on the entity
      */
     public void signalEntity(EntityInstanceId entityId, String operationName) {
-        getClient().signalEntity(entityId, operationName);
+        getClient().getEntities().signalEntity(entityId, operationName);
     }
 
     /**
@@ -168,7 +180,7 @@ public class DurableClientContext {
      * @return the entity metadata, or {@code null} if the entity does not exist
      */
     public EntityMetadata getEntityMetadata(EntityInstanceId entityId, boolean includeState) {
-        return getClient().getEntityMetadata(entityId, includeState);
+        return getClient().getEntities().getEntityMetadata(entityId, includeState);
     }
 
     /**
@@ -178,7 +190,7 @@ public class DurableClientContext {
      * @return the entity metadata, or {@code null} if the entity does not exist
      */
     public EntityMetadata getEntityMetadata(EntityInstanceId entityId) {
-        return getClient().getEntityMetadata(entityId);
+        return getClient().getEntities().getEntityMetadata(entityId);
     }
 
     /**
@@ -188,7 +200,7 @@ public class DurableClientContext {
      * @return the query result containing matching entities and an optional continuation token
      */
     public EntityQueryResult queryEntities(EntityQuery query) {
-        return getClient().queryEntities(query);
+        return getClient().getEntities().queryEntities(query);
     }
 
     /**
@@ -198,7 +210,7 @@ public class DurableClientContext {
      * @return the result of the clean operation, including counts of removed entities and released locks
      */
     public CleanEntityStorageResult cleanEntityStorage(CleanEntityStorageRequest request) {
-        return getClient().cleanEntityStorage(request);
+        return getClient().getEntities().cleanEntityStorage(request);
     }
 
     private HttpManagementPayload getClientResponseLinks(HttpRequestMessage<?> request, String instanceId) {

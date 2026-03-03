@@ -13,8 +13,8 @@ import java.util.concurrent.TimeoutException;
  * <p>
  * This sample shows how to use the client management APIs:
  * <ul>
- *   <li>{@link DurableTaskClient#queryEntities(EntityQuery)} — query entities with filters and pagination</li>
- *   <li>{@link DurableTaskClient#cleanEntityStorage(CleanEntityStorageRequest)} — remove empty entities
+ *   <li>{@link DurableEntityClient#queryEntities(EntityQuery)} — query entities with filters and pagination</li>
+ *   <li>{@link DurableEntityClient#cleanEntityStorage(CleanEntityStorageRequest)} — remove empty entities
  *       and release orphaned locks</li>
  * </ul>
  * <p>
@@ -75,7 +75,7 @@ final class EntityQuerySample {
                 query.setContinuationToken(continuationToken);
             }
 
-            EntityQueryResult result = client.queryEntities(query);
+            EntityQueryResult result = client.getEntities().queryEntities(query);
             pageNumber++;
             System.out.printf("Page %d: %d entities%n", pageNumber, result.getEntities().size());
 
@@ -93,7 +93,7 @@ final class EntityQuerySample {
         System.out.println("\n--- Deleting all counter entities ---");
         for (int i = 1; i <= 5; i++) {
             EntityInstanceId counterId = new EntityInstanceId("Counter", "counter-" + i);
-            client.signalEntity(counterId, "delete");
+            client.getEntities().signalEntity(counterId, "delete");
         }
         // Give time for delete signals to be processed
         Thread.sleep(3000);
@@ -104,13 +104,13 @@ final class EntityQuerySample {
                 .setRemoveEmptyEntities(true)
                 .setReleaseOrphanedLocks(true);
 
-        CleanEntityStorageResult cleanResult = client.cleanEntityStorage(cleanRequest);
+        CleanEntityStorageResult cleanResult = client.getEntities().cleanEntityStorage(cleanRequest);
         System.out.printf("Cleaned storage: %d empty entities removed, %d orphaned locks released%n",
                 cleanResult.getEmptyEntitiesRemoved(),
                 cleanResult.getOrphanedLocksReleased());
 
         // Step 5: Verify entities are gone
-        EntityQueryResult afterClean = client.queryEntities(
+        EntityQueryResult afterClean = client.getEntities().queryEntities(
                 new EntityQuery().setInstanceIdStartsWith("Counter"));
         System.out.printf("Entities remaining after cleanup: %d%n", afterClean.getEntities().size());
 

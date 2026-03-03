@@ -5,7 +5,7 @@ package com.microsoft.durabletask;
 import javax.annotation.Nullable;
 
 /**
- * Represents the result of a {@link DurableTaskClient#cleanEntityStorage(CleanEntityStorageRequest)} operation.
+ * Represents the result of a {@link DurableEntityClient#cleanEntityStorage(CleanEntityStorageRequest)} operation.
  */
 public final class CleanEntityStorageResult {
     private final String continuationToken;

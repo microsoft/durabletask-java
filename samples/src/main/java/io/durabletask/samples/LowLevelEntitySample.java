@@ -108,7 +108,7 @@ final class LowLevelEntitySample {
                 id1, Duration.ofSeconds(30), true);
         System.out.printf("Result: %s%n", result1.readOutputAs(String.class));
 
-        EntityMetadata kvMeta = client.getEntityMetadata(
+        EntityMetadata kvMeta = client.getEntities().getEntityMetadata(
                 new EntityInstanceId("KeyValue", "config"), true);
         if (kvMeta != null) {
             System.out.printf("KeyValue entity state: %s%n", kvMeta.readStateAs(Object.class));
@@ -129,7 +129,7 @@ final class LowLevelEntitySample {
         System.out.printf("Result: %s%n", result3.readOutputAs(String.class));
 
         // Verify entity was deleted
-        EntityMetadata deletedMeta = client.getEntityMetadata(
+        EntityMetadata deletedMeta = client.getEntities().getEntityMetadata(
                 new EntityInstanceId("ShoppingCart", "cart-delete"), true);
         System.out.printf("Entity after delete: %s%n", deletedMeta == null ? "null (deleted)" : "still exists");
 

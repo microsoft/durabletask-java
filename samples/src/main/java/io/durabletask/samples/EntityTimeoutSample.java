@@ -106,18 +106,18 @@ final class EntityTimeoutSample {
         EntityInstanceId counterId = new EntityInstanceId("SlowCounter", "scheduled-test");
 
         // Initialize the counter
-        client.signalEntity(counterId, "add", 50);
+        client.getEntities().signalEntity(counterId, "add", 50);
         Thread.sleep(2000);
 
         // Schedule a signal to add 25 more, delivered 5 seconds from now
         Instant scheduledTime = Instant.now().plusSeconds(5);
         SignalEntityOptions signalOptions = new SignalEntityOptions()
                 .setScheduledTime(scheduledTime);
-        client.signalEntity(counterId, "add", 25, signalOptions);
+        client.getEntities().signalEntity(counterId, "add", 25, signalOptions);
         System.out.printf("Scheduled 'add 25' signal for %s%n", scheduledTime);
 
         // Check state before the scheduled signal is delivered
-        EntityMetadata beforeMeta = client.getEntityMetadata(counterId, true);
+        EntityMetadata beforeMeta = client.getEntities().getEntityMetadata(counterId, true);
         if (beforeMeta != null) {
             System.out.printf("State before scheduled signal: %d%n",
                     beforeMeta.readStateAs(Integer.class));
@@ -128,7 +128,7 @@ final class EntityTimeoutSample {
         Thread.sleep(7000);
 
         // Check state after
-        EntityMetadata afterMeta = client.getEntityMetadata(counterId, true);
+        EntityMetadata afterMeta = client.getEntities().getEntityMetadata(counterId, true);
         if (afterMeta != null) {
             System.out.printf("State after scheduled signal: %d%n",
                     afterMeta.readStateAs(Integer.class));

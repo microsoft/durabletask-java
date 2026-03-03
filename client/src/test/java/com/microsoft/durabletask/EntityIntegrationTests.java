@@ -66,13 +66,13 @@ public class EntityIntegrationTests extends IntegrationTestBase {
         DurableTaskClient client = this.createClientBuilder().build();
 
         // Signal the entity to add 10
-        client.signalEntity(entityId, "add", 10);
+        client.getEntities().signalEntity(entityId, "add", 10);
 
         // Wait for the entity to process the signal
         Thread.sleep(5000);
 
         // Query entity state
-        EntityMetadata metadata = client.getEntityMetadata(entityId, true);
+        EntityMetadata metadata = client.getEntities().getEntityMetadata(entityId, true);
         assertNotNull(metadata, "Entity metadata should not be null");
 
         Integer state = metadata.readStateAs(Integer.class);
@@ -92,14 +92,14 @@ public class EntityIntegrationTests extends IntegrationTestBase {
         DurableTaskClient client = this.createClientBuilder().build();
 
         // Send multiple signals
-        client.signalEntity(entityId, "add", 5);
-        client.signalEntity(entityId, "add", 3);
-        client.signalEntity(entityId, "add", 2);
+        client.getEntities().signalEntity(entityId, "add", 5);
+        client.getEntities().signalEntity(entityId, "add", 3);
+        client.getEntities().signalEntity(entityId, "add", 2);
 
         // Wait for all signals to be processed
         Thread.sleep(8000);
 
-        EntityMetadata metadata = client.getEntityMetadata(entityId, true);
+        EntityMetadata metadata = client.getEntities().getEntityMetadata(entityId, true);
         assertNotNull(metadata);
 
         Integer state = metadata.readStateAs(Integer.class);
@@ -119,12 +119,12 @@ public class EntityIntegrationTests extends IntegrationTestBase {
         DurableTaskClient client = this.createClientBuilder().build();
 
         // Add, then reset
-        client.signalEntity(entityId, "add", 42);
+        client.getEntities().signalEntity(entityId, "add", 42);
         Thread.sleep(3000);
-        client.signalEntity(entityId, "reset");
+        client.getEntities().signalEntity(entityId, "reset");
         Thread.sleep(5000);
 
-        EntityMetadata metadata = client.getEntityMetadata(entityId, true);
+        EntityMetadata metadata = client.getEntities().getEntityMetadata(entityId, true);
         assertNotNull(metadata);
 
         Integer state = metadata.readStateAs(Integer.class);
@@ -194,7 +194,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
         Thread.sleep(5000);
 
         // Verify entity state was updated
-        EntityMetadata metadata = client.getEntityMetadata(entityId, true);
+        EntityMetadata metadata = client.getEntities().getEntityMetadata(entityId, true);
         assertNotNull(metadata);
         Integer state = metadata.readStateAs(Integer.class);
         assertNotNull(state);
@@ -217,10 +217,10 @@ public class EntityIntegrationTests extends IntegrationTestBase {
 
         DurableTaskClient client = this.createClientBuilder().build();
 
-        client.signalEntity(entityId, "add", 25);
+        client.getEntities().signalEntity(entityId, "add", 25);
         Thread.sleep(5000);
 
-        EntityMetadata metadata = client.getEntityMetadata(entityId, true);
+        EntityMetadata metadata = client.getEntities().getEntityMetadata(entityId, true);
         assertNotNull(metadata, "Entity metadata should not be null");
 
         Integer state = metadata.readStateAs(Integer.class);

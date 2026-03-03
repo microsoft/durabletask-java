@@ -10,7 +10,7 @@ import java.util.Locale;
  * Represents a query filter for fetching durable entity metadata from the store.
  * <p>
  * Use the builder-style setters to configure the query parameters, then pass this object to
- * {@link DurableTaskClient#queryEntities(EntityQuery)}.
+ * {@link DurableEntityClient#queryEntities(EntityQuery)}.
  */
 public final class EntityQuery {
     private String instanceIdStartsWith;

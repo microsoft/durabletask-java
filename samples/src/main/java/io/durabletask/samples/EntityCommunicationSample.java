@@ -86,13 +86,13 @@ final class EntityCommunicationSample {
         Thread.sleep(5000);
 
         // Check final entity states
-        EntityMetadata sensor = client.getEntityMetadata(
+        EntityMetadata sensor = client.getEntities().getEntityMetadata(
                 new EntityInstanceId("Sensor", "sensor-1"), true);
         if (sensor != null) {
             System.out.printf("Sensor state: %s%n", sensor.readStateAs(SensorState.class));
         }
 
-        EntityMetadata aggregator = client.getEntityMetadata(
+        EntityMetadata aggregator = client.getEntities().getEntityMetadata(
                 new EntityInstanceId("Aggregator", "sensor-1"), true);
         if (aggregator != null) {
             AggregatorState aggState = aggregator.readStateAs(AggregatorState.class);

@@ -8,7 +8,7 @@ import javax.annotation.Nullable;
  * Represents a request to clean up entity storage by removing empty entities and/or releasing orphaned locks.
  * <p>
  * Use the builder-style setters to configure the request, then pass it to
- * {@link DurableTaskClient#cleanEntityStorage(CleanEntityStorageRequest)}.
+ * {@link DurableEntityClient#cleanEntityStorage(CleanEntityStorageRequest)}.
  */
 public final class CleanEntityStorageRequest {
     private String continuationToken;

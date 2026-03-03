@@ -55,6 +55,15 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
     protected TState state;
 
     /**
+     * The current entity context, providing access to entity metadata such as the entity ID
+     * and the ability to signal other entities.
+     * <p>
+     * This property is automatically set before each operation dispatch and is available for use
+     * in operation methods. This mirrors the .NET SDK's {@code TaskEntity.Context} property.
+     */
+    protected TaskEntityContext context;
+
+    /**
      * Controls whether operations can be dispatched to methods on the state object.
      * When {@code true} (the default), if no matching method is found on the entity class itself,
      * the framework will look for a matching method on the state object.
@@ -129,6 +138,9 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
 
     @Override
     public Object runAsync(TaskEntityOperation operation) throws Exception {
+        // Set the context before dispatch so subclass methods can access it
+        this.context = operation.getContext();
+
         // Step 1: Load or initialize state
         Class<TState> stateType = getStateType();
         if (stateType != null) {
