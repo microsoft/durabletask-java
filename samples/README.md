@@ -57,14 +57,16 @@ Shows the trace from `durabletask-java-tracing-sample` service with spans coveri
 
 ### Jaeger — Trace Detail
 
-Full span hierarchy showing the fan-out/fan-in pattern with paired Client+Server spans (matching .NET SDK):
+Full span hierarchy showing the fan-out/fan-in pattern with proper span durations:
 - `create_orchestration:FanOutFanIn` (root, internal)
-  - `orchestration:FanOutFanIn` (server — orchestration execution)
-    - `orchestration:FanOutFanIn:timer` (internal — durable timer wait)
-    - `activity:GetWeather` ×5 (client — scheduling) → `activity:GetWeather` ×5 (server — execution)
-    - `activity:CreateSummary` (client) → `activity:CreateSummary` (server)
+  - `orchestration:FanOutFanIn` (server — full lifecycle, ~1.2s)
+  - `orchestration:FanOutFanIn:timer` (internal — creation-to-fired, ~965ms)
+  - `activity:GetWeather` ×5 (client — scheduling-to-completion, ~184ms) + ×5 (server — execution, ~25ms)
+  - `activity:CreateSummary` (client, ~8ms) + (server, ~0.7ms)
 
-15 spans total, Depth 3 — aligned with the .NET SDK trace structure.
+15 spans total, Depth 2.
+
+> **Note:** Java OTel doesn't support `SetSpanId()` like .NET, so child spans appear as siblings under `create_orchestration` rather than nested under the orchestration span. All spans have meaningful durations.
 
 ![Jaeger trace detail](images/jaeger-full-trace-detail.png)
 
@@ -91,3 +93,20 @@ The `FanOutFanIn` orchestration completed successfully with all activities.
 ```bash
 docker stop jaeger dts-emulator && docker rm jaeger dts-emulator
 ```
+
+## Azure Functions Sample
+
+The `samples-azure-functions` module contains a matching **Fan-Out/Fan-In** sample (`TracingChain.java`) for use with Azure Durable Functions. It uses the same pattern (1s timer → 5× `GetWeather` → `CreateSummary`) but runs as an HTTP-triggered Azure Function.
+
+### Running
+
+```bash
+cd samples-azure-functions
+../gradlew azureFunctionsPackage -PskipSigning -x downloadProtoFiles
+cd build/azure-functions/<app-name>
+func start
+```
+
+Then trigger with: `curl http://localhost:7071/api/StartFanOutFanIn`
+
+Distributed tracing in Durable Functions exports to **Application Insights** (not Jaeger/OTLP). Configure your `APPLICATIONINSIGHTS_CONNECTION_STRING` in `local.settings.json` to see traces.
