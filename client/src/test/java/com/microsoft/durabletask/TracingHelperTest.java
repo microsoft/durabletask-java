@@ -290,4 +290,48 @@ public class TracingHelperTest {
         // With a registered SDK, it should create a root span
         assertNotNull(result);
     }
+
+    @Test
+    void emitTimerSpan_createsInternalSpanWithFireAt() {
+        TracingHelper.emitTimerSpan("MyOrchestration", "instance-1", 5, "2026-01-01T00:00:00Z");
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertEquals(1, spans.size());
+        SpanData sd = spans.get(0);
+        assertEquals("orchestration:MyOrchestration:timer", sd.getName());
+        assertEquals(SpanKind.INTERNAL, sd.getKind());
+        assertEquals("timer", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.type")));
+        assertEquals("MyOrchestration", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.name")));
+        assertEquals("instance-1", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.instance_id")));
+        assertEquals("5", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.task_id")));
+        assertEquals("2026-01-01T00:00:00Z", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.fire_at")));
+    }
+
+    @Test
+    void emitEventRaisedFromWorkerSpan_createsProducerSpan() {
+        TracingHelper.emitEventRaisedFromWorkerSpan("ApprovalEvent", "orch-1", "target-orch-2");
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertEquals(1, spans.size());
+        SpanData sd = spans.get(0);
+        assertEquals("orchestration_event:ApprovalEvent", sd.getName());
+        assertEquals(SpanKind.PRODUCER, sd.getKind());
+        assertEquals("event", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.type")));
+        assertEquals("ApprovalEvent", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.name")));
+        assertEquals("orch-1", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.instance_id")));
+        assertEquals("target-orch-2", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.event.target_instance_id")));
+    }
+
+    @Test
+    void emitEventRaisedFromClientSpan_createsProducerSpan() {
+        TracingHelper.emitEventRaisedFromClientSpan("ApprovalEvent", "target-orch-1");
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertEquals(1, spans.size());
+        SpanData sd = spans.get(0);
+        assertEquals("orchestration_event:ApprovalEvent", sd.getName());
+        assertEquals(SpanKind.PRODUCER, sd.getKind());
+        assertEquals("event", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.type")));
+        assertEquals("target-orch-1", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.event.target_instance_id")));
+    }
 }

@@ -396,6 +396,9 @@ final class TaskOrchestrationExecutor {
                         eventName,
                         id,
                         serializedEventData != null ? serializedEventData : "(null)"));
+
+                // Emit an event span matching .NET SDK's StartTraceActivityForEventRaisedFromWorker
+                TracingHelper.emitEventRaisedFromWorkerSpan(eventName, this.instanceId, instanceId);
             }
         }
 
@@ -733,7 +736,15 @@ final class TaskOrchestrationExecutor {
             }
 
             if (!this.isReplaying) {
-                // TODO: Log timer fired, including the scheduled fire-time
+                // Emit a timer span matching .NET SDK's EmitTraceActivityForTimer
+                String fireAt = timerFiredEvent.hasFireAt()
+                        ? DataConverter.getInstantFromTimestamp(timerFiredEvent.getFireAt()).toString()
+                        : null;
+                TracingHelper.emitTimerSpan(
+                        this.getName(),
+                        this.instanceId,
+                        timerEventId,
+                        fireAt);
             }
 
             CompletableTask<?> task = record.getTask();

@@ -38,12 +38,17 @@ final class TracingHelper {
     static final String TYPE_ORCHESTRATION = "orchestration";
     static final String TYPE_ACTIVITY = "activity";
     static final String TYPE_CREATE_ORCHESTRATION = "create_orchestration";
+    static final String TYPE_TIMER = "timer";
+    static final String TYPE_EVENT = "event";
+    static final String TYPE_ORCHESTRATION_EVENT = "orchestration_event";
 
     // Attribute keys matching .NET SDK schema
     static final String ATTR_TYPE = "durabletask.type";
     static final String ATTR_TASK_NAME = "durabletask.task.name";
     static final String ATTR_INSTANCE_ID = "durabletask.task.instance_id";
     static final String ATTR_TASK_ID = "durabletask.task.task_id";
+    static final String ATTR_FIRE_AT = "durabletask.fire_at";
+    static final String ATTR_EVENT_TARGET_INSTANCE_ID = "durabletask.event.target_instance_id";
 
     private TracingHelper() {
         // Static utility class
@@ -262,6 +267,94 @@ final class TracingHelper {
             span.setStatus(StatusCode.ERROR, error.getMessage());
             span.recordException(error);
         }
+        span.end();
+    }
+
+    /**
+     * Emits a short-lived span for a durable timer that has fired.
+     * Matches .NET SDK's {@code EmitTraceActivityForTimer}.
+     *
+     * @param orchestrationName The name of the orchestration that created the timer.
+     * @param instanceId        The orchestration instance ID.
+     * @param timerId           The timer event ID.
+     * @param fireAt            The ISO-8601 formatted fire time.
+     */
+    static void emitTimerSpan(
+            String orchestrationName,
+            @Nullable String instanceId,
+            int timerId,
+            @Nullable String fireAt) {
+        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
+        SpanBuilder spanBuilder = tracer.spanBuilder(
+                TYPE_ORCHESTRATION + ":" + orchestrationName + ":" + TYPE_TIMER)
+                .setSpanKind(SpanKind.INTERNAL)
+                .setAttribute(ATTR_TYPE, TYPE_TIMER)
+                .setAttribute(ATTR_TASK_NAME, orchestrationName)
+                .setAttribute(ATTR_TASK_ID, String.valueOf(timerId));
+
+        if (instanceId != null) {
+            spanBuilder.setAttribute(ATTR_INSTANCE_ID, instanceId);
+        }
+        if (fireAt != null) {
+            spanBuilder.setAttribute(ATTR_FIRE_AT, fireAt);
+        }
+
+        Span span = spanBuilder.startSpan();
+        span.end();
+    }
+
+    /**
+     * Emits a short-lived Producer span for an event raised from the orchestrator (worker side).
+     * Matches .NET SDK's {@code StartTraceActivityForEventRaisedFromWorker}.
+     *
+     * @param eventName         The name of the event being raised.
+     * @param instanceId        The orchestration instance ID sending the event.
+     * @param targetInstanceId  The target orchestration instance ID, may be {@code null}.
+     */
+    static void emitEventRaisedFromWorkerSpan(
+            String eventName,
+            @Nullable String instanceId,
+            @Nullable String targetInstanceId) {
+        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
+        SpanBuilder spanBuilder = tracer.spanBuilder(
+                TYPE_ORCHESTRATION_EVENT + ":" + eventName)
+                .setSpanKind(SpanKind.PRODUCER)
+                .setAttribute(ATTR_TYPE, TYPE_EVENT)
+                .setAttribute(ATTR_TASK_NAME, eventName);
+
+        if (instanceId != null) {
+            spanBuilder.setAttribute(ATTR_INSTANCE_ID, instanceId);
+        }
+        if (targetInstanceId != null) {
+            spanBuilder.setAttribute(ATTR_EVENT_TARGET_INSTANCE_ID, targetInstanceId);
+        }
+
+        Span span = spanBuilder.startSpan();
+        span.end();
+    }
+
+    /**
+     * Emits a short-lived Producer span for an event raised from the client.
+     * Matches .NET SDK's {@code StartActivityForNewEventRaisedFromClient}.
+     *
+     * @param eventName         The name of the event being raised.
+     * @param targetInstanceId  The target orchestration instance ID.
+     */
+    static void emitEventRaisedFromClientSpan(
+            String eventName,
+            @Nullable String targetInstanceId) {
+        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
+        SpanBuilder spanBuilder = tracer.spanBuilder(
+                TYPE_ORCHESTRATION_EVENT + ":" + eventName)
+                .setSpanKind(SpanKind.PRODUCER)
+                .setAttribute(ATTR_TYPE, TYPE_EVENT)
+                .setAttribute(ATTR_TASK_NAME, eventName);
+
+        if (targetInstanceId != null) {
+            spanBuilder.setAttribute(ATTR_EVENT_TARGET_INSTANCE_ID, targetInstanceId);
+        }
+
+        Span span = spanBuilder.startSpan();
         span.end();
     }
 }

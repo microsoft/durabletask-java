@@ -150,6 +150,9 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         Helpers.throwIfArgumentNull(instanceId, "instanceId");
         Helpers.throwIfArgumentNull(eventName, "eventName");
 
+        // Emit an event span matching .NET SDK's StartActivityForNewEventRaisedFromClient
+        TracingHelper.emitEventRaisedFromClientSpan(eventName, instanceId);
+
         RaiseEventRequest.Builder builder = RaiseEventRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .setName(eventName);
