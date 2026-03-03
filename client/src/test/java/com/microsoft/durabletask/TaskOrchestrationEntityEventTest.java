@@ -639,6 +639,103 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
+    void callEntity_withTimeout_producesCallAndTimerActions() {
+        final String orchestratorName = "CallWithTimeoutTest";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            CallEntityOptions options = new CallEntityOptions().setTimeout(Duration.ofSeconds(30));
+            ctx.callEntity(entityId, "get", null, int.class, options).await();
+            ctx.complete("done");
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasCall = false;
+        boolean hasTimer = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                hasCall = true;
+            }
+            if (action.hasCreateTimer()) {
+                hasTimer = true;
+            }
+        }
+        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+        assertTrue(hasTimer, "Expected a createTimer action for the timeout");
+    }
+
+    @Test
+    void callEntity_withoutTimeout_producesNoTimerAction() {
+        final String orchestratorName = "CallNoTimeoutTest";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            // No options = no timeout
+            ctx.callEntity(entityId, "get", null, int.class).await();
+            ctx.complete("done");
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasCall = false;
+        boolean hasTimer = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                hasCall = true;
+            }
+            if (action.hasCreateTimer()) {
+                hasTimer = true;
+            }
+        }
+        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+        assertFalse(hasTimer, "Expected no createTimer action when no timeout is specified");
+    }
+
+    @Test
+    void callEntity_withZeroTimeout_cancelledImmediately() {
+        final String orchestratorName = "CallZeroTimeoutTest";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            CallEntityOptions options = new CallEntityOptions().setTimeout(Duration.ZERO);
+            try {
+                ctx.callEntity(entityId, "get", null, int.class, options).await();
+                ctx.complete("should not reach here");
+            } catch (TaskCanceledException e) {
+                ctx.complete("cancelled");
+            }
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                String output = action.getCompleteOrchestration().getResult().getValue();
+                assertEquals("\"cancelled\"", output);
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete with 'cancelled' after zero timeout");
+    }
+
+    @Test
     void getLockedEntities_insideCriticalSection_returnsLockedIds() {
         final String orchestratorName = "GetLockedEntitiesTest";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
@@ -745,6 +842,36 @@ public class TaskOrchestrationEntityEventTest {
             }
         }
         assertTrue(hasLockRequest, "Expected an entityLockRequest action from varargs lockEntities");
+    }
+
+    // endregion
+
+    // region DurableTaskGrpcWorkerBuilder entity config tests
+
+    @Test
+    void maxConcurrentEntityWorkItems_rejectsZero() {
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
+        assertThrows(IllegalArgumentException.class, () -> builder.maxConcurrentEntityWorkItems(0));
+    }
+
+    @Test
+    void maxConcurrentEntityWorkItems_rejectsNegative() {
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
+        assertThrows(IllegalArgumentException.class, () -> builder.maxConcurrentEntityWorkItems(-1));
+    }
+
+    @Test
+    void maxConcurrentEntityWorkItems_acceptsValidValue() {
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
+        DurableTaskGrpcWorkerBuilder result = builder.maxConcurrentEntityWorkItems(4);
+        assertSame(builder, result, "Builder should return itself for fluent chaining");
+    }
+
+    @Test
+    void maxConcurrentEntityWorkItems_defaultIsOne() {
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
+        assertEquals(1, builder.maxConcurrentEntityWorkItems,
+                "Default maxConcurrentEntityWorkItems should be 1");
     }
 
     // endregion

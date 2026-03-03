@@ -20,6 +20,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     DataConverter dataConverter;
     Duration maximumTimerInterval;
     DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    int maxConcurrentEntityWorkItems = 1;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -138,6 +139,24 @@ public final class DurableTaskGrpcWorkerBuilder {
      */
     public DurableTaskGrpcWorkerBuilder maximumTimerInterval(Duration maximumTimerInterval) {
         this.maximumTimerInterval = maximumTimerInterval;
+        return this;
+    }
+
+    /**
+     * Sets the maximum number of entity work items that can be processed concurrently by this worker.
+     * <p>
+     * Each entity instance is always single-threaded (serial execution), but this setting controls
+     * how many different entity instances can process work items in parallel. The default value is 1.
+     *
+     * @param maxConcurrentEntityWorkItems the maximum number of concurrent entity work items (must be at least 1)
+     * @return this builder object
+     * @throws IllegalArgumentException if the value is less than 1
+     */
+    public DurableTaskGrpcWorkerBuilder maxConcurrentEntityWorkItems(int maxConcurrentEntityWorkItems) {
+        if (maxConcurrentEntityWorkItems < 1) {
+            throw new IllegalArgumentException("maxConcurrentEntityWorkItems must be at least 1.");
+        }
+        this.maxConcurrentEntityWorkItems = maxConcurrentEntityWorkItems;
         return this;
     }
 

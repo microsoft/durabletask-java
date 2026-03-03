@@ -458,6 +458,37 @@ final class TaskOrchestrationExecutor {
             TaskRecord<V> record = new TaskRecord<>(task, operationName, returnType, entityId);
             Queue<TaskRecord<?>> eventQueue = this.outstandingEvents.computeIfAbsent(requestId, k -> new LinkedList<>());
             eventQueue.add(record);
+
+            // If a timeout is specified, schedule a durable timer to cancel the call if the entity
+            // doesn't respond in time (same pattern as waitForExternalEvent with timeout).
+            Duration timeout = options != null ? options.getTimeout() : null;
+            if (timeout != null && !Helpers.isInfiniteTimeout(timeout)) {
+                if (timeout.isZero()) {
+                    // Immediately cancel
+                    eventQueue.removeIf(t -> t.task == task);
+                    if (eventQueue.isEmpty()) {
+                        this.outstandingEvents.remove(requestId);
+                    }
+                    String message = String.format(
+                            "Timeout of %s expired while calling entity '%s' operation '%s' (requestId=%s).",
+                            timeout, entityId, operationName, requestId);
+                    task.completeExceptionally(new TaskCanceledException(message, operationName, id));
+                } else {
+                    this.createTimer(timeout).future.thenRun(() -> {
+                        if (!task.isDone()) {
+                            eventQueue.removeIf(t -> t.task == task);
+                            if (eventQueue.isEmpty()) {
+                                this.outstandingEvents.remove(requestId);
+                            }
+                            String message = String.format(
+                                    "Timeout of %s expired while calling entity '%s' operation '%s' (requestId=%s).",
+                                    timeout, entityId, operationName, requestId);
+                            task.completeExceptionally(new TaskCanceledException(message, operationName, id));
+                        }
+                    });
+                }
+            }
+
             return task;
         }
 

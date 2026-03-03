@@ -14,6 +14,8 @@ import io.grpc.*;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -35,6 +37,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final int maxConcurrentEntityWorkItems;
+    private final ExecutorService workItemExecutor;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
@@ -42,6 +46,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
         this.entityFactories.putAll(builder.entityFactories);
+        this.maxConcurrentEntityWorkItems = builder.maxConcurrentEntityWorkItems;
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
@@ -67,6 +72,11 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
+        this.workItemExecutor = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "durabletask-worker");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     /**
@@ -87,6 +97,15 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      * configured.
      */
     public void close() {
+        this.workItemExecutor.shutdown();
+        try {
+            if (!this.workItemExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                this.workItemExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            this.workItemExecutor.shutdownNow();
+        }
+
         if (this.managedSidecarChannel != null) {
             try {
                 this.managedSidecarChannel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
@@ -136,7 +155,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 GetWorkItemsRequest.Builder requestBuilder = GetWorkItemsRequest.newBuilder();
                 if (!this.entityFactories.isEmpty()) {
                     // Signal to the sidecar that this worker can handle entity work items
-                    requestBuilder.setMaxConcurrentEntityWorkItems(1);
+                    requestBuilder.setMaxConcurrentEntityWorkItems(this.maxConcurrentEntityWorkItems);
                 }
                 GetWorkItemsRequest getWorkItemsRequest = requestBuilder.build();
                 Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(getWorkItemsRequest);
@@ -230,58 +249,62 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                     } else if (requestType == RequestCase.ACTIVITYREQUEST) {
                         ActivityRequest activityRequest = workItem.getActivityRequest();
 
-                        // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
-                        String output = null;
-                        TaskFailureDetails failureDetails = null;
-                        try {
-                            output = taskActivityExecutor.execute(
-                                activityRequest.getName(),
-                                activityRequest.getInput().getValue(),
-                                activityRequest.getTaskId());
-                        } catch (Throwable e) {
-                            failureDetails = TaskFailureDetails.newBuilder()
-                                .setErrorType(e.getClass().getName())
-                                .setErrorMessage(e.getMessage())
-                                .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
-                                .build();
-                        }
+                        this.workItemExecutor.submit(() -> {
+                            String output = null;
+                            TaskFailureDetails failureDetails = null;
+                            try {
+                                output = taskActivityExecutor.execute(
+                                    activityRequest.getName(),
+                                    activityRequest.getInput().getValue(),
+                                    activityRequest.getTaskId());
+                            } catch (Throwable e) {
+                                failureDetails = TaskFailureDetails.newBuilder()
+                                    .setErrorType(e.getClass().getName())
+                                    .setErrorMessage(e.getMessage())
+                                    .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
+                                    .build();
+                            }
 
-                        ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
-                                .setInstanceId(activityRequest.getOrchestrationInstance().getInstanceId())
-                                .setTaskId(activityRequest.getTaskId())
-                                .setCompletionToken(workItem.getCompletionToken());
+                            ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
+                                    .setInstanceId(activityRequest.getOrchestrationInstance().getInstanceId())
+                                    .setTaskId(activityRequest.getTaskId())
+                                    .setCompletionToken(workItem.getCompletionToken());
 
-                        if (output != null) {
-                            responseBuilder.setResult(StringValue.of(output));
-                        }
+                            if (output != null) {
+                                responseBuilder.setResult(StringValue.of(output));
+                            }
 
-                        if (failureDetails != null) {
-                            responseBuilder.setFailureDetails(failureDetails);
-                        }
+                            if (failureDetails != null) {
+                                responseBuilder.setFailureDetails(failureDetails);
+                            }
 
-                        this.sidecarClient.completeActivityTask(responseBuilder.build());
+                            this.sidecarClient.completeActivityTask(responseBuilder.build());
+                        });
                     } else if (requestType == RequestCase.ENTITYREQUEST) {
                         EntityBatchRequest entityRequest = workItem.getEntityRequest();
-                        try {
-                            EntityBatchResult result = taskEntityExecutor.execute(entityRequest);
-                            EntityBatchResult responseWithToken = result.toBuilder()
-                                    .setCompletionToken(workItem.getCompletionToken())
-                                    .build();
-                            this.sidecarClient.completeEntityTask(responseWithToken);
-                        } catch (Exception e) {
-                            logger.log(Level.WARNING,
-                                    String.format("Failed to execute entity batch for '%s'. Abandoning work item.",
-                                            entityRequest.getInstanceId()),
-                                    e);
-                            this.sidecarClient.abandonTaskEntityWorkItem(
-                                    AbandonEntityTaskRequest.newBuilder()
-                                            .setCompletionToken(workItem.getCompletionToken())
-                                            .build());
-                        }
+                        this.workItemExecutor.submit(() -> {
+                            try {
+                                EntityBatchResult result = taskEntityExecutor.execute(entityRequest);
+                                EntityBatchResult responseWithToken = result.toBuilder()
+                                        .setCompletionToken(workItem.getCompletionToken())
+                                        .build();
+                                this.sidecarClient.completeEntityTask(responseWithToken);
+                            } catch (Exception e) {
+                                logger.log(Level.WARNING,
+                                        String.format("Failed to execute entity batch for '%s'. Abandoning work item.",
+                                                entityRequest.getInstanceId()),
+                                        e);
+                                this.sidecarClient.abandonTaskEntityWorkItem(
+                                        AbandonEntityTaskRequest.newBuilder()
+                                                .setCompletionToken(workItem.getCompletionToken())
+                                                .build());
+                            }
+                        });
                     } else if (requestType == RequestCase.ENTITYREQUESTV2) {
                         EntityRequest entityRequestV2 = workItem.getEntityRequestV2();
-                        try {
-                            // Convert V2 (history-based) format to V1 (flat) format
+                        this.workItemExecutor.submit(() -> {
+                            try {
+                                // Convert V2 (history-based) format to V1 (flat) format
                             EntityBatchRequest.Builder batchBuilder = EntityBatchRequest.newBuilder()
                                     .setInstanceId(entityRequestV2.getInstanceId());
                             if (entityRequestV2.hasEntityState()) {
@@ -355,6 +378,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                             .setCompletionToken(workItem.getCompletionToken())
                                             .build());
                         }
+                        });
                     }
                     else if (requestType == RequestCase.HEALTHPING)
                     {

@@ -11,6 +11,10 @@ import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientFactory;
 import com.microsoft.durabletask.EntityInstanceId;
 import com.microsoft.durabletask.EntityMetadata;
+import com.microsoft.durabletask.EntityQuery;
+import com.microsoft.durabletask.EntityQueryResult;
+import com.microsoft.durabletask.CleanEntityStorageRequest;
+import com.microsoft.durabletask.CleanEntityStorageResult;
 import com.microsoft.durabletask.OrchestrationMetadata;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 
@@ -175,6 +179,26 @@ public class DurableClientContext {
      */
     public EntityMetadata getEntityMetadata(EntityInstanceId entityId) {
         return getClient().getEntityMetadata(entityId);
+    }
+
+    /**
+     * Queries the durable store for entity instances matching the specified filter criteria.
+     *
+     * @param query the query filter criteria
+     * @return the query result containing matching entities and an optional continuation token
+     */
+    public EntityQueryResult queryEntities(EntityQuery query) {
+        return getClient().queryEntities(query);
+    }
+
+    /**
+     * Cleans up entity storage by removing empty entities and/or releasing orphaned locks.
+     *
+     * @param request the clean storage request specifying what to clean
+     * @return the result of the clean operation, including counts of removed entities and released locks
+     */
+    public CleanEntityStorageResult cleanEntityStorage(CleanEntityStorageRequest request) {
+        return getClient().cleanEntityStorage(request);
     }
 
     private HttpManagementPayload getClientResponseLinks(HttpRequestMessage<?> request, String instanceId) {
