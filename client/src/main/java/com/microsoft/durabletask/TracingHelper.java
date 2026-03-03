@@ -181,6 +181,74 @@ final class TracingHelper {
     }
 
     /**
+     * Creates a short-lived Client-kind span for scheduling an activity or sub-orchestration,
+     * captures its trace context as a protobuf {@code TraceContext}, and ends the span immediately.
+     * This mirrors the .NET SDK pattern of paired Client+Server spans.
+     *
+     * @param spanName       The span name (e.g. "activity:GetWeather").
+     * @param parentContext  The parent trace context from the orchestration, may be {@code null}.
+     * @param type           The durabletask.type value (e.g. "activity").
+     * @param taskName       The task name attribute value.
+     * @param instanceId     The orchestration instance ID.
+     * @param taskId         The task sequence ID.
+     * @return A {@code TraceContext} captured from the Client span, or the original parentContext if tracing is unavailable.
+     */
+    @Nullable
+    static TraceContext createClientSpan(
+            String spanName,
+            @Nullable TraceContext parentContext,
+            String type,
+            String taskName,
+            @Nullable String instanceId,
+            int taskId) {
+
+        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
+        SpanBuilder spanBuilder = tracer.spanBuilder(spanName)
+                .setSpanKind(SpanKind.CLIENT)
+                .setAttribute(ATTR_TYPE, type)
+                .setAttribute(ATTR_TASK_NAME, taskName)
+                .setAttribute(ATTR_TASK_ID, String.valueOf(taskId));
+
+        if (instanceId != null) {
+            spanBuilder.setAttribute(ATTR_INSTANCE_ID, instanceId);
+        }
+
+        Context parentCtx = extractTraceContext(parentContext);
+        if (parentCtx != null) {
+            spanBuilder.setParent(parentCtx);
+        }
+
+        Span clientSpan = spanBuilder.startSpan();
+
+        // Capture the client span's context before ending it
+        TraceContext captured;
+        try {
+            SpanContext sc = clientSpan.getSpanContext();
+            if (sc.isValid()) {
+                String traceParent = String.format("00-%s-%s-%02x",
+                        sc.getTraceId(), sc.getSpanId(), sc.getTraceFlags().asByte());
+
+                String traceState = sc.getTraceState().asMap()
+                        .entrySet()
+                        .stream()
+                        .map(entry -> entry.getKey() + "=" + entry.getValue())
+                        .collect(Collectors.joining(","));
+
+                TraceContext.Builder builder = TraceContext.newBuilder().setTraceParent(traceParent);
+                if (traceState != null && !traceState.isEmpty()) {
+                    builder.setTraceState(StringValue.of(traceState));
+                }
+                captured = builder.build();
+            } else {
+                captured = parentContext;
+            }
+        } finally {
+            clientSpan.end();
+        }
+        return captured;
+    }
+
+    /**
      * Ends the given span, optionally recording an error.
      *
      * @param span  The span to end, may be {@code null}.

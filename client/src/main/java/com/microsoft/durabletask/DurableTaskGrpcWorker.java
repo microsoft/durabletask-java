@@ -185,20 +185,29 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 .findFirst()
                                 .orElse(null);
 
+                            // Only create orchestration span for the first execution (not replays).
+                            // First execution has EXECUTIONSTARTED in newEvents; replays have it in pastEvents.
+                            boolean isFirstExecution = orchestratorRequest.getNewEventsList().stream()
+                                .anyMatch(event -> event.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONSTARTED);
+
                             TraceContext orchTraceCtx = (startedEvent != null && startedEvent.hasParentTraceContext())
                                     ? startedEvent.getParentTraceContext() : null;
                             String orchName = startedEvent != null ? startedEvent.getName() : "";
 
-                            Map<String, String> orchSpanAttrs = new HashMap<>();
-                            orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
-                            orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
-                            orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
-                            Span orchestrationSpan = TracingHelper.startSpan(
-                                    TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
-                                    orchTraceCtx,
-                                    SpanKind.SERVER,
-                                    orchSpanAttrs);
-                            Scope orchestrationScope = orchestrationSpan.makeCurrent();
+                            Span orchestrationSpan = null;
+                            Scope orchestrationScope = null;
+                            if (isFirstExecution) {
+                                Map<String, String> orchSpanAttrs = new HashMap<>();
+                                orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
+                                orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
+                                orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
+                                orchestrationSpan = TracingHelper.startSpan(
+                                        TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
+                                        orchTraceCtx,
+                                        SpanKind.SERVER,
+                                        orchSpanAttrs);
+                                orchestrationScope = orchestrationSpan.makeCurrent();
+                            }
 
                             TaskOrchestratorResult taskOrchestratorResult;
                             try {
@@ -207,13 +216,13 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     orchestratorRequest.getNewEventsList());
                             } catch (Throwable e) {
                                 TracingHelper.endSpan(orchestrationSpan, e);
-                                orchestrationScope.close();
+                                if (orchestrationScope != null) orchestrationScope.close();
                                 if (e instanceof Error) {
                                     throw (Error) e;
                                 }
                                 throw new RuntimeException(e);
                             }
-                            orchestrationScope.close();
+                            if (orchestrationScope != null) orchestrationScope.close();
                             TracingHelper.endSpan(orchestrationSpan, null);
 
                             OrchestratorResponse response = OrchestratorResponse.newBuilder()

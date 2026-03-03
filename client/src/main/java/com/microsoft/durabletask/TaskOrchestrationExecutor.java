@@ -298,12 +298,26 @@ final class TaskOrchestrationExecutor {
             if (serializedInput != null) {
                 scheduleTaskBuilder.setInput(StringValue.of(serializedInput));
             }
-            if (this.parentTraceContext != null) {
-                scheduleTaskBuilder.setParentTraceContext(this.parentTraceContext);
-            }
-
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
+
+                // Create a Client-kind span for scheduling (mirrors .NET paired Client+Server spans)
+                // Only create during non-replay to avoid duplicate spans on orchestration replay
+                if (this.parentTraceContext != null && !this.isReplaying) {
+                    TraceContext clientCtx = TracingHelper.createClientSpan(
+                            "activity:" + name,
+                            this.parentTraceContext,
+                            TracingHelper.TYPE_ACTIVITY,
+                            name,
+                            this.instanceId,
+                            id);
+                    if (clientCtx != null) {
+                        scheduleTaskBuilder.setParentTraceContext(clientCtx);
+                    }
+                } else if (this.parentTraceContext != null) {
+                    scheduleTaskBuilder.setParentTraceContext(this.parentTraceContext);
+                }
+
                 this.pendingActions.put(id, OrchestratorAction.newBuilder()
                         .setId(id)
                         .setScheduleTask(scheduleTaskBuilder)
@@ -411,10 +425,6 @@ final class TaskOrchestrationExecutor {
             }
             createSubOrchestrationActionBuilder.setInstanceId(instanceId);
 
-            if (this.parentTraceContext != null) {
-                createSubOrchestrationActionBuilder.setParentTraceContext(this.parentTraceContext);
-            }
-
             if (options instanceof NewSubOrchestrationInstanceOptions && ((NewSubOrchestrationInstanceOptions)options).getVersion() != null) {
                 NewSubOrchestrationInstanceOptions subOrchestrationOptions = (NewSubOrchestrationInstanceOptions) options;
                 createSubOrchestrationActionBuilder.setVersion(StringValue.of(subOrchestrationOptions.getVersion()));
@@ -423,8 +433,28 @@ final class TaskOrchestrationExecutor {
                 createSubOrchestrationActionBuilder.setVersion(StringValue.of(this.getDefaultVersion()));
             }
 
+            // Need final copy for lambda capture
+            final String subInstanceId = instanceId;
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
+
+                // Create a Client-kind span for scheduling (mirrors .NET paired Client+Server spans)
+                // Only create during non-replay to avoid duplicate spans on orchestration replay
+                if (this.parentTraceContext != null && !this.isReplaying) {
+                    TraceContext clientCtx = TracingHelper.createClientSpan(
+                            "orchestration:" + name,
+                            this.parentTraceContext,
+                            TracingHelper.TYPE_ORCHESTRATION,
+                            name,
+                            subInstanceId,
+                            id);
+                    if (clientCtx != null) {
+                        createSubOrchestrationActionBuilder.setParentTraceContext(clientCtx);
+                    }
+                } else if (this.parentTraceContext != null) {
+                    createSubOrchestrationActionBuilder.setParentTraceContext(this.parentTraceContext);
+                }
+
                 this.pendingActions.put(id, OrchestratorAction.newBuilder()
                         .setId(id)
                         .setCreateSubOrchestration(createSubOrchestrationActionBuilder)

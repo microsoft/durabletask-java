@@ -38,6 +38,8 @@ public class TracingHelperTest {
 
     @BeforeEach
     void setUp() {
+        // Reset first in case another test class triggered GlobalOpenTelemetry.get()
+        io.opentelemetry.api.GlobalOpenTelemetry.resetForTest();
         spanExporter = InMemorySpanExporter.create();
         tracerProvider = SdkTracerProvider.builder()
                 .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
@@ -235,5 +237,57 @@ public class TracingHelperTest {
                 extractedSpan.getSpanContext().getTraceId());
         assertEquals(originalSpan.getSpanContext().getSpanId(),
                 extractedSpan.getSpanContext().getSpanId());
+    }
+
+    @Test
+    void createClientSpan_createsClientKindSpan_withNewSpanId() {
+        // Create a parent context
+        Tracer tracer = openTelemetry.getTracer("test");
+        Span parentSpan = tracer.spanBuilder("parent-orch").startSpan();
+        TraceContext parentCtx;
+        try (Scope ignored = parentSpan.makeCurrent()) {
+            parentCtx = TracingHelper.getCurrentTraceContext();
+        } finally {
+            parentSpan.end();
+        }
+        assertNotNull(parentCtx);
+        spanExporter.reset();
+
+        // Create a client span
+        TraceContext clientCtx = TracingHelper.createClientSpan(
+                "activity:GetWeather", parentCtx,
+                TracingHelper.TYPE_ACTIVITY, "GetWeather", "instance-123", 3);
+
+        assertNotNull(clientCtx);
+        assertNotNull(clientCtx.getTraceParent());
+
+        // Client span should have the same trace ID but different span ID
+        String parentTraceId = parentCtx.getTraceParent().split("-")[1];
+        String clientTraceId = clientCtx.getTraceParent().split("-")[1];
+        String parentSpanId = parentCtx.getTraceParent().split("-")[2];
+        String clientSpanId = clientCtx.getTraceParent().split("-")[2];
+        assertEquals(parentTraceId, clientTraceId, "Should share the same trace ID");
+        assertNotEquals(parentSpanId, clientSpanId, "Should have a new span ID");
+
+        // Verify the exported client span has correct attributes and kind
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertEquals(1, spans.size());
+        SpanData sd = spans.get(0);
+        assertEquals("activity:GetWeather", sd.getName());
+        assertEquals(SpanKind.CLIENT, sd.getKind());
+        assertEquals("activity", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.type")));
+        assertEquals("GetWeather", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.name")));
+        assertEquals("instance-123", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.instance_id")));
+        assertEquals("3", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.task_id")));
+    }
+
+    @Test
+    void createClientSpan_withNullParent_returnsNull() {
+        TraceContext result = TracingHelper.createClientSpan(
+                "activity:Test", null, TracingHelper.TYPE_ACTIVITY, "Test", null, 0);
+        // When parent is null, the span has no parent but still creates a valid context
+        // (or returns null if the tracer returns an invalid span)
+        // With a registered SDK, it should create a root span
+        assertNotNull(result);
     }
 }

@@ -57,11 +57,13 @@ Shows the trace from `durabletask-java-tracing-sample` service with spans coveri
 
 ### Jaeger — Trace Detail
 
-Full span hierarchy showing the fan-out/fan-in pattern:
-- `create_orchestration:FanOutFanIn` (parent)
-  - `orchestration:FanOutFanIn` (orchestration execution)
-    - `activity:GetWeather` ×5 (parallel fan-out)
-    - `activity:CreateSummary` (fan-in aggregation)
+Full span hierarchy showing the fan-out/fan-in pattern with paired Client+Server spans (matching .NET SDK):
+- `create_orchestration:FanOutFanIn` (root, internal)
+  - `orchestration:FanOutFanIn` (server — orchestration execution)
+    - `activity:GetWeather` ×5 (client — scheduling) → `activity:GetWeather` ×5 (server — execution)
+    - `activity:CreateSummary` (client) → `activity:CreateSummary` (server)
+
+14 spans total, Depth 3 — aligned with the .NET SDK trace structure.
 
 ![Jaeger trace detail](images/jaeger-full-trace-detail.png)
 
