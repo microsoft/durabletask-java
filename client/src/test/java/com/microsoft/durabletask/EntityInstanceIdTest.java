@@ -126,8 +126,6 @@ public class EntityInstanceIdTest {
         assertNotEquals("@counter@c1", id);
     }
 
-    // --- Gap 1: Case-insensitive name matching ---
-
     @Test
     void constructor_nameIsLowercased() {
         EntityInstanceId id = new EntityInstanceId("Counter", "c1");
@@ -160,8 +158,6 @@ public class EntityInstanceIdTest {
         EntityInstanceId id = EntityInstanceId.fromString("@MyEntity@key1");
         assertEquals("myentity", id.getName());
     }
-
-    // --- Gap 2: Validate @ not present in name ---
 
     @Test
     void constructor_nameContainsAt_throwsException() {
