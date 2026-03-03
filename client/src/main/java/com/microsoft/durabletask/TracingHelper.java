@@ -163,6 +163,26 @@ final class TracingHelper {
             @Nullable TraceContext traceContext,
             @Nullable SpanKind kind,
             @Nullable Map<String, String> attributes) {
+        return startSpanWithStartTime(name, traceContext, kind, attributes, null);
+    }
+
+    /**
+     * Starts a new span as a child of the given trace context, optionally with a custom start time.
+     * Used for orchestration spans where the engine provides the span start time.
+     *
+     * @param name        The span name.
+     * @param traceContext The parent trace context from the protobuf message, may be {@code null}.
+     * @param kind        The span kind, may be {@code null} (defaults to INTERNAL).
+     * @param attributes  Optional span attributes, may be {@code null}.
+     * @param startTime   Optional start time for the span, may be {@code null}.
+     * @return The started {@code Span}. Caller must call {@link Span#end()} when done.
+     */
+    static Span startSpanWithStartTime(
+            String name,
+            @Nullable TraceContext traceContext,
+            @Nullable SpanKind kind,
+            @Nullable Map<String, String> attributes,
+            @Nullable java.time.Instant startTime) {
         Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
         SpanBuilder spanBuilder = tracer.spanBuilder(name);
 
@@ -179,6 +199,10 @@ final class TracingHelper {
             for (Map.Entry<String, String> entry : attributes.entrySet()) {
                 spanBuilder.setAttribute(entry.getKey(), entry.getValue());
             }
+        }
+
+        if (startTime != null) {
+            spanBuilder.setStartTimestamp(startTime);
         }
 
         Span span = spanBuilder.startSpan();

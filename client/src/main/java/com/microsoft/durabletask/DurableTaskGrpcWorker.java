@@ -16,6 +16,7 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.context.Scope;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -176,38 +177,20 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
                         if (!versioningFailed) {
-                            // Extract ExecutionStartedEvent for trace context and orchestration name
-                            ExecutionStartedEvent startedEvent = Stream.concat(
+                            // Extract ExecutionStartedEvent and its timestamp for trace context
+                            HistoryEvent startedHistoryEvent = Stream.concat(
                                     orchestratorRequest.getPastEventsList().stream(),
                                     orchestratorRequest.getNewEventsList().stream())
                                 .filter(event -> event.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
-                                .map(HistoryEvent::getExecutionStarted)
                                 .findFirst()
                                 .orElse(null);
 
-                            // Only create orchestration span for the first execution (not replays).
-                            // First execution has EXECUTIONSTARTED in newEvents; replays have it in pastEvents.
-                            boolean isFirstExecution = orchestratorRequest.getNewEventsList().stream()
-                                .anyMatch(event -> event.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONSTARTED);
+                            ExecutionStartedEvent startedEvent = startedHistoryEvent != null
+                                    ? startedHistoryEvent.getExecutionStarted() : null;
 
                             TraceContext orchTraceCtx = (startedEvent != null && startedEvent.hasParentTraceContext())
                                     ? startedEvent.getParentTraceContext() : null;
                             String orchName = startedEvent != null ? startedEvent.getName() : "";
-
-                            Span orchestrationSpan = null;
-                            Scope orchestrationScope = null;
-                            if (isFirstExecution) {
-                                Map<String, String> orchSpanAttrs = new HashMap<>();
-                                orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
-                                orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
-                                orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
-                                orchestrationSpan = TracingHelper.startSpan(
-                                        TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
-                                        orchTraceCtx,
-                                        SpanKind.SERVER,
-                                        orchSpanAttrs);
-                                orchestrationScope = orchestrationSpan.makeCurrent();
-                            }
 
                             TaskOrchestratorResult taskOrchestratorResult;
                             try {
@@ -215,15 +198,41 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     orchestratorRequest.getPastEventsList(),
                                     orchestratorRequest.getNewEventsList());
                             } catch (Throwable e) {
-                                TracingHelper.endSpan(orchestrationSpan, e);
-                                if (orchestrationScope != null) orchestrationScope.close();
                                 if (e instanceof Error) {
                                     throw (Error) e;
                                 }
                                 throw new RuntimeException(e);
                             }
-                            if (orchestrationScope != null) orchestrationScope.close();
-                            TracingHelper.endSpan(orchestrationSpan, null);
+
+                            // Emit orchestration span only when the orchestration completes or is terminated.
+                            // Uses ExecutionStartedEvent timestamp as span start time so the span covers
+                            // the full orchestration lifecycle (from creation to completion),
+                            // matching the .NET SDK behavior.
+                            boolean isCompleting = taskOrchestratorResult.getActions().stream()
+                                .anyMatch(a -> a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION
+                                        || a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.TERMINATEORCHESTRATION);
+
+                            if (isCompleting && orchTraceCtx != null) {
+                                Map<String, String> orchSpanAttrs = new HashMap<>();
+                                orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
+                                orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
+                                orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
+
+                                // Use the ExecutionStartedEvent timestamp as the orchestration span start time
+                                Instant spanStartTime = null;
+                                if (startedHistoryEvent != null && startedHistoryEvent.hasTimestamp()) {
+                                    spanStartTime = DataConverter.getInstantFromTimestamp(
+                                            startedHistoryEvent.getTimestamp());
+                                }
+
+                                Span orchestrationSpan = TracingHelper.startSpanWithStartTime(
+                                        TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
+                                        orchTraceCtx,
+                                        SpanKind.SERVER,
+                                        orchSpanAttrs,
+                                        spanStartTime);
+                                orchestrationSpan.end();
+                            }
 
                             OrchestratorResponse response = OrchestratorResponse.newBuilder()
                                     .setInstanceId(orchestratorRequest.getInstanceId())
