@@ -887,6 +887,8 @@ final class TaskOrchestrationExecutor {
                         this.setVersion(version);
                         if (startedEvent.hasParentTraceContext()) {
                             this.parentTraceContext = startedEvent.getParentTraceContext();
+                        } else {
+                            this.parentTraceContext = null;
                         }
                         TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
                         if (factory == null) {
