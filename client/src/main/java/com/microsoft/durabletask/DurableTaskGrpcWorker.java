@@ -176,21 +176,27 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
                         if (!versioningFailed) {
-                            // Extract trace context from ExecutionStartedEvent in the history
-                            TraceContext orchTraceCtx = Stream.concat(
+                            // Extract ExecutionStartedEvent for trace context and orchestration name
+                            ExecutionStartedEvent startedEvent = Stream.concat(
                                     orchestratorRequest.getPastEventsList().stream(),
                                     orchestratorRequest.getNewEventsList().stream())
                                 .filter(event -> event.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
-                                .filter(event -> event.getExecutionStarted().hasParentTraceContext())
-                                .map(event -> event.getExecutionStarted().getParentTraceContext())
+                                .map(HistoryEvent::getExecutionStarted)
                                 .findFirst()
                                 .orElse(null);
+
+                            TraceContext orchTraceCtx = (startedEvent != null && startedEvent.hasParentTraceContext())
+                                    ? startedEvent.getParentTraceContext() : null;
+                            String orchName = startedEvent != null ? startedEvent.getName() : "";
+
                             Map<String, String> orchSpanAttrs = new HashMap<>();
-                            orchSpanAttrs.put("durabletask.task.instance_id", orchestratorRequest.getInstanceId());
+                            orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
+                            orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
+                            orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
                             Span orchestrationSpan = TracingHelper.startSpan(
-                                    "orchestration:" + orchestratorRequest.getInstanceId(),
+                                    TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
                                     orchTraceCtx,
-                                    SpanKind.INTERNAL,
+                                    SpanKind.SERVER,
                                     orchSpanAttrs);
                             Scope orchestrationScope = orchestrationSpan.makeCurrent();
 
@@ -254,13 +260,14 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         TraceContext activityTraceCtx = activityRequest.hasParentTraceContext()
                                 ? activityRequest.getParentTraceContext() : null;
                         Map<String, String> spanAttributes = new HashMap<>();
-                        spanAttributes.put("durabletask.task.instance_id", activityInstanceId);
-                        spanAttributes.put("durabletask.task.name", activityRequest.getName());
-                        spanAttributes.put("durabletask.task.task_id", String.valueOf(activityRequest.getTaskId()));
+                        spanAttributes.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ACTIVITY);
+                        spanAttributes.put(TracingHelper.ATTR_TASK_NAME, activityRequest.getName());
+                        spanAttributes.put(TracingHelper.ATTR_INSTANCE_ID, activityInstanceId);
+                        spanAttributes.put(TracingHelper.ATTR_TASK_ID, String.valueOf(activityRequest.getTaskId()));
                         Span activitySpan = TracingHelper.startSpan(
-                                "activity:" + activityRequest.getName(),
+                                TracingHelper.TYPE_ACTIVITY + ":" + activityRequest.getName(),
                                 activityTraceCtx,
-                                SpanKind.INTERNAL,
+                                SpanKind.SERVER,
                                 spanAttributes);
                         Scope activityScope = activitySpan.makeCurrent();
 

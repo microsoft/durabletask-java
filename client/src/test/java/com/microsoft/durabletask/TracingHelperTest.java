@@ -126,10 +126,11 @@ public class TracingHelperTest {
     @Test
     void startSpan_createsSpanWithAttributes() {
         Map<String, String> attrs = new HashMap<>();
-        attrs.put("durabletask.task.name", "test-activity");
-        attrs.put("durabletask.task.instance_id", "abc123");
+        attrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ACTIVITY);
+        attrs.put(TracingHelper.ATTR_TASK_NAME, "test-activity");
+        attrs.put(TracingHelper.ATTR_INSTANCE_ID, "abc123");
 
-        Span span = TracingHelper.startSpan("activity:test-activity", null, SpanKind.INTERNAL, attrs);
+        Span span = TracingHelper.startSpan("activity:test-activity", null, SpanKind.SERVER, attrs);
         assertNotNull(span);
         span.end();
 
@@ -137,10 +138,13 @@ public class TracingHelperTest {
         assertEquals(1, spans.size());
         SpanData spanData = spans.get(0);
         assertEquals("activity:test-activity", spanData.getName());
+        assertEquals(io.opentelemetry.api.trace.SpanKind.SERVER, spanData.getKind());
         assertEquals("test-activity", spanData.getAttributes().get(
                 io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.name")));
         assertEquals("abc123", spanData.getAttributes().get(
                 io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.instance_id")));
+        assertEquals("activity", spanData.getAttributes().get(
+                io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.type")));
     }
 
     @Test

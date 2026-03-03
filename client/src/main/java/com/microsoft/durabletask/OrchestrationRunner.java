@@ -151,21 +151,27 @@ public final class OrchestrationRunner {
                 logger,
                 versioningOptions);
 
-        // Extract trace context from ExecutionStartedEvent in the history
-        OrchestratorService.TraceContext orchTraceCtx = java.util.stream.Stream.concat(
+        // Extract ExecutionStartedEvent for trace context and orchestration name
+        OrchestratorService.ExecutionStartedEvent startedEvent = java.util.stream.Stream.concat(
                 orchestratorRequest.getPastEventsList().stream(),
                 orchestratorRequest.getNewEventsList().stream())
             .filter(event -> event.getEventTypeCase() == OrchestratorService.HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
-            .filter(event -> event.getExecutionStarted().hasParentTraceContext())
-            .map(event -> event.getExecutionStarted().getParentTraceContext())
+            .map(OrchestratorService.HistoryEvent::getExecutionStarted)
             .findFirst()
             .orElse(null);
+
+        OrchestratorService.TraceContext orchTraceCtx = (startedEvent != null && startedEvent.hasParentTraceContext())
+                ? startedEvent.getParentTraceContext() : null;
+        String orchName = startedEvent != null ? startedEvent.getName() : "";
+
         Map<String, String> orchSpanAttrs = new HashMap<>();
-        orchSpanAttrs.put("durabletask.task.instance_id", orchestratorRequest.getInstanceId());
+        orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
+        orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
+        orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
         Span orchestrationSpan = TracingHelper.startSpan(
-                "orchestration:" + orchestratorRequest.getInstanceId(),
+                TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
                 orchTraceCtx,
-                SpanKind.INTERNAL,
+                SpanKind.SERVER,
                 orchSpanAttrs);
         Scope orchestrationScope = orchestrationSpan.makeCurrent();
 

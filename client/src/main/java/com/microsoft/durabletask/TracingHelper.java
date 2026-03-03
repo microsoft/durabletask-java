@@ -32,7 +32,18 @@ import java.util.stream.Collectors;
  */
 final class TracingHelper {
 
-    private static final String TRACER_NAME = "durabletask";
+    private static final String TRACER_NAME = "Microsoft.DurableTask";
+
+    // Span type constants matching .NET SDK schema
+    static final String TYPE_ORCHESTRATION = "orchestration";
+    static final String TYPE_ACTIVITY = "activity";
+    static final String TYPE_CREATE_ORCHESTRATION = "create_orchestration";
+
+    // Attribute keys matching .NET SDK schema
+    static final String ATTR_TYPE = "durabletask.type";
+    static final String ATTR_TASK_NAME = "durabletask.task.name";
+    static final String ATTR_INSTANCE_ID = "durabletask.task.instance_id";
+    static final String ATTR_TASK_ID = "durabletask.task.task_id";
 
     private TracingHelper() {
         // Static utility class
