@@ -9,6 +9,8 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
 
 import io.grpc.*;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 
 import javax.annotation.Nullable;
 import java.time.Duration;
@@ -135,14 +137,30 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             builder.putAllTags(options.getTags());
         }
 
-        TraceContext traceContext = TracingHelper.getCurrentTraceContext();
-        if (traceContext != null) {
-            builder.setParentTraceContext(traceContext);
-        }
+        // Create a create_orchestration span (matching .NET SDK pattern)
+        Map<String, String> spanAttrs = new HashMap<>();
+        spanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_CREATE_ORCHESTRATION);
+        spanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchestratorName);
+        spanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, instanceId);
+        Span createSpan = TracingHelper.startSpan(
+                TracingHelper.TYPE_CREATE_ORCHESTRATION + ":" + orchestratorName,
+                null, null, spanAttrs);
+        Scope createScope = createSpan.makeCurrent();
 
-        CreateInstanceRequest request = builder.build();
-        CreateInstanceResponse response = this.sidecarClient.startInstance(request);
-        return response.getInstanceId();
+        try {
+            // Capture trace context from the create_orchestration span
+            TraceContext traceContext = TracingHelper.getCurrentTraceContext();
+            if (traceContext != null) {
+                builder.setParentTraceContext(traceContext);
+            }
+
+            CreateInstanceRequest request = builder.build();
+            CreateInstanceResponse response = this.sidecarClient.startInstance(request);
+            return response.getInstanceId();
+        } finally {
+            createScope.close();
+            createSpan.end();
+        }
     }
 
     @Override

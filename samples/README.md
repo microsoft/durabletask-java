@@ -68,15 +68,15 @@ Full span hierarchy showing the fan-out/fan-in pattern with paired Client+Server
 
 ![Jaeger trace detail](images/jaeger-full-trace-detail.png)
 
-### Jaeger — Span Attributes (Timer)
+### Jaeger — Span Attributes
 
-Timer span showing attributes aligned with the .NET SDK schema:
-- `durabletask.type=timer`
-- `durabletask.task.name=FanOutFanIn`
-- `durabletask.fire_at=2026-03-03T21:13:15.142Z`
+Activity span showing attributes aligned with the .NET SDK schema:
+- `durabletask.type=activity`
+- `durabletask.task.name=GetWeather`
 - `durabletask.task.instance_id=<orchestrationId>`
+- `durabletask.task.task_id=1`
 - `otel.scope.name=Microsoft.DurableTask`
-- `span.kind=internal`
+- `span.kind=server`
 
 ![Jaeger span detail](images/jaeger-span-detail.png)
 

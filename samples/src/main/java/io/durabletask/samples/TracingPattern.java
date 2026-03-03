@@ -6,12 +6,6 @@ import com.microsoft.durabletask.*;
 import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerClientExtensions;
 import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerWorkerExtensions;
 
-import io.opentelemetry.api.GlobalOpenTelemetry;
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.StatusCode;
-import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.resources.Resource;
@@ -41,9 +35,6 @@ import java.util.logging.Logger;
 final class TracingPattern {
     private static final Logger logger = Logger.getLogger(TracingPattern.class.getName());
 
-    // Shared parent context so activity spans become children of the orchestration span
-    private static volatile Context orchestrationContext;
-
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         // Configure OpenTelemetry with OTLP exporter to Jaeger
         String otlpEndpoint = System.getenv("OTEL_EXPORTER_OTLP_ENDPOINT");
@@ -68,7 +59,6 @@ final class TracingPattern {
                 .setTracerProvider(tracerProvider)
                 .buildAndRegisterGlobal();
 
-        Tracer tracer = openTelemetry.getTracer("Microsoft.DurableTask");
         logger.info("OpenTelemetry configured with OTLP exporter at " + otlpEndpoint);
 
         // Build connection string for DTS emulator
@@ -149,29 +139,17 @@ final class TracingPattern {
         DurableTaskClient client = DurableTaskSchedulerClientExtensions
                 .createClientBuilder(connectionString).build();
 
-        // Create a parent span — the SDK automatically propagates W3C trace context
-        Span orchestrationSpan = tracer.spanBuilder("create_orchestration:FanOutFanIn")
-                .setAttribute("durabletask.task.name", "FanOutFanIn")
-                .setAttribute("durabletask.type", "orchestration")
-                .startSpan();
-
-        orchestrationContext = Context.current().with(orchestrationSpan);
-
-        String instanceId;
-        try (Scope scope = orchestrationSpan.makeCurrent()) {
-            logger.info("Scheduling FanOutFanIn orchestration...");
-            instanceId = client.scheduleNewOrchestrationInstance(
-                    "FanOutFanIn",
-                    new NewOrchestrationInstanceOptions().setInput("weather-request"));
-            orchestrationSpan.setAttribute("durabletask.task.instance_id", instanceId);
-            logger.info("Started orchestration: " + instanceId);
-        }
+        // The SDK automatically creates a create_orchestration span and propagates W3C trace context
+        logger.info("Scheduling FanOutFanIn orchestration...");
+        String instanceId = client.scheduleNewOrchestrationInstance(
+                "FanOutFanIn",
+                new NewOrchestrationInstanceOptions().setInput("weather-request"));
+        logger.info("Started orchestration: " + instanceId);
 
         // Wait for completion
         logger.info("Waiting for completion...");
         OrchestrationMetadata result = client.waitForInstanceCompletion(
                 instanceId, Duration.ofSeconds(60), true);
-        orchestrationSpan.end();
 
         logger.info("Status: " + result.getRuntimeStatus());
         logger.info("Result: " + result.readOutputAs(String.class));
