@@ -208,7 +208,10 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                             } catch (Throwable e) {
                                 TracingHelper.endSpan(orchestrationSpan, e);
                                 orchestrationScope.close();
-                                throw e;
+                                if (e instanceof Error) {
+                                    throw (Error) e;
+                                }
+                                throw new RuntimeException(e);
                             }
                             orchestrationScope.close();
                             TracingHelper.endSpan(orchestrationSpan, null);

@@ -181,12 +181,12 @@ public final class OrchestrationRunner {
             taskOrchestratorResult = taskOrchestrationExecutor.execute(
                     orchestratorRequest.getPastEventsList(),
                     orchestratorRequest.getNewEventsList());
-        } catch (Throwable e) {
+        } catch (Exception e) {
             TracingHelper.endSpan(orchestrationSpan, e);
-            orchestrationScope.close();
             throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+        } finally {
+            orchestrationScope.close();
         }
-        orchestrationScope.close();
         TracingHelper.endSpan(orchestrationSpan, null);
 
         OrchestratorService.OrchestratorResponse response = OrchestratorService.OrchestratorResponse.newBuilder()
