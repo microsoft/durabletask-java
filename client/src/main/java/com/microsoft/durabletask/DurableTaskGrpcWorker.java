@@ -204,7 +204,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
 
                                 Instant spanStartTime = null;
-                                if (startedHistoryEvent != null && startedHistoryEvent.hasTimestamp()) {
+                                if (startedHistoryEvent.hasTimestamp()) {
                                     spanStartTime = DataConverter.getInstantFromTimestamp(
                                             startedHistoryEvent.getTimestamp());
                                 }
