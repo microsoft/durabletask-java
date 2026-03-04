@@ -545,18 +545,7 @@ final class TaskOrchestrationExecutor {
 
             TaskScheduledEvent taskScheduled = e.getTaskScheduled();
 
-            // Store scheduling metadata for retroactive client span at completion time.
-            // Use orchestrationSpanContext as parent so the client span is a child of the orchestration span.
-            Instant scheduledTime = e.hasTimestamp()
-                    ? DataConverter.getInstantFromTimestamp(e.getTimestamp())
-                    : null;
-            TraceContext spanParent = this.orchestrationSpanContext != null
-                    ? this.orchestrationSpanContext : this.parentTraceContext;
-            this.scheduledTaskInfoMap.put(taskId, new ScheduledTaskInfo(
-                    taskScheduled.getName(),
-                    scheduledTime,
-                    spanParent,
-                    TracingHelper.TYPE_ACTIVITY));
+            storeSchedulingMetadata(taskId, taskScheduled.getName(), TracingHelper.TYPE_ACTIVITY, e);
 
             // The history shows that this orchestrator created a durable task in a previous execution.
             // We can therefore remove it from the map of pending actions. If we can't find the pending
@@ -595,17 +584,7 @@ final class TaskOrchestrationExecutor {
 
                 // Emit a retroactive Client span covering scheduling-to-completion duration.
                 // Matches .NET SDK's EmitTraceActivityForTaskCompleted pattern.
-                ScheduledTaskInfo info = this.scheduledTaskInfoMap.remove(taskId);
-                if (info != null) {
-                    TracingHelper.emitRetroactiveClientSpan(
-                            info.spanType + ":" + info.taskName,
-                            info.parentTraceContext,
-                            info.spanType,
-                            info.taskName,
-                            this.instanceId,
-                            taskId,
-                            info.scheduledTime);
-                }
+                emitClientSpanIfTracked(taskId);
             }
             CompletableTask task = record.getTask();
             try {
@@ -631,17 +610,7 @@ final class TaskOrchestrationExecutor {
                 // TODO: Log task failure, including the number of bytes in the result
 
                 // Emit a retroactive Client span covering scheduling-to-failure duration.
-                ScheduledTaskInfo info = this.scheduledTaskInfoMap.remove(taskId);
-                if (info != null) {
-                    TracingHelper.emitRetroactiveClientSpan(
-                            info.spanType + ":" + info.taskName,
-                            info.parentTraceContext,
-                            info.spanType,
-                            info.taskName,
-                            this.instanceId,
-                            taskId,
-                            info.scheduledTime);
-                }
+                emitClientSpanIfTracked(taskId);
             }
 
             CompletableTask<?> task = record.getTask();
@@ -798,17 +767,8 @@ final class TaskOrchestrationExecutor {
             int taskId = e.getEventId();
             SubOrchestrationInstanceCreatedEvent subOrchestrationInstanceCreated = e.getSubOrchestrationInstanceCreated();
 
-            // Store scheduling metadata for retroactive client span at completion time
-            Instant scheduledTime = e.hasTimestamp()
-                    ? DataConverter.getInstantFromTimestamp(e.getTimestamp())
-                    : null;
-            TraceContext spanParent = this.orchestrationSpanContext != null
-                    ? this.orchestrationSpanContext : this.parentTraceContext;
-            this.scheduledTaskInfoMap.put(taskId, new ScheduledTaskInfo(
-                    subOrchestrationInstanceCreated.getName(),
-                    scheduledTime,
-                    spanParent,
-                    TracingHelper.TYPE_ORCHESTRATION));
+            storeSchedulingMetadata(taskId, subOrchestrationInstanceCreated.getName(),
+                    TracingHelper.TYPE_ORCHESTRATION, e);
 
             OrchestratorAction taskAction = this.pendingActions.remove(taskId);
             if (taskAction == null) {
@@ -841,17 +801,7 @@ final class TaskOrchestrationExecutor {
                         rawResult != null ? rawResult : "(null)"));
 
                 // Emit a retroactive Client span covering scheduling-to-completion duration.
-                ScheduledTaskInfo info = this.scheduledTaskInfoMap.remove(taskId);
-                if (info != null) {
-                    TracingHelper.emitRetroactiveClientSpan(
-                            info.spanType + ":" + info.taskName,
-                            info.parentTraceContext,
-                            info.spanType,
-                            info.taskName,
-                            this.instanceId,
-                            taskId,
-                            info.scheduledTime);
-                }
+                emitClientSpanIfTracked(taskId);
             }
             CompletableTask task = record.getTask();
             try {
@@ -877,17 +827,7 @@ final class TaskOrchestrationExecutor {
                 // TODO: Log task failure, including the number of bytes in the result
 
                 // Emit a retroactive Client span covering scheduling-to-failure duration.
-                ScheduledTaskInfo info = this.scheduledTaskInfoMap.remove(taskId);
-                if (info != null) {
-                    TracingHelper.emitRetroactiveClientSpan(
-                            info.spanType + ":" + info.taskName,
-                            info.parentTraceContext,
-                            info.spanType,
-                            info.taskName,
-                            this.instanceId,
-                            taskId,
-                            info.scheduledTime);
-                }
+                emitClientSpanIfTracked(taskId);
             }
 
             CompletableTask<?> task = record.getTask();
@@ -1102,6 +1042,35 @@ final class TaskOrchestrationExecutor {
             public Class<V> getDataType() {
                 return this.dataType;
             }
+        }
+
+        /**
+         * Emits a retroactive Client span for a completed/failed task, if scheduling metadata was tracked.
+         */
+        private void emitClientSpanIfTracked(int taskId) {
+            ScheduledTaskInfo info = this.scheduledTaskInfoMap.remove(taskId);
+            if (info != null) {
+                TracingHelper.emitRetroactiveClientSpan(
+                        info.spanType + ":" + info.taskName,
+                        info.parentTraceContext,
+                        info.spanType,
+                        info.taskName,
+                        this.instanceId,
+                        taskId,
+                        info.scheduledTime);
+            }
+        }
+
+        /**
+         * Stores scheduling metadata for a task so a retroactive client span can be emitted at completion time.
+         */
+        private void storeSchedulingMetadata(int taskId, String taskName, String spanType, HistoryEvent e) {
+            Instant scheduledTime = e.hasTimestamp()
+                    ? DataConverter.getInstantFromTimestamp(e.getTimestamp()) : null;
+            TraceContext spanParent = this.orchestrationSpanContext != null
+                    ? this.orchestrationSpanContext : this.parentTraceContext;
+            this.scheduledTaskInfoMap.put(taskId, new ScheduledTaskInfo(
+                    taskName, scheduledTime, spanParent, spanType));
         }
 
         /**
