@@ -56,15 +56,24 @@ public class EntityQueryTest {
     // region defaults
 
     @Test
-    void defaults_allNullOrFalse() {
+    void defaults_includeStateTrue_othersNullOrFalse() {
         EntityQuery query = new EntityQuery();
         assertNull(query.getInstanceIdStartsWith());
         assertNull(query.getLastModifiedFrom());
         assertNull(query.getLastModifiedTo());
-        assertFalse(query.isIncludeState());
+        assertTrue(query.isIncludeState());
         assertFalse(query.isIncludeTransient());
         assertNull(query.getPageSize());
         assertNull(query.getContinuationToken());
+    }
+
+    // endregion
+
+    // region DefaultPageSize constant
+
+    @Test
+    void defaultPageSize_is100() {
+        assertEquals(100, EntityQuery.DEFAULT_PAGE_SIZE);
     }
 
     // endregion

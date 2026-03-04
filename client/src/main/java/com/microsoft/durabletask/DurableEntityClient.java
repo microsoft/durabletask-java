@@ -80,14 +80,16 @@ public abstract class DurableEntityClient {
             @Nullable SignalEntityOptions options);
 
     /**
-     * Fetches the metadata for a durable entity instance, excluding its state.
+     * Fetches the metadata for a durable entity instance, including its state by default.
+     * <p>
+     * This matches the .NET SDK behavior where {@code includeState} defaults to {@code true}.
      *
      * @param entityId the entity instance ID to query
      * @return the entity metadata, or {@code null} if the entity does not exist
      */
     @Nullable
     public EntityMetadata getEntityMetadata(EntityInstanceId entityId) {
-        return this.getEntityMetadata(entityId, false);
+        return this.getEntityMetadata(entityId, true);
     }
 
     /**
@@ -99,6 +101,36 @@ public abstract class DurableEntityClient {
      */
     @Nullable
     public abstract EntityMetadata getEntityMetadata(EntityInstanceId entityId, boolean includeState);
+
+    /**
+     * Fetches the metadata for a durable entity instance with typed state access.
+     * <p>
+     * This always includes state in the result, matching the .NET SDK's
+     * {@code GetEntityAsync<T>()} pattern. The returned {@link TypedEntityMetadata} provides
+     * a {@link TypedEntityMetadata#getState()} method for direct typed state access.
+     *
+     * <pre>{@code
+     * TypedEntityMetadata<Integer> metadata = client.getEntities()
+     *     .getEntityMetadata(entityId, Integer.class);
+     * if (metadata != null) {
+     *     Integer state = metadata.getState();
+     *     System.out.println("Counter value: " + state);
+     * }
+     * }</pre>
+     *
+     * @param entityId  the entity instance ID to query
+     * @param stateType the class to deserialize the entity's state into
+     * @param <T>       the entity state type
+     * @return the typed entity metadata with state, or {@code null} if the entity does not exist
+     */
+    @Nullable
+    public <T> TypedEntityMetadata<T> getEntityMetadata(EntityInstanceId entityId, Class<T> stateType) {
+        EntityMetadata metadata = this.getEntityMetadata(entityId, true);
+        if (metadata == null) {
+            return null;
+        }
+        return new TypedEntityMetadata<>(metadata, stateType);
+    }
 
     /**
      * Queries the durable store for entity instances matching the specified filter criteria.
@@ -147,6 +179,44 @@ public abstract class DurableEntityClient {
      */
     public EntityQueryPageable getAllEntities() {
         return getAllEntities(new EntityQuery());
+    }
+
+    /**
+     * Returns an auto-paginating iterable over entity instances matching the specified filter criteria,
+     * with state included for typed access.
+     * <p>
+     * This convenience overload ensures that entity state is fetched, matching the .NET SDK's
+     * {@code GetAllEntitiesAsync<T>()} pattern. Use {@link EntityMetadata#readStateAs(Class)} on
+     * each result to access the typed state.
+     * <p>
+     * Note: The provided query's {@code includeState} setting is preserved. A copy of the query
+     * is made with {@code includeState} set to {@code true} so the original query is not modified.
+     *
+     * <pre>{@code
+     * EntityQuery query = new EntityQuery().setInstanceIdStartsWith("counter");
+     * for (EntityMetadata entity : client.getEntities().getAllEntities(query, Integer.class)) {
+     *     Integer state = entity.readStateAs(Integer.class);
+     *     System.out.println("Counter value: " + state);
+     * }
+     * }</pre>
+     *
+     * @param query     the query filter criteria
+     * @param stateType the expected type of the entity's state, used with
+     *                  {@link EntityMetadata#readStateAs(Class)} for deserialization
+     * @param <T>       the entity state type
+     * @return a pageable iterable over all matching entities with state included
+     */
+    public <T> EntityQueryPageable getAllEntities(EntityQuery query, Class<T> stateType) {
+        // Create a copy with includeState=true so we don't mutate the caller's query
+        EntityQuery typedQuery = new EntityQuery()
+                .setInstanceIdStartsWith(query.getInstanceIdStartsWith())
+                .setLastModifiedFrom(query.getLastModifiedFrom())
+                .setLastModifiedTo(query.getLastModifiedTo())
+                .setIncludeState(true)
+                .setIncludeTransient(query.isIncludeTransient())
+                .setPageSize(query.getPageSize())
+                .setContinuationToken(query.getContinuationToken());
+        return new EntityQueryPageable(typedQuery, this::queryEntities);
     }
 
     /**

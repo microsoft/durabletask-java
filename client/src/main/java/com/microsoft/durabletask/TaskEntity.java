@@ -65,11 +65,13 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
 
     /**
      * Controls whether operations can be dispatched to methods on the state object.
-     * When {@code true} (the default), if no matching method is found on the entity class itself,
+     * When {@code true}, if no matching method is found on the entity class itself,
      * the framework will look for a matching method on the state object.
-     * When {@code false}, only methods on the entity class are considered.
+     * When {@code false} (the default), only methods on the entity class are considered.
+     * <p>
+     * This matches the .NET SDK default where {@code AllowStateDispatch} is {@code false}.
      */
-    private boolean allowStateDispatch = true;
+    private boolean allowStateDispatch = false;
 
     // Cache for resolved methods, keyed by (class, operationName).
     // Uses Optional<Method> so that "not found" results are also cached.
@@ -93,9 +95,9 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
     /**
      * Sets whether operations can be dispatched to methods on the state object.
      * <p>
-     * When {@code true} (the default), if no matching method is found on the entity class itself,
+     * When {@code true}, if no matching method is found on the entity class itself,
      * the framework will look for a matching method on the state object.
-     * When {@code false}, only methods on the entity class are considered.
+     * When {@code false} (the default), only methods on the entity class are considered.
      *
      * @param allowStateDispatch {@code true} to allow state dispatch, {@code false} to disable
      */

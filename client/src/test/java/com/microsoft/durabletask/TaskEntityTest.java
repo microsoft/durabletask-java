@@ -105,9 +105,14 @@ public class TaskEntityTest {
 
     /**
      * Entity that has no matching method but whose state type has the method (state dispatch).
+     * Explicitly enables state dispatch since the default is now {@code false}.
      */
     static class StateDispatchEntity extends TaskEntity<MyState> {
         // No "increment" method on the entity itself — should dispatch to MyState.increment()
+
+        public StateDispatchEntity() {
+            setAllowStateDispatch(true);
+        }
 
         @Override
         protected Class<MyState> getStateType() {
@@ -336,10 +341,10 @@ public class TaskEntityTest {
     }
 
     @Test
-    void stateDispatch_enabledByDefault() throws Exception {
-        // StateDispatchEntity has allowStateDispatch=true (default)
-        StateDispatchEntity entity = new StateDispatchEntity();
-        assertTrue(entity.getAllowStateDispatch());
+    void stateDispatch_disabledByDefault() throws Exception {
+        // Default is now false, matching the .NET SDK
+        CounterEntity entity = new CounterEntity();
+        assertFalse(entity.getAllowStateDispatch());
     }
 
     // endregion

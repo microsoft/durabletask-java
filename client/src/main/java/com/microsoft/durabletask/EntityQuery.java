@@ -13,10 +13,17 @@ import java.util.Locale;
  * {@link DurableEntityClient#queryEntities(EntityQuery)}.
  */
 public final class EntityQuery {
+
+    /**
+     * The default page size for entity queries ({@value}).
+     * This matches the .NET SDK's {@code EntityQuery.DefaultPageSize}.
+     */
+    public static final int DEFAULT_PAGE_SIZE = 100;
+
     private String instanceIdStartsWith;
     private Instant lastModifiedFrom;
     private Instant lastModifiedTo;
-    private boolean includeState;
+    private boolean includeState = true;
     private boolean includeTransient;
     private Integer pageSize;
     private String continuationToken;

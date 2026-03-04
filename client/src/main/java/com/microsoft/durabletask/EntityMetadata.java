@@ -7,8 +7,13 @@ import java.time.Instant;
 
 /**
  * Represents metadata about a durable entity instance, including its identity, state, and lock status.
+ * <p>
+ * For typed state access, see {@link TypedEntityMetadata} which provides a {@code getState()} method
+ * that returns the deserialized state as a specific type.
+ *
+ * @see TypedEntityMetadata
  */
-public final class EntityMetadata {
+public class EntityMetadata {
     private final String instanceId;
     private final Instant lastModifiedTime;
     private final int backlogQueueSize;
@@ -113,6 +118,17 @@ public final class EntityMetadata {
      */
     public boolean isIncludesState() {
         return this.includesState;
+    }
+
+    /**
+     * Gets the data converter used for state deserialization.
+     * <p>
+     * This is package-private to allow {@link TypedEntityMetadata} to pass it to the superclass constructor.
+     *
+     * @return the data converter
+     */
+    DataConverter getDataConverter() {
+        return this.dataConverter;
     }
 
     /**
