@@ -13,6 +13,7 @@ import com.microsoft.durabletask.util.VersionUtils;
 import io.grpc.*;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
 
 import java.time.Duration;
@@ -231,8 +232,20 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 throw new RuntimeException(e);
                             }
 
-                            // End the orchestration span for every dispatch
+                            // End the orchestration span, setting error status if the orchestration failed
                             if (orchestrationSpan != null) {
+                                for (OrchestratorAction action : taskOrchestratorResult.getActions()) {
+                                    if (action.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION) {
+                                        CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                                        if (complete.getOrchestrationStatus() == OrchestrationStatus.ORCHESTRATION_STATUS_FAILED) {
+                                            String errorMsg = complete.hasFailureDetails()
+                                                    ? complete.getFailureDetails().getErrorMessage()
+                                                    : "Orchestration failed";
+                                            orchestrationSpan.setStatus(StatusCode.ERROR, errorMsg);
+                                        }
+                                        break;
+                                    }
+                                }
                                 orchestrationSpan.end();
                             }
 

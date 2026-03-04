@@ -10,6 +10,7 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 
 import io.grpc.*;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.context.Scope;
 
 import javax.annotation.Nullable;
@@ -144,7 +145,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         spanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, instanceId);
         Span createSpan = TracingHelper.startSpan(
                 TracingHelper.TYPE_CREATE_ORCHESTRATION + ":" + orchestratorName,
-                null, null, spanAttrs);
+                null, SpanKind.PRODUCER, spanAttrs);
         Scope createScope = createSpan.makeCurrent();
 
         try {
