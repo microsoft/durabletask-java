@@ -1,5 +1,11 @@
 ## Unreleased
 
+* Adding rewind client API ([#253](https://github.com/microsoft/durabletask-java/pull/253)). Note: orchestration processing for rewind is supported with Azure Functions but not with the standalone `GrpcDurableTaskWorker`.
+
+## v1.7.0
+* Add descriptive error when orchestration type is not registered ([#261](https://github.com/microsoft/durabletask-java/pull/261))
+* Update all dependencies to latest versions ([#260](https://github.com/microsoft/durabletask-java/pull/260))
+
 ## v1.6.3
 * Add DurableTaskGrpcClientFactory ([#256](https://github.com/microsoft/durabletask-java/pull/256))
 * Add support for running GitHub workflows manually and update flaky tests ([#258](https://github.com/microsoft/durabletask-java/pull/258))

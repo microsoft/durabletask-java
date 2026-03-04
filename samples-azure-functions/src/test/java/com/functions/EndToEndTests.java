@@ -229,6 +229,45 @@ public class EndToEndTests {
         assertEquals("\"TESTNAME\"", outputName);
     }
 
+    @Test
+    public void rewindNonExistentOrchestration() throws InterruptedException {
+        // Attempt to rewind a non-existent orchestration instance.
+        // The trigger calls client.rewindInstance() with a fake instance ID and
+        // expects an IllegalArgumentException (from gRPC NOT_FOUND status).
+        String startOrchestrationPath = "/api/StartRewindNonExistentOrchestration";
+        Response response = post(startOrchestrationPath);
+        assertEquals(200, response.getStatusCode(),
+                "Expected 200 OK indicating the IllegalArgumentException was caught. Body: " + response.getBody().asString());
+        String body = response.getBody().asString();
+        assertTrue(body.contains("No orchestration instance with ID") && body.contains("was found"),
+                "Response should contain the not-found error message, but was: " + body);
+    }
+
+    @Test
+    public void rewindFailedOrchestration() throws InterruptedException {
+        // Reset the failure flag before starting
+        post("/api/ResetRewindFailureFlag");
+
+        // Start the orchestration - the trigger waits for failure and calls
+        // client.rewindInstance() internally before returning
+        String startOrchestrationPath = "/api/StartRewindableOrchestration";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+
+        // The trigger already called client.rewindInstance(), so just poll for completion
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(15));
+        assertTrue(completed, "Orchestration should complete after rewind");
+
+        // Verify the output contains the expected result
+        Response statusResponse = get(statusQueryGetUri);
+        String output = statusResponse.jsonPath().get("output");
+        assertTrue(output.contains("rewound-success"), "Output should indicate successful rewind: " + output);
+    }
+
     private boolean pollingCheck(String statusQueryGetUri,
                                  String expectedState,
                                  Set<String> continueStates,
