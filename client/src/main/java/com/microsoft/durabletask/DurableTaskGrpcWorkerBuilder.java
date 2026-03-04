@@ -4,8 +4,10 @@ package com.microsoft.durabletask;
 
 import io.grpc.Channel;
 
+import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Locale;
 
 /**
  * Builder object for constructing customized {@link DurableTaskGrpcWorker} instances.
@@ -13,11 +15,13 @@ import java.util.HashMap;
 public final class DurableTaskGrpcWorkerBuilder {
     final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
+    final HashMap<String, TaskEntityFactory> entityFactories = new HashMap<>();
     int port;
     Channel channel;
     DataConverter dataConverter;
     Duration maximumTimerInterval;
     DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    int maxConcurrentEntityWorkItems = 1;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -60,6 +64,115 @@ public final class DurableTaskGrpcWorkerBuilder {
 
         this.activityFactories.put(key, factory);
         return this;
+    }
+
+    /**
+     * Adds an entity factory to be used by the constructed {@link DurableTaskGrpcWorker}.
+     *
+     * @param name    the name of the entity type
+     * @param factory the factory that creates instances of the entity
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, TaskEntityFactory factory) {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("A non-empty entity name is required.");
+        }
+        if (factory == null) {
+            throw new IllegalArgumentException("An entity factory is required.");
+        }
+
+        String key = name.toLowerCase(Locale.ROOT);
+        if (this.entityFactories.containsKey(key)) {
+            throw new IllegalArgumentException(
+                    String.format("An entity factory named %s is already registered.", name));
+        }
+
+        this.entityFactories.put(key, factory);
+        return this;
+    }
+
+    /**
+     * Registers an entity type for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The entity class must implement {@link ITaskEntity} and have a public no-argument constructor.
+     * A new instance of the entity is created for each operation batch using reflection.
+     * <p>
+     * The entity name is derived from the simple class name of the provided type.
+     *
+     * @param entityClass the entity class to register; must implement {@link ITaskEntity}
+     * @return this builder object
+     * @throws IllegalArgumentException if the class does not implement {@link ITaskEntity}
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(Class<? extends ITaskEntity> entityClass) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null.");
+        }
+        String name = entityClass.getSimpleName();
+        return this.addEntity(name, entityClass);
+    }
+
+    /**
+     * Registers an entity type with a specific name for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The entity class must implement {@link ITaskEntity} and have a public no-argument constructor.
+     * A new instance of the entity is created for each operation batch using reflection.
+     *
+     * @param name        the name of the entity type
+     * @param entityClass the entity class to register; must implement {@link ITaskEntity}
+     * @return this builder object
+     * @throws IllegalArgumentException if the class does not implement {@link ITaskEntity}
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, Class<? extends ITaskEntity> entityClass) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null.");
+        }
+        if (!ITaskEntity.class.isAssignableFrom(entityClass)) {
+            throw new IllegalArgumentException(
+                    String.format("Type %s does not implement ITaskEntity.", entityClass.getName()));
+        }
+        return this.addEntity(name, () -> {
+            try {
+                return entityClass.getDeclaredConstructor().newInstance();
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw new RuntimeException(
+                        String.format("Failed to create instance of entity type %s. Ensure it has a public no-argument constructor.", entityClass.getName()), e);
+            }
+        });
+    }
+
+    /**
+     * Registers an entity singleton for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The same entity instance is reused for every operation batch. This is useful for stateless entities
+     * or entities that manage their own lifecycle.
+     * <p>
+     * The entity name is derived from the simple class name of the provided entity instance.
+     *
+     * @param entity the entity instance to register
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(ITaskEntity entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity must not be null.");
+        }
+        String name = entity.getClass().getSimpleName();
+        return this.addEntity(name, () -> entity);
+    }
+
+    /**
+     * Registers an entity singleton with a specific name for the constructed {@link DurableTaskGrpcWorker}.
+     * <p>
+     * The same entity instance is reused for every operation batch.
+     *
+     * @param name   the name of the entity type
+     * @param entity the entity instance to register
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, ITaskEntity entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity must not be null.");
+        }
+        return this.addEntity(name, () -> entity);
     }
 
     /**
@@ -111,6 +224,24 @@ public final class DurableTaskGrpcWorkerBuilder {
      */
     public DurableTaskGrpcWorkerBuilder maximumTimerInterval(Duration maximumTimerInterval) {
         this.maximumTimerInterval = maximumTimerInterval;
+        return this;
+    }
+
+    /**
+     * Sets the maximum number of entity work items that can be processed concurrently by this worker.
+     * <p>
+     * Each entity instance is always single-threaded (serial execution), but this setting controls
+     * how many different entity instances can process work items in parallel. The default value is 1.
+     *
+     * @param maxConcurrentEntityWorkItems the maximum number of concurrent entity work items (must be at least 1)
+     * @return this builder object
+     * @throws IllegalArgumentException if the value is less than 1
+     */
+    public DurableTaskGrpcWorkerBuilder maxConcurrentEntityWorkItems(int maxConcurrentEntityWorkItems) {
+        if (maxConcurrentEntityWorkItems < 1) {
+            throw new IllegalArgumentException("maxConcurrentEntityWorkItems must be at least 1.");
+        }
+        this.maxConcurrentEntityWorkItems = maxConcurrentEntityWorkItems;
         return this;
     }
 
