@@ -193,38 +193,14 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     ? startedEvent.getParentTraceContext() : null;
                             String orchName = startedEvent != null ? startedEvent.getName() : "";
 
-                            // Start the orchestration span BEFORE execution so child spans
-                            // (activities, timers) are nested under it in the trace hierarchy.
-                            // Each dispatch creates its own orchestration span (matching JS/dotnet behavior).
-                            Span orchestrationSpan = null;
-                            TraceContext orchestrationSpanContext = null;
-                            if (orchTraceCtx != null) {
-                                Map<String, String> orchSpanAttrs = new HashMap<>();
-                                orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
-                                orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
-                                orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
-
-                                Instant spanStartTime = null;
-                                if (startedHistoryEvent.hasTimestamp()) {
-                                    spanStartTime = DataConverter.getInstantFromTimestamp(
-                                            startedHistoryEvent.getTimestamp());
-                                }
-
-                                orchestrationSpan = TracingHelper.startSpanWithStartTime(
-                                        TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
-                                        orchTraceCtx,
-                                        SpanKind.SERVER,
-                                        orchSpanAttrs,
-                                        spanStartTime);
-                                orchestrationSpanContext = TracingHelper.getCurrentTraceContext(orchestrationSpan);
-                            }
-
+                            // Pass parentTraceContext to executor so child spans
+                            // (activities, timers) reference the correct trace.
                             TaskOrchestratorResult taskOrchestratorResult;
                             try {
                                 taskOrchestratorResult = taskOrchestrationExecutor.execute(
                                     orchestratorRequest.getPastEventsList(),
                                     orchestratorRequest.getNewEventsList(),
-                                    orchestrationSpanContext);
+                                    orchTraceCtx);
                             } catch (Throwable e) {
                                 if (e instanceof Error) {
                                     throw (Error) e;
@@ -232,8 +208,34 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 throw new RuntimeException(e);
                             }
 
-                            // End the orchestration span, setting error status if the orchestration failed
-                            if (orchestrationSpan != null) {
+                            // Emit a single orchestration span only on the completion dispatch.
+                            // Uses ExecutionStartedEvent timestamp as start time for full lifecycle.
+                            // Java OTel doesn't support SetSpanId() like .NET, so we emit one
+                            // span on completion rather than merging across dispatches.
+                            boolean isCompleting = taskOrchestratorResult.getActions().stream()
+                                .anyMatch(a -> a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION
+                                        || a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.TERMINATEORCHESTRATION);
+
+                            if (isCompleting && orchTraceCtx != null) {
+                                Map<String, String> orchSpanAttrs = new HashMap<>();
+                                orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
+                                orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
+                                orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
+
+                                Instant spanStartTime = null;
+                                if (startedHistoryEvent != null && startedHistoryEvent.hasTimestamp()) {
+                                    spanStartTime = DataConverter.getInstantFromTimestamp(
+                                            startedHistoryEvent.getTimestamp());
+                                }
+
+                                Span orchestrationSpan = TracingHelper.startSpanWithStartTime(
+                                        TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
+                                        orchTraceCtx,
+                                        SpanKind.SERVER,
+                                        orchSpanAttrs,
+                                        spanStartTime);
+
+                                // Set error status if orchestration failed
                                 for (OrchestratorAction action : taskOrchestratorResult.getActions()) {
                                     if (action.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION) {
                                         CompleteOrchestrationAction complete = action.getCompleteOrchestration();
