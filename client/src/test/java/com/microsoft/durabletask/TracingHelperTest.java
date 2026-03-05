@@ -274,7 +274,7 @@ public class TracingHelperTest {
         java.time.Instant startTime = java.time.Instant.parse("2026-01-01T00:00:00Z");
         TracingHelper.emitRetroactiveClientSpan(
                 "activity:GetWeather", null, TracingHelper.TYPE_ACTIVITY,
-                "GetWeather", "instance-1", 3, startTime);
+                "GetWeather", "instance-1", 3, startTime, null);
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();
         assertEquals(1, spans.size());
@@ -287,6 +287,48 @@ public class TracingHelperTest {
         assertEquals("3", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.task.task_id")));
         long startEpochNanos = startTime.getEpochSecond() * 1_000_000_000L + startTime.getNano();
         assertEquals(startEpochNanos, sd.getStartEpochNanos());
+    }
+
+    @Test
+    void emitRetroactiveClientSpan_setsSpanId_whenProvided() {
+        String targetSpanId = "abcdef1234567890";
+        TracingHelper.emitRetroactiveClientSpan(
+                "activity:GetWeather", null, TracingHelper.TYPE_ACTIVITY,
+                "GetWeather", "instance-1", 3, null, targetSpanId);
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        assertEquals(1, spans.size());
+        assertEquals(targetSpanId, spans.get(0).getSpanContext().getSpanId());
+    }
+
+    @Test
+    void setSpanId_changesSpanId() {
+        Tracer tracer = openTelemetry.getTracer("test");
+        Span span = tracer.spanBuilder("test-span").startSpan();
+        String originalId = span.getSpanContext().getSpanId();
+        String targetId = "abcdef1234567890";
+
+        TracingHelper.setSpanId(span, targetId);
+
+        assertEquals(targetId, span.getSpanContext().getSpanId());
+        assertNotEquals(originalId, targetId);
+        span.end();
+    }
+
+    @Test
+    void setSpanId_nullSpan_doesNotThrow() {
+        TracingHelper.setSpanId(null, "abcdef1234567890");
+    }
+
+    @Test
+    void extractSpanIdFromTraceparent_validTraceparent() {
+        assertEquals("1234567890abcdef",
+                TracingHelper.extractSpanIdFromTraceparent("00-0af7651916cd43dd8448eb211c80319c-1234567890abcdef-01"));
+    }
+
+    @Test
+    void extractSpanIdFromTraceparent_null_returnsNull() {
+        assertNull(TracingHelper.extractSpanIdFromTraceparent(null));
     }
 
     @Test

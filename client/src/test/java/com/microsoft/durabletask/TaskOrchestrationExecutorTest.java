@@ -149,8 +149,13 @@ public class TaskOrchestrationExecutorTest {
         ScheduleTaskAction taskAction = scheduleAction.getScheduleTask();
         assertEquals(activityName, taskAction.getName());
         assertTrue(taskAction.hasParentTraceContext(), "ScheduleTaskAction should have parentTraceContext");
-        assertEquals(parentTrace.getTraceParent(), taskAction.getParentTraceContext().getTraceParent());
-        assertEquals(parentTrace.getTraceState().getValue(), taskAction.getParentTraceContext().getTraceState().getValue());
+        // The propagated context should have the same trace ID but a new span ID (client span)
+        String originalTraceId = parentTrace.getTraceParent().split("-")[1];
+        String propagatedTraceId = taskAction.getParentTraceContext().getTraceParent().split("-")[1];
+        assertEquals(originalTraceId, propagatedTraceId, "Should share the same trace ID");
+        String originalSpanId = parentTrace.getTraceParent().split("-")[2];
+        String propagatedSpanId = taskAction.getParentTraceContext().getTraceParent().split("-")[2];
+        assertNotEquals(originalSpanId, propagatedSpanId, "Should have a new client span ID");
     }
 
     @Test
@@ -216,7 +221,10 @@ public class TaskOrchestrationExecutorTest {
         CreateSubOrchestrationAction createSubOrch = subOrchAction.getCreateSubOrchestration();
         assertEquals(subOrchName, createSubOrch.getName());
         assertTrue(createSubOrch.hasParentTraceContext(), "CreateSubOrchestrationAction should have parentTraceContext");
-        assertEquals(parentTrace.getTraceParent(), createSubOrch.getParentTraceContext().getTraceParent());
+        // The propagated context should have the same trace ID but a new span ID (client span)
+        String originalTraceId = parentTrace.getTraceParent().split("-")[1];
+        String propagatedTraceId = createSubOrch.getParentTraceContext().getTraceParent().split("-")[1];
+        assertEquals(originalTraceId, propagatedTraceId, "Should share the same trace ID");
     }
 
     @Test

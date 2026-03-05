@@ -314,12 +314,23 @@ final class TaskOrchestrationExecutor {
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
 
-                // Propagate the orchestration span's context so the Server span on the worker
-                // is a child of the orchestration span. Falls back to parentTraceContext if no
-                // orchestration span context is available.
+                // Create a Client-kind span for scheduling and propagate its context.
+                // At completion, emitRetroactiveClientSpan uses setSpanId to match this span ID,
+                // so the server span becomes a child of the retroactive client span.
                 TraceContext propagatedCtx = this.orchestrationSpanContext != null
                         ? this.orchestrationSpanContext : this.parentTraceContext;
-                if (propagatedCtx != null) {
+                if (propagatedCtx != null && !this.isReplaying) {
+                    TraceContext clientCtx = TracingHelper.createClientSpan(
+                            "activity:" + name,
+                            propagatedCtx,
+                            TracingHelper.TYPE_ACTIVITY,
+                            name,
+                            this.instanceId,
+                            id);
+                    if (clientCtx != null) {
+                        scheduleTaskBuilder.setParentTraceContext(clientCtx);
+                    }
+                } else if (propagatedCtx != null) {
                     scheduleTaskBuilder.setParentTraceContext(propagatedCtx);
                 }
 
@@ -441,14 +452,26 @@ final class TaskOrchestrationExecutor {
                 createSubOrchestrationActionBuilder.setVersion(StringValue.of(this.getDefaultVersion()));
             }
 
+            // Need final copy for lambda capture
+            final String subInstanceId = instanceId;
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
 
-                // Propagate the orchestration span's context so the Server span on the worker
-                // is a child of the orchestration span.
+                // Create a Client-kind span for scheduling and propagate its context.
                 TraceContext propagatedCtx = this.orchestrationSpanContext != null
                         ? this.orchestrationSpanContext : this.parentTraceContext;
-                if (propagatedCtx != null) {
+                if (propagatedCtx != null && !this.isReplaying) {
+                    TraceContext clientCtx = TracingHelper.createClientSpan(
+                            "orchestration:" + name,
+                            propagatedCtx,
+                            TracingHelper.TYPE_ORCHESTRATION,
+                            name,
+                            subInstanceId,
+                            id);
+                    if (clientCtx != null) {
+                        createSubOrchestrationActionBuilder.setParentTraceContext(clientCtx);
+                    }
+                } else if (propagatedCtx != null) {
                     createSubOrchestrationActionBuilder.setParentTraceContext(propagatedCtx);
                 }
 
@@ -545,7 +568,14 @@ final class TaskOrchestrationExecutor {
 
             TaskScheduledEvent taskScheduled = e.getTaskScheduled();
 
-            storeSchedulingMetadata(taskId, taskScheduled.getName(), TracingHelper.TYPE_ACTIVITY, e);
+            // Extract client span ID from the propagated parentTraceContext for setSpanId at completion
+            String clientSpanId = null;
+            if (taskScheduled.hasParentTraceContext()) {
+                clientSpanId = TracingHelper.extractSpanIdFromTraceparent(
+                        taskScheduled.getParentTraceContext().getTraceParent());
+            }
+
+            storeSchedulingMetadata(taskId, taskScheduled.getName(), TracingHelper.TYPE_ACTIVITY, e, clientSpanId);
 
             // The history shows that this orchestrator created a durable task in a previous execution.
             // We can therefore remove it from the map of pending actions. If we can't find the pending
@@ -767,8 +797,15 @@ final class TaskOrchestrationExecutor {
             int taskId = e.getEventId();
             SubOrchestrationInstanceCreatedEvent subOrchestrationInstanceCreated = e.getSubOrchestrationInstanceCreated();
 
+            // Extract client span ID from the propagated parentTraceContext for setSpanId at completion
+            String clientSpanId = null;
+            if (subOrchestrationInstanceCreated.hasParentTraceContext()) {
+                clientSpanId = TracingHelper.extractSpanIdFromTraceparent(
+                        subOrchestrationInstanceCreated.getParentTraceContext().getTraceParent());
+            }
+
             storeSchedulingMetadata(taskId, subOrchestrationInstanceCreated.getName(),
-                    TracingHelper.TYPE_ORCHESTRATION, e);
+                    TracingHelper.TYPE_ORCHESTRATION, e, clientSpanId);
 
             OrchestratorAction taskAction = this.pendingActions.remove(taskId);
             if (taskAction == null) {
@@ -1057,20 +1094,22 @@ final class TaskOrchestrationExecutor {
                         info.taskName,
                         this.instanceId,
                         taskId,
-                        info.scheduledTime);
+                        info.scheduledTime,
+                        info.clientSpanId);
             }
         }
 
         /**
          * Stores scheduling metadata for a task so a retroactive client span can be emitted at completion time.
          */
-        private void storeSchedulingMetadata(int taskId, String taskName, String spanType, HistoryEvent e) {
+        private void storeSchedulingMetadata(int taskId, String taskName, String spanType,
+                                              HistoryEvent e, String clientSpanId) {
             Instant scheduledTime = e.hasTimestamp()
                     ? DataConverter.getInstantFromTimestamp(e.getTimestamp()) : null;
             TraceContext spanParent = this.orchestrationSpanContext != null
                     ? this.orchestrationSpanContext : this.parentTraceContext;
             this.scheduledTaskInfoMap.put(taskId, new ScheduledTaskInfo(
-                    taskName, scheduledTime, spanParent, spanType));
+                    taskName, scheduledTime, spanParent, spanType, clientSpanId));
         }
 
         /**
@@ -1082,12 +1121,15 @@ final class TaskOrchestrationExecutor {
             final Instant scheduledTime;
             final TraceContext parentTraceContext;
             final String spanType; // "activity" or "orchestration"
+            final String clientSpanId; // span ID from instant client span for setSpanId at completion
 
-            ScheduledTaskInfo(String taskName, Instant scheduledTime, TraceContext parentTraceContext, String spanType) {
+            ScheduledTaskInfo(String taskName, Instant scheduledTime, TraceContext parentTraceContext,
+                              String spanType, String clientSpanId) {
                 this.taskName = taskName;
                 this.scheduledTime = scheduledTime;
                 this.parentTraceContext = parentTraceContext;
                 this.spanType = spanType;
+                this.clientSpanId = clientSpanId;
             }
         }
 

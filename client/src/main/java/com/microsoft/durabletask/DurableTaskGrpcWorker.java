@@ -193,30 +193,13 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     ? startedEvent.getParentTraceContext() : null;
                             String orchName = startedEvent != null ? startedEvent.getName() : "";
 
-                            // Pass parentTraceContext to executor so child spans
-                            // (activities, timers) reference the correct trace.
-                            TaskOrchestratorResult taskOrchestratorResult;
-                            try {
-                                taskOrchestratorResult = taskOrchestrationExecutor.execute(
-                                    orchestratorRequest.getPastEventsList(),
-                                    orchestratorRequest.getNewEventsList(),
-                                    orchTraceCtx);
-                            } catch (Throwable e) {
-                                if (e instanceof Error) {
-                                    throw (Error) e;
-                                }
-                                throw new RuntimeException(e);
-                            }
-
-                            // Emit a single orchestration span only on the completion dispatch.
-                            // Uses ExecutionStartedEvent timestamp as start time for full lifecycle.
-                            // Java OTel doesn't support SetSpanId() like .NET, so we emit one
-                            // span on completion rather than merging across dispatches.
-                            boolean isCompleting = taskOrchestratorResult.getActions().stream()
-                                .anyMatch(a -> a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION
-                                        || a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.TERMINATEORCHESTRATION);
-
-                            if (isCompleting && orchTraceCtx != null) {
+                            // Start the orchestration span BEFORE execution so child spans
+                            // (activities, timers) are nested under it. Use setSpanId() to give
+                            // all dispatches the same span ID — Jaeger deduplicates by span ID,
+                            // keeping the latest end time (matching .NET's SetSpanId pattern).
+                            Span orchestrationSpan = null;
+                            TraceContext orchestrationSpanContext = null;
+                            if (orchTraceCtx != null) {
                                 Map<String, String> orchSpanAttrs = new HashMap<>();
                                 orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
                                 orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
@@ -228,27 +211,75 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                             startedHistoryEvent.getTimestamp());
                                 }
 
-                                Span orchestrationSpan = TracingHelper.startSpanWithStartTime(
+                                orchestrationSpan = TracingHelper.startSpanWithStartTime(
                                         TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
                                         orchTraceCtx,
                                         SpanKind.SERVER,
                                         orchSpanAttrs,
                                         spanStartTime);
 
-                                // Set error status if orchestration failed
-                                for (OrchestratorAction action : taskOrchestratorResult.getActions()) {
-                                    if (action.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION) {
-                                        CompleteOrchestrationAction complete = action.getCompleteOrchestration();
-                                        if (complete.getOrchestrationStatus() == OrchestrationStatus.ORCHESTRATION_STATUS_FAILED) {
-                                            String errorMsg = complete.hasFailureDetails()
-                                                    ? complete.getFailureDetails().getErrorMessage()
-                                                    : "Orchestration failed";
-                                            orchestrationSpan.setStatus(StatusCode.ERROR, errorMsg);
-                                        }
-                                        break;
+                                // Use the same span ID across dispatches for deduplication.
+                                // Priority: OrchestrationTraceContext.spanID (if populated by server),
+                                // fallback: derive deterministically from parentTraceContext span ID.
+                                String orchSpanId = null;
+                                if (orchestratorRequest.hasOrchestrationTraceContext()
+                                        && orchestratorRequest.getOrchestrationTraceContext().hasSpanID()
+                                        && orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue() != null
+                                        && !orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue().isEmpty()) {
+                                    orchSpanId = orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue();
+                                } else if (orchTraceCtx != null) {
+                                    // Derive from parent span ID by hashing with instance ID
+                                    String parentSpanId = TracingHelper.extractSpanIdFromTraceparent(
+                                            orchTraceCtx.getTraceParent());
+                                    if (parentSpanId != null) {
+                                        long hash = parentSpanId.hashCode() * 31L
+                                                + orchestratorRequest.getInstanceId().hashCode();
+                                        orchSpanId = String.format("%016x", hash);
                                     }
                                 }
-                                orchestrationSpan.end();
+                                TracingHelper.setSpanId(orchestrationSpan, orchSpanId);
+
+                                orchestrationSpanContext = TracingHelper.getCurrentTraceContext(orchestrationSpan);
+                            }
+
+                            TaskOrchestratorResult taskOrchestratorResult;
+                            try {
+                                taskOrchestratorResult = taskOrchestrationExecutor.execute(
+                                    orchestratorRequest.getPastEventsList(),
+                                    orchestratorRequest.getNewEventsList(),
+                                    orchestrationSpanContext);
+                            } catch (Throwable e) {
+                                if (e instanceof Error) {
+                                    throw (Error) e;
+                                }
+                                throw new RuntimeException(e);
+                            }
+
+                            // Only end (export) the orchestration span on the completion dispatch.
+                            // Non-completion dispatches: span is started for child parenting but
+                            // never ended, so it won't be exported by the SpanProcessor.
+                            if (orchestrationSpan != null) {
+                                boolean isCompleting = taskOrchestratorResult.getActions().stream()
+                                    .anyMatch(a -> a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION
+                                            || a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.TERMINATEORCHESTRATION);
+
+                                if (isCompleting) {
+                                    for (OrchestratorAction action : taskOrchestratorResult.getActions()) {
+                                        if (action.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION) {
+                                            CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                                            if (complete.getOrchestrationStatus() == OrchestrationStatus.ORCHESTRATION_STATUS_FAILED) {
+                                                String errorMsg = complete.hasFailureDetails()
+                                                        ? complete.getFailureDetails().getErrorMessage()
+                                                        : "Orchestration failed";
+                                                orchestrationSpan.setStatus(StatusCode.ERROR, errorMsg);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    orchestrationSpan.end();
+                                }
+                                // Non-completion: intentionally NOT ending the span.
+                                // Unended spans are not exported by the SpanProcessor.
                             }
 
                             OrchestratorResponse response = OrchestratorResponse.newBuilder()
