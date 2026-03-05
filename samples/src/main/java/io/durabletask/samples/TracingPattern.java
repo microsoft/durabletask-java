@@ -99,11 +99,25 @@ final class TracingPattern {
                             // Fan-in: wait for all activities to complete
                             List<String> results = ctx.allOf(parallelTasks).await();
 
-                            // Aggregate results
-                            String summary = ctx.callActivity(
-                                    "CreateSummary", String.join(", ", results), String.class).await();
+                            // Sub-orchestration: aggregate results (demonstrates sub-orch span)
+                            String summary = ctx.callSubOrchestrator(
+                                    "Summarize", String.join(", ", results), String.class).await();
 
                             ctx.complete(summary);
+                        };
+                    }
+                })
+                .addOrchestration(new TaskOrchestrationFactory() {
+                    @Override
+                    public String getName() { return "Summarize"; }
+
+                    @Override
+                    public TaskOrchestration create() {
+                        return ctx -> {
+                            String input = ctx.getInput(String.class);
+                            String result = ctx.callActivity(
+                                    "CreateSummary", input, String.class).await();
+                            ctx.complete(result);
                         };
                     }
                 })
