@@ -231,7 +231,6 @@ public class TaskEntityTest {
     @Test
     void reflectionDispatch_voidMethodWithArg() throws Exception {
         CounterEntity entity = new CounterEntity();
-        DataConverter converter = new JacksonDataConverter();
         // Set initial state to 0
         TaskEntityOperation op = createOperation("add", 5);
         entity.runAsync(op);
