@@ -559,6 +559,29 @@ public interface TaskOrchestrationContext {
         }
     }
 
+    /**
+     * Gets the durable entity feature for this orchestration context.
+     * <p>
+     * This mirrors the .NET SDK's {@code TaskOrchestrationContext.Entities} surface,
+     * adapted to Java as a method-based accessor.
+     *
+     * @return the entity feature for this orchestration context
+     */
+    default TaskOrchestrationEntityFeature getEntities() {
+        return new ContextBackedTaskOrchestrationEntityFeature(this);
+    }
+
+    /**
+     * Gets the durable entity feature for this orchestration context.
+     * <p>
+     * This is an alias of {@link #getEntities()}.
+     *
+     * @return the entity feature for this orchestration context
+     */
+    default TaskOrchestrationEntityFeature entities() {
+        return this.getEntities();
+    }
+
     // region Entity integration methods
 
     /**

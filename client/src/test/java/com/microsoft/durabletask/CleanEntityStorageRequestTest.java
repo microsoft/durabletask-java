@@ -12,11 +12,11 @@ import static org.junit.jupiter.api.Assertions.*;
 public class CleanEntityStorageRequestTest {
 
     @Test
-    void defaults_allFalseAndNull() {
+    void defaults_matchDotNetDefaults() {
         CleanEntityStorageRequest request = new CleanEntityStorageRequest();
         assertNull(request.getContinuationToken());
-        assertFalse(request.isRemoveEmptyEntities());
-        assertFalse(request.isReleaseOrphanedLocks());
+        assertTrue(request.isRemoveEmptyEntities());
+        assertTrue(request.isReleaseOrphanedLocks());
         assertFalse(request.isContinueUntilComplete());
     }
 

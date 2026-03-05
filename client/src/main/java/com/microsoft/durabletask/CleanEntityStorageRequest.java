@@ -12,12 +12,12 @@ import javax.annotation.Nullable;
  */
 public final class CleanEntityStorageRequest {
     private String continuationToken;
-    private boolean removeEmptyEntities;
-    private boolean releaseOrphanedLocks;
+    private boolean removeEmptyEntities = true;
+    private boolean releaseOrphanedLocks = true;
 
     /**
      * Creates a new {@code CleanEntityStorageRequest} with default settings.
-     * By default, both {@code removeEmptyEntities} and {@code releaseOrphanedLocks} are {@code false}.
+        * By default, both {@code removeEmptyEntities} and {@code releaseOrphanedLocks} are {@code true}.
      */
     public CleanEntityStorageRequest() {
     }

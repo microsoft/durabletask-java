@@ -219,6 +219,39 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
+    void getEntities_signalEntity_producesSendEntityMessageAction() {
+        final String orchestratorName = "SignalViaEntitiesFeatureOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            ctx.getEntities().signalEntity(entityId, "add", 7);
+            ctx.complete("done");
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasSignal = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage()) {
+                SendEntityMessageAction msg = action.getSendEntityMessage();
+                if (msg.hasEntityOperationSignaled()) {
+                    EntityOperationSignaledEvent signal = msg.getEntityOperationSignaled();
+                    assertEquals("add", signal.getOperation());
+                    assertEquals("@counter@c1", signal.getTargetInstanceId().getValue());
+                    hasSignal = true;
+                }
+            }
+        }
+
+        assertTrue(hasSignal, "Expected a sendEntityMessage action with signal");
+    }
+
+    @Test
     void signalEntity_replayPassesNonDeterminismCheck() {
         final String orchestratorName = "SignalEntityReplay";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
@@ -293,6 +326,44 @@ public class TaskOrchestrationEntityEventTest {
                 hasComplete = true;
             }
         }
+        assertFalse(hasComplete, "Should not complete while waiting for entity response");
+    }
+
+    @Test
+    void entities_callEntity_producesActionAndWaitsForResponse() {
+        final String orchestratorName = "CallViaEntitiesFeatureOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            int value = ctx.entities().callEntity(entityId, "get", null, int.class).await();
+            ctx.complete(value);
+        });
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+
+        boolean hasCall = false;
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEntityMessage()) {
+                SendEntityMessageAction msg = action.getSendEntityMessage();
+                if (msg.hasEntityOperationCalled()) {
+                    EntityOperationCalledEvent call = msg.getEntityOperationCalled();
+                    assertEquals("get", call.getOperation());
+                    assertEquals("@counter@c1", call.getTargetInstanceId().getValue());
+                    hasCall = true;
+                }
+            }
+            if (action.hasCompleteOrchestration()) {
+                hasComplete = true;
+            }
+        }
+
+        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
         assertFalse(hasComplete, "Should not complete while waiting for entity response");
     }
 
