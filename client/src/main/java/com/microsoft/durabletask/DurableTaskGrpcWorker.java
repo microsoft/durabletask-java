@@ -195,8 +195,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
                             // Start the orchestration span BEFORE execution so child spans
                             // (activities, timers) are nested under it. Use setSpanId() to give
-                            // all dispatches the same span ID — Jaeger deduplicates by span ID,
-                            // keeping the latest end time (matching .NET's SetSpanId pattern).
+                            // all dispatches the same span ID for deduplication
+                            // (matching .NET's SetSpanId pattern).
                             Span orchestrationSpan = null;
                             TraceContext orchestrationSpanContext = null;
                             if (orchTraceCtx != null) {
@@ -205,11 +205,11 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
                                 orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
 
-                                Instant spanStartTime = null;
-                                if (startedHistoryEvent != null && startedHistoryEvent.hasTimestamp()) {
-                                    spanStartTime = DataConverter.getInstantFromTimestamp(
-                                            startedHistoryEvent.getTimestamp());
-                                }
+                                // Use ExecutionStartedEvent timestamp so the orchestration span
+                                // covers the full lifecycle from creation to completion
+                                Instant spanStartTime = startedHistoryEvent.hasTimestamp()
+                                        ? DataConverter.getInstantFromTimestamp(startedHistoryEvent.getTimestamp())
+                                        : null;
 
                                 orchestrationSpan = TracingHelper.startSpanWithStartTime(
                                         TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
@@ -227,7 +227,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                         && orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue() != null
                                         && !orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue().isEmpty()) {
                                     orchSpanId = orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue();
-                                } else if (orchTraceCtx != null) {
+                                } else {
                                     // Derive from parent span ID by hashing with instance ID
                                     String parentSpanId = TracingHelper.extractSpanIdFromTraceparent(
                                             orchTraceCtx.getTraceParent());
