@@ -1,6 +1,7 @@
 ## Unreleased
 
 * Adding rewind client API ([#253](https://github.com/microsoft/durabletask-java/pull/253)). Note: orchestration processing for rewind is supported with Azure Functions but not with the standalone `GrpcDurableTaskWorker`.
+* Add distributed tracing (OpenTelemetry) support with W3C Trace Context propagation ([#266](https://github.com/microsoft/durabletask-java/pull/266))
 
 ## v1.7.0
 * Add descriptive error when orchestration type is not registered ([#261](https://github.com/microsoft/durabletask-java/pull/261))
