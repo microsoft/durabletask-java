@@ -183,30 +183,29 @@ public abstract class DurableEntityClient {
 
     /**
      * Returns an auto-paginating iterable over entity instances matching the specified filter criteria,
-     * with state included for typed access.
+     * with typed state access.
      * <p>
-     * This convenience overload ensures that entity state is fetched, matching the .NET SDK's
-     * {@code GetAllEntitiesAsync<T>()} pattern. Use {@link EntityMetadata#readStateAs(Class)} on
-     * each result to access the typed state.
+     * This mirrors the .NET SDK's {@code GetAllEntitiesAsync<T>()} pattern. Entity state is always
+     * included in the results and eagerly deserialized into the specified type. Each item is a
+     * {@link TypedEntityMetadata} with a {@link TypedEntityMetadata#getState()} accessor.
      * <p>
-     * Note: The provided query's {@code includeState} setting is preserved. A copy of the query
-     * is made with {@code includeState} set to {@code true} so the original query is not modified.
+     * Note: A copy of the query is made with {@code includeState} set to {@code true} so the
+     * original query is not modified.
      *
      * <pre>{@code
      * EntityQuery query = new EntityQuery().setInstanceIdStartsWith("counter");
-     * for (EntityMetadata entity : client.getEntities().getAllEntities(query, Integer.class)) {
-     *     Integer state = entity.readStateAs(Integer.class);
+     * for (TypedEntityMetadata<Integer> entity : client.getEntities().getAllEntities(query, Integer.class)) {
+     *     Integer state = entity.getState();
      *     System.out.println("Counter value: " + state);
      * }
      * }</pre>
      *
      * @param query     the query filter criteria
-     * @param stateType the expected type of the entity's state, used with
-     *                  {@link EntityMetadata#readStateAs(Class)} for deserialization
+     * @param stateType the class to deserialize each entity's state into
      * @param <T>       the entity state type
-     * @return a pageable iterable over all matching entities with state included
+     * @return a pageable iterable over all matching entities with typed state
      */
-    public <T> EntityQueryPageable getAllEntities(EntityQuery query, Class<T> stateType) {
+    public <T> TypedEntityQueryPageable<T> getAllEntities(EntityQuery query, Class<T> stateType) {
         // Create a copy with includeState=true so we don't mutate the caller's query
         EntityQuery typedQuery = new EntityQuery()
                 .setInstanceIdStartsWith(query.getInstanceIdStartsWith())
@@ -216,7 +215,8 @@ public abstract class DurableEntityClient {
                 .setIncludeTransient(query.isIncludeTransient())
                 .setPageSize(query.getPageSize())
                 .setContinuationToken(query.getContinuationToken());
-        return new EntityQueryPageable(typedQuery, this::queryEntities);
+        EntityQueryPageable inner = new EntityQueryPageable(typedQuery, this::queryEntities);
+        return new TypedEntityQueryPageable<>(inner, stateType);
     }
 
     /**
