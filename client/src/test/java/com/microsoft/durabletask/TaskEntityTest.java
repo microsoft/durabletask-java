@@ -250,7 +250,6 @@ public class TaskEntityTest {
     @Test
     void reflectionDispatch_caseInsensitive() throws Exception {
         CounterEntity entity = new CounterEntity();
-        DataConverter converter = new JacksonDataConverter();
 
         // Method is "add" but call with "ADD"
         TaskEntityOperation addOp = createOperation("ADD", 10);
