@@ -332,8 +332,8 @@ public class TracingHelperTest {
     }
 
     @Test
-    void emitEventRaisedFromWorkerSpan_createsProducerSpan() {
-        TracingHelper.emitEventRaisedFromWorkerSpan("ApprovalEvent", "orch-1", "target-orch-2");
+    void emitEventSpan_fromWorker_createsProducerSpan() {
+        TracingHelper.emitEventSpan("ApprovalEvent", "orch-1", "target-orch-2");
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();
         assertEquals(1, spans.size());
@@ -347,8 +347,8 @@ public class TracingHelperTest {
     }
 
     @Test
-    void emitEventRaisedFromClientSpan_createsProducerSpan() {
-        TracingHelper.emitEventRaisedFromClientSpan("ApprovalEvent", "target-orch-1");
+    void emitEventSpan_fromClient_createsProducerSpan() {
+        TracingHelper.emitEventSpan("ApprovalEvent", null, "target-orch-1");
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();
         assertEquals(1, spans.size());

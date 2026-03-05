@@ -320,13 +320,7 @@ final class TaskOrchestrationExecutor {
                 TraceContext propagatedCtx = this.orchestrationSpanContext != null
                         ? this.orchestrationSpanContext : this.parentTraceContext;
                 if (propagatedCtx != null && !this.isReplaying) {
-                    TraceContext clientCtx = TracingHelper.createClientSpan(
-                            "activity:" + name,
-                            propagatedCtx,
-                            TracingHelper.TYPE_ACTIVITY,
-                            name,
-                            this.instanceId,
-                            id);
+                    TraceContext clientCtx = TracingHelper.createSyntheticClientContext(propagatedCtx);
                     if (clientCtx != null) {
                         scheduleTaskBuilder.setParentTraceContext(clientCtx);
                     }
@@ -414,7 +408,7 @@ final class TaskOrchestrationExecutor {
                         serializedEventData != null ? serializedEventData : "(null)"));
 
                 // Emit an event span  StartTraceActivityForEventRaisedFromWorker
-                TracingHelper.emitEventRaisedFromWorkerSpan(eventName, this.instanceId, instanceId);
+                TracingHelper.emitEventSpan(eventName, this.instanceId, instanceId);
             }
         }
 
@@ -452,8 +446,6 @@ final class TaskOrchestrationExecutor {
                 createSubOrchestrationActionBuilder.setVersion(StringValue.of(this.getDefaultVersion()));
             }
 
-            // Need final copy for lambda capture
-            final String subInstanceId = instanceId;
             TaskFactory<V> taskFactory = () -> {
                 int id = this.sequenceNumber++;
 
@@ -461,13 +453,7 @@ final class TaskOrchestrationExecutor {
                 TraceContext propagatedCtx = this.orchestrationSpanContext != null
                         ? this.orchestrationSpanContext : this.parentTraceContext;
                 if (propagatedCtx != null && !this.isReplaying) {
-                    TraceContext clientCtx = TracingHelper.createClientSpan(
-                            "orchestration:" + name,
-                            propagatedCtx,
-                            TracingHelper.TYPE_ORCHESTRATION,
-                            name,
-                            subInstanceId,
-                            id);
+                    TraceContext clientCtx = TracingHelper.createSyntheticClientContext(propagatedCtx);
                     if (clientCtx != null) {
                         createSubOrchestrationActionBuilder.setParentTraceContext(clientCtx);
                     }

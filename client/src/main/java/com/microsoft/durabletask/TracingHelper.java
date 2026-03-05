@@ -311,9 +311,9 @@ final class TracingHelper {
     }
 
     /**
-     * Creates a synthetic Client-kind trace context for scheduling an activity or sub-orchestration.
-     * Does NOT create or export a real span — just generates a new span ID under the parent trace.
-     * The returned context is propagated as {@code parentTraceContext} on the action so the
+     * Creates a synthetic trace context with a new span ID under the parent trace.
+     * Does NOT create or export a real span — just generates a new span ID for propagation.
+     * The returned context is set as {@code parentTraceContext} on the action so the
      * server-side span becomes a child of the synthetic client span ID.
      * At completion time, {@link #emitRetroactiveClientSpan} creates a real span with this
      * span ID (via {@link #setSpanId}) to provide proper duration and attributes.
@@ -323,13 +323,7 @@ final class TracingHelper {
      *         the parent context is invalid.
      */
     @Nullable
-    static TraceContext createClientSpan(
-            String spanName,
-            @Nullable TraceContext parentContext,
-            String type,
-            String taskName,
-            @Nullable String instanceId,
-            int taskId) {
+    static TraceContext createSyntheticClientContext(@Nullable TraceContext parentContext) {
         if (parentContext == null || parentContext.getTraceParent() == null
                 || parentContext.getTraceParent().isEmpty()) {
             return null;
@@ -454,14 +448,15 @@ final class TracingHelper {
     }
 
     /**
-     * Emits a short-lived Producer span for an event raised from the orchestrator (worker side).
-     * Matches .NET SDK's {@code StartTraceActivityForEventRaisedFromWorker}.
+     * Emits a short-lived Producer span for an event raised from orchestrator (worker) or client.
+     * Matches .NET SDK's {@code StartTraceActivityForEventRaisedFromWorker} and
+     * {@code StartActivityForNewEventRaisedFromClient}.
      *
      * @param eventName         The name of the event being raised.
-     * @param instanceId        The orchestration instance ID sending the event.
+     * @param instanceId        The orchestration instance ID (worker-side), may be {@code null}.
      * @param targetInstanceId  The target orchestration instance ID, may be {@code null}.
      */
-    static void emitEventRaisedFromWorkerSpan(
+    static void emitEventSpan(
             String eventName,
             @Nullable String instanceId,
             @Nullable String targetInstanceId) {
@@ -479,32 +474,6 @@ final class TracingHelper {
             spanBuilder.setAttribute(ATTR_EVENT_TARGET_INSTANCE_ID, targetInstanceId);
         }
 
-        Span span = spanBuilder.startSpan();
-        span.end();
-    }
-
-    /**
-     * Emits a short-lived Producer span for an event raised from the client.
-     * Matches .NET SDK's {@code StartActivityForNewEventRaisedFromClient}.
-     *
-     * @param eventName         The name of the event being raised.
-     * @param targetInstanceId  The target orchestration instance ID.
-     */
-    static void emitEventRaisedFromClientSpan(
-            String eventName,
-            @Nullable String targetInstanceId) {
-        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
-        SpanBuilder spanBuilder = tracer.spanBuilder(
-                TYPE_ORCHESTRATION_EVENT + ":" + eventName)
-                .setSpanKind(SpanKind.PRODUCER)
-                .setAttribute(ATTR_TYPE, TYPE_EVENT)
-                .setAttribute(ATTR_TASK_NAME, eventName);
-
-        if (targetInstanceId != null) {
-            spanBuilder.setAttribute(ATTR_EVENT_TARGET_INSTANCE_ID, targetInstanceId);
-        }
-
-        Span span = spanBuilder.startSpan();
-        span.end();
+        spanBuilder.startSpan().end();
     }
 }
