@@ -561,7 +561,10 @@ final class TaskOrchestrationExecutor {
                         taskScheduled.getParentTraceContext().getTraceParent());
             }
 
-            storeSchedulingMetadata(taskId, taskScheduled.getName(), TracingHelper.TYPE_ACTIVITY, e, clientSpanId);
+            Instant activityScheduledTime = e.hasTimestamp()
+                    ? DataConverter.getInstantFromTimestamp(e.getTimestamp()) : null;
+            storeSchedulingMetadata(taskId, taskScheduled.getName(), TracingHelper.TYPE_ACTIVITY,
+                    activityScheduledTime, clientSpanId);
 
             // The history shows that this orchestrator created a durable task in a previous execution.
             // We can therefore remove it from the map of pending actions. If we can't find the pending
@@ -790,8 +793,13 @@ final class TaskOrchestrationExecutor {
                         subOrchestrationInstanceCreated.getParentTraceContext().getTraceParent());
             }
 
+            // Use the dispatch start time (OrchestratorStartedEvent) instead of the
+            // SubOrchestrationInstanceCreatedEvent timestamp. The created event is a server
+            // confirmation whose timestamp can be AFTER the sub-orchestration's
+            // ExecutionStartedEvent, causing the client span to visually start after the
+            // server span.
             storeSchedulingMetadata(taskId, subOrchestrationInstanceCreated.getName(),
-                    TracingHelper.TYPE_ORCHESTRATION, e, clientSpanId);
+                    TracingHelper.TYPE_ORCHESTRATION, this.getCurrentInstant(), clientSpanId);
 
             OrchestratorAction taskAction = this.pendingActions.remove(taskId);
             if (taskAction == null) {
@@ -1089,9 +1097,7 @@ final class TaskOrchestrationExecutor {
          * Stores scheduling metadata for a task so a retroactive client span can be emitted at completion time.
          */
         private void storeSchedulingMetadata(int taskId, String taskName, String spanType,
-                                              HistoryEvent e, String clientSpanId) {
-            Instant scheduledTime = e.hasTimestamp()
-                    ? DataConverter.getInstantFromTimestamp(e.getTimestamp()) : null;
+                                              Instant scheduledTime, String clientSpanId) {
             TraceContext spanParent = this.orchestrationSpanContext != null
                     ? this.orchestrationSpanContext : this.parentTraceContext;
             this.scheduledTaskInfoMap.put(taskId, new ScheduledTaskInfo(
