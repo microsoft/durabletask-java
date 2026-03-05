@@ -98,8 +98,9 @@ public class EntityQueryPageableTest {
             }
         });
 
-        for (EntityMetadata ignored : pageable) {
-            // consume
+        Iterator<EntityMetadata> iterator = pageable.iterator();
+        while (iterator.hasNext()) {
+            iterator.next();
         }
 
         assertEquals(2, tokensReceived.size());
