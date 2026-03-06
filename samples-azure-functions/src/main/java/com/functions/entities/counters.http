@@ -1,0 +1,22 @@
+@host = http://localhost:7071/api
+@mode = 0
+
+// The counter example shows 3 different entity dispatch modes.
+// The mode query string controls this:
+// mode=0 or mode=entity (default) - dispatch to "counter" entity (TaskEntity<Integer>)
+// mode=1 or mode=state - dispatch to "counter_state" entity (POJO state dispatch)
+// mode=2 or mode=manual - dispatch to "counter_manual" entity (ITaskEntity)
+
+POST {{host}}/counters/1/add/10?mode={{mode}}
+
+###
+
+GET {{host}}/counters/1?mode={{mode}}
+
+###
+
+POST {{host}}/counters/1/reset?mode={{mode}}
+
+###
+
+DELETE {{host}}/counters/1?mode={{mode}}
