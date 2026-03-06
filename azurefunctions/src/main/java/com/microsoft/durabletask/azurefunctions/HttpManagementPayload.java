@@ -13,6 +13,7 @@ public class HttpManagementPayload {
     private final String id;
     private final String purgeHistoryDeleteUri;
     private final String restartPostUri;
+    private final String rewindPostUri;
     private final String sendEventPostUri;
     private final String statusQueryGetUri;
     private final String terminatePostUri;
@@ -33,6 +34,7 @@ public class HttpManagementPayload {
         this.id = instanceId;
         this.purgeHistoryDeleteUri = instanceStatusURL + "?" + requiredQueryStringParameters;
         this.restartPostUri = instanceStatusURL + "/restart?" + requiredQueryStringParameters;
+        this.rewindPostUri = instanceStatusURL + "/rewind?reason={text}&" + requiredQueryStringParameters;
         this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}?" + requiredQueryStringParameters;
         this.statusQueryGetUri = instanceStatusURL + "?" + requiredQueryStringParameters;
         this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
@@ -92,6 +94,15 @@ public class HttpManagementPayload {
      */
     public String getRestartPostUri() {
         return restartPostUri;
+    }
+
+    /**
+     * Gets the HTTP POST instance rewind endpoint.
+     *
+     * @return The HTTP URL for posting instance rewind commands.
+     */
+    public String getRewindPostUri() {
+        return rewindPostUri;
     }
 
 }
