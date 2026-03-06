@@ -119,5 +119,10 @@ public class IntegrationTestBase {
             this.innerBuilder.useVersioning(options);
             return this;
         }
+
+        public TestDurableTaskWorkerBuilder exceptionPropertiesProvider(ExceptionPropertiesProvider provider) {
+            this.innerBuilder.exceptionPropertiesProvider(provider);
+            return this;
+        }
     }
 }

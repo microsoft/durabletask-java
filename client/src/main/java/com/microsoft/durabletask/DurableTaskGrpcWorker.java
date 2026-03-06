@@ -39,6 +39,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final ExceptionPropertiesProvider exceptionPropertiesProvider;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
@@ -70,6 +71,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
+        this.exceptionPropertiesProvider = builder.exceptionPropertiesProvider;
     }
 
     /**
@@ -123,7 +125,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 this.dataConverter,
                 this.maximumTimerInterval,
                 logger,
-                this.versioningOptions);
+                this.versioningOptions,
+                this.exceptionPropertiesProvider);
         TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,
                 this.dataConverter,
@@ -351,11 +354,9 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 activityRequest.getTaskId());
                         } catch (Throwable e) {
                             activityError = e;
-                            failureDetails = TaskFailureDetails.newBuilder()
-                                .setErrorType(e.getClass().getName())
-                                .setErrorMessage(e.getMessage())
-                                .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
-                                .build();
+                            Exception ex = e instanceof Exception ? (Exception) e : new RuntimeException(e);
+                            failureDetails = FailureDetails.fromException(
+                                    ex, this.exceptionPropertiesProvider).toProto();
                         } finally {
                             activityScope.close();
                             TracingHelper.endSpan(activitySpan, activityError);
