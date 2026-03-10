@@ -411,6 +411,69 @@ public class EndToEndTests {
         }
     }
 
+    // ─── Entity tests ───
+
+    /**
+     * Tests callEntity: orchestrator calls counter entity "add" and returns the result.
+     * This is the key scenario for the trigger-binding-path fix where entity responses
+     * arrive as EventRaised with a ResponseMessage JSON wrapper.
+     */
+    @Test
+    public void callEntityTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        Response response = post("/api/StartCallEntityOrchestration?key=call-test-1&value=5");
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(completed, "CallEntityOrchestration should complete");
+
+        Response statusResponse = get(statusQueryGetUri);
+        int output = statusResponse.jsonPath().get("output");
+        assertEquals(5, output, "Counter entity should return the added value");
+    }
+
+    /**
+     * Tests signalEntity + callEntity: orchestrator signals counter entity to "add",
+     * then calls "get" to verify the updated state.
+     */
+    @Test
+    public void signalThenCallEntityTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        Response response = post("/api/StartSignalThenCallEntityOrchestration?key=signal-test-1&value=10");
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(completed, "SignalThenCallEntityOrchestration should complete");
+
+        Response statusResponse = get(statusQueryGetUri);
+        int output = statusResponse.jsonPath().get("output");
+        assertEquals(10, output, "Counter entity should return the signaled value after get");
+    }
+
+    /**
+     * Tests callEntity on a fresh entity: orchestrator calls "get" on a new counter entity,
+     * which should return zero (the initial state).
+     */
+    @Test
+    public void callEntityGetInitialStateTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        Response response = post("/api/StartCallEntityGetOrchestration?key=get-test-" + System.currentTimeMillis());
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(completed, "CallEntityGetOrchestration should complete");
+
+        Response statusResponse = get(statusQueryGetUri);
+        int output = statusResponse.jsonPath().get("output");
+        assertEquals(0, output, "Fresh counter entity should return initial state of 0");
+    }
+
     private boolean pollingCheck(String statusQueryGetUri,
                                  String expectedState,
                                  Set<String> continueStates,
