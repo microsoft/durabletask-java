@@ -2,16 +2,16 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.google.protobuf.ListValue;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.StringValue;
+import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.TaskFailureDetails;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Class that represents the details of a task failure.
@@ -58,7 +58,7 @@ public final class FailureDetails {
              exception.getMessage(),
              getFullStackTrace(exception),
              false,
-             exception.getCause() != null ? fromExceptionRecursive(exception.getCause(), null) : null,
+             fromExceptionRecursive(exception.getCause(), null, 1),
              null);
     }
 
@@ -71,21 +71,7 @@ public final class FailureDetails {
      * @return a new {@code FailureDetails} instance
      */
     static FailureDetails fromException(Exception exception, @Nullable ExceptionPropertiesProvider provider) {
-        Map<String, Object> properties = null;
-        if (provider != null) {
-            try {
-                properties = provider.getExceptionProperties(exception);
-            } catch (Exception ignored) {
-                // Don't let provider errors mask the original failure
-            }
-        }
-        return new FailureDetails(
-                exception.getClass().getName(),
-                exception.getMessage(),
-                getFullStackTrace(exception),
-                false,
-                exception.getCause() != null ? fromExceptionRecursive(exception.getCause(), provider) : null,
-                properties);
+        return fromExceptionRecursive(exception, provider, 0);
     }
 
     FailureDetails(TaskFailureDetails proto) {
@@ -220,11 +206,14 @@ public final class FailureDetails {
         return builder.build();
     }
 
+    private static final int MAX_INNER_FAILURE_DEPTH = 10;
+
     @Nullable
     private static FailureDetails fromExceptionRecursive(
             @Nullable Throwable exception,
-            @Nullable ExceptionPropertiesProvider provider) {
-        if (exception == null) {
+            @Nullable ExceptionPropertiesProvider provider,
+            int depth) {
+        if (exception == null || depth > MAX_INNER_FAILURE_DEPTH) {
             return null;
         }
         Map<String, Object> properties = null;
@@ -240,7 +229,7 @@ public final class FailureDetails {
                 exception.getMessage(),
                 getFullStackTrace(exception),
                 false,
-                exception.getCause() != null ? fromExceptionRecursive(exception.getCause(), provider) : null,
+                fromExceptionRecursive(exception.getCause(), provider, depth + 1),
                 properties);
     }
 
@@ -271,6 +260,18 @@ public final class FailureDetails {
                 return value.getStringValue();
             case BOOL_VALUE:
                 return value.getBoolValue();
+            case LIST_VALUE:
+                List<Object> list = new ArrayList<>();
+                for (Value item : value.getListValue().getValuesList()) {
+                    list.add(convertProtoValue(item));
+                }
+                return list;
+            case STRUCT_VALUE:
+                Map<String, Object> map = new HashMap<>();
+                for (Map.Entry<String, Value> entry : value.getStructValue().getFieldsMap().entrySet()) {
+                    map.put(entry.getKey(), convertProtoValue(entry.getValue()));
+                }
+                return map;
             default:
                 return value.toString();
         }
@@ -284,6 +285,7 @@ public final class FailureDetails {
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     private static Value convertToProtoValue(@Nullable Object obj) {
         if (obj == null) {
             return Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build();
@@ -293,6 +295,18 @@ public final class FailureDetails {
             return Value.newBuilder().setBoolValue((Boolean) obj).build();
         } else if (obj instanceof String) {
             return Value.newBuilder().setStringValue((String) obj).build();
+        } else if (obj instanceof List) {
+            ListValue.Builder listBuilder = ListValue.newBuilder();
+            for (Object item : (List<?>) obj) {
+                listBuilder.addValues(convertToProtoValue(item));
+            }
+            return Value.newBuilder().setListValue(listBuilder).build();
+        } else if (obj instanceof Map) {
+            Struct.Builder structBuilder = Struct.newBuilder();
+            for (Map.Entry<String, Object> entry : ((Map<String, Object>) obj).entrySet()) {
+                structBuilder.putFields(entry.getKey(), convertToProtoValue(entry.getValue()));
+            }
+            return Value.newBuilder().setStructValue(structBuilder).build();
         } else {
             return Value.newBuilder().setStringValue(obj.toString()).build();
         }
