@@ -316,7 +316,6 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     /**
      * Tests that inner exception details are preserved without a provider, and no properties are included.
      */
-    @Disabled("Temporarily disabled to isolate emulator crash")
     @Test
     void innerExceptionDetailsArePreserved() throws TimeoutException {
         final String orchestratorName = "Parent";
