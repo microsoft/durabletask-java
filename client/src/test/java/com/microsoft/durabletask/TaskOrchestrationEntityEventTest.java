@@ -176,6 +176,64 @@ public class TaskOrchestrationEntityEventTest {
                 .build();
     }
 
+    /**
+     * Creates an EventRaised HistoryEvent. This simulates the trigger binding code path
+     * where DTFx.Core delivers entity responses as EventRaised events (not proto entity events).
+     */
+    private HistoryEvent eventRaisedEvent(String name, String input) {
+        return HistoryEvent.newBuilder()
+                .setEventId(-1)
+                .setTimestamp(Timestamp.getDefaultInstance())
+                .setEventRaised(EventRaisedEvent.newBuilder()
+                        .setName(name)
+                        .setInput(StringValue.of(input))
+                        .build())
+                .build();
+    }
+
+    /**
+     * Builds a DTFx ResponseMessage JSON for a successful entity operation.
+     * Matches the format produced by DTFx.Core's TaskEntityDispatcher:
+     * - "result": the serialized operation result
+     * - Error fields ("exceptionType", "failureDetails") are omitted on success (EmitDefaultValue=false)
+     */
+    private String successResponseMessageJson(String result) {
+        // DTFx serializes with Newtonsoft.Json; result is always present.
+        // On success, exceptionType and failureDetails are omitted.
+        if (result == null) {
+            return "{\"result\":null}";
+        }
+        return "{\"result\":" + escapeJsonString(result) + "}";
+    }
+
+    /**
+     * Builds a DTFx ResponseMessage JSON for a failed entity operation.
+     * The C# ResponseMessage property ErrorMessage maps to JSON key "exceptionType"
+     * (due to [DataMember(Name = "exceptionType")]). FailureDetails uses PascalCase fields.
+     */
+    private String failedResponseMessageJson(String errorMessage, String errorType) {
+        return "{\"result\":null,"
+                + "\"exceptionType\":" + escapeJsonString(errorMessage) + ","
+                + "\"failureDetails\":{"
+                + "\"ErrorType\":" + escapeJsonString(errorType) + ","
+                + "\"ErrorMessage\":" + escapeJsonString(errorMessage)
+                + "}}";
+    }
+
+    /**
+     * Builds a DTFx ResponseMessage JSON for a failed entity operation (exceptionType only, no failureDetails).
+     */
+    private String failedResponseMessageJsonSimple(String errorMessage) {
+        return "{\"result\":null,"
+                + "\"exceptionType\":" + escapeJsonString(errorMessage) + "}";
+    }
+
+    private String escapeJsonString(String value) {
+        if (value == null) return "null";
+        // Simple JSON string escaping for test purposes
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
     // endregion
 
     // region signalEntity tests
@@ -491,6 +549,320 @@ public class TaskOrchestrationEntityEventTest {
             }
         }
         assertTrue(hasComplete, "Expected orchestration to complete after catching entity failure");
+    }
+
+    // endregion
+
+    // region callEntity via EventRaised (trigger binding path) tests
+    //
+    // These tests simulate the Azure Functions trigger binding code path where entity
+    // operation responses arrive as EventRaised events containing DTFx ResponseMessage JSON,
+    // rather than proto EntityOperationCompleted/Failed events (gRPC path).
+    //
+    // In the trigger binding path:
+    //   - Past events: EVENTSENT (no-op) instead of ENTITYOPERATIONCALLED
+    //   - New events: EVENTRAISED with ResponseMessage JSON instead of ENTITYOPERATIONCOMPLETED
+
+    @Test
+    void callEntity_completesViaEventRaised_triggerBindingPath() {
+        final String orchestratorName = "CallEntityTriggerPath";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            int value = ctx.callEntity(entityId, "get", null, int.class).await();
+            ctx.complete(value);
+        });
+
+        // First pass: capture the requestId from the generated action
+        List<HistoryEvent> pastEvents1 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+
+        String requestId = null;
+        for (OrchestratorAction action : result1.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
+            }
+        }
+        assertNotNull(requestId, "Should have captured the requestId");
+
+        // Second pass (replay): use EVENTSENT in past (trigger binding records EventSent, not EntityOperationCalled)
+        // and EVENTRAISED with ResponseMessage JSON in new events (not EntityOperationCompleted)
+        executor = createExecutor(orchestratorName, ctx -> {
+            int value = ctx.callEntity(entityId, "get", null, int.class).await();
+            ctx.complete(value);
+        });
+
+        String responseJson = successResponseMessageJson("42");
+        List<HistoryEvent> pastEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"),
+                eventSentEvent(0),  // Trigger binding records EventSent, not EntityOperationCalled
+                orchestratorCompleted());
+        List<HistoryEvent> newEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                eventRaisedEvent(requestId, responseJson),  // ResponseMessage JSON wrapper
+                orchestratorCompleted());
+
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result2.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED, complete.getOrchestrationStatus());
+                assertEquals("42", complete.getResult().getValue());
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete with entity result via EventRaised");
+    }
+
+    @Test
+    void callEntity_stringResultViaEventRaised_triggerBindingPath() {
+        final String orchestratorName = "CallEntityTriggerPathString";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            String value = ctx.callEntity(entityId, "getName", null, String.class).await();
+            ctx.complete(value);
+        });
+
+        // First pass: capture requestId
+        List<HistoryEvent> pastEvents1 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+
+        String requestId = null;
+        for (OrchestratorAction action : result1.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
+            }
+        }
+        assertNotNull(requestId);
+
+        // Second pass: replay with EventRaised containing a JSON-serialized string result
+        executor = createExecutor(orchestratorName, ctx -> {
+            String value = ctx.callEntity(entityId, "getName", null, String.class).await();
+            ctx.complete(value);
+        });
+
+        // DTFx serializes string results as JSON strings: "\"hello\""
+        String responseJson = successResponseMessageJson("\"hello\"");
+        List<HistoryEvent> pastEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"),
+                eventSentEvent(0),
+                orchestratorCompleted());
+        List<HistoryEvent> newEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                eventRaisedEvent(requestId, responseJson),
+                orchestratorCompleted());
+
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result2.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED, complete.getOrchestrationStatus());
+                assertEquals("\"hello\"", complete.getResult().getValue());
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete with string entity result via EventRaised");
+    }
+
+    @Test
+    void callEntity_nullResultViaEventRaised_triggerBindingPath() {
+        final String orchestratorName = "CallEntityTriggerPathNull";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            // Void operation — result is null
+            Void value = ctx.callEntity(entityId, "reset", null, Void.class).await();
+            ctx.complete("done");
+        });
+
+        // First pass: capture requestId
+        List<HistoryEvent> pastEvents1 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+
+        String requestId = null;
+        for (OrchestratorAction action : result1.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
+            }
+        }
+        assertNotNull(requestId);
+
+        // Second pass: replay with null result in ResponseMessage
+        executor = createExecutor(orchestratorName, ctx -> {
+            Void value = ctx.callEntity(entityId, "reset", null, Void.class).await();
+            ctx.complete("done");
+        });
+
+        String responseJson = successResponseMessageJson(null);
+        List<HistoryEvent> pastEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"),
+                eventSentEvent(0),
+                orchestratorCompleted());
+        List<HistoryEvent> newEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                eventRaisedEvent(requestId, responseJson),
+                orchestratorCompleted());
+
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result2.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED, complete.getOrchestrationStatus());
+                assertEquals("\"done\"", complete.getResult().getValue());
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete after void entity call via EventRaised");
+    }
+
+    @Test
+    void callEntity_failedViaEventRaised_withFailureDetails_triggerBindingPath() {
+        final String orchestratorName = "CallEntityTriggerPathFail";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            try {
+                ctx.callEntity(entityId, "get", null, int.class).await();
+                ctx.complete("should not reach here");
+            } catch (EntityOperationFailedException e) {
+                ctx.complete("caught: " + e.getFailureDetails().getErrorMessage());
+            }
+        });
+
+        // First pass: capture requestId
+        List<HistoryEvent> pastEvents1 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+
+        String requestId = null;
+        for (OrchestratorAction action : result1.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
+            }
+        }
+        assertNotNull(requestId);
+
+        // Second pass: replay with failed ResponseMessage via EventRaised
+        executor = createExecutor(orchestratorName, ctx -> {
+            try {
+                ctx.callEntity(entityId, "get", null, int.class).await();
+                ctx.complete("should not reach here");
+            } catch (EntityOperationFailedException e) {
+                ctx.complete("caught: " + e.getFailureDetails().getErrorMessage());
+            }
+        });
+
+        String responseJson = failedResponseMessageJson("Entity error!", "java.lang.RuntimeException");
+        List<HistoryEvent> pastEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"),
+                eventSentEvent(0),
+                orchestratorCompleted());
+        List<HistoryEvent> newEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                eventRaisedEvent(requestId, responseJson),
+                orchestratorCompleted());
+
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result2.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED, complete.getOrchestrationStatus());
+                assertTrue(complete.getResult().getValue().contains("Entity error!"),
+                        "Expected result to contain the error message");
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete after catching entity failure via EventRaised");
+    }
+
+    @Test
+    void callEntity_failedViaEventRaised_simpleError_triggerBindingPath() {
+        final String orchestratorName = "CallEntityTriggerPathFailSimple";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            try {
+                ctx.callEntity(entityId, "get", null, int.class).await();
+                ctx.complete("should not reach here");
+            } catch (EntityOperationFailedException e) {
+                ctx.complete("caught: " + e.getFailureDetails().getErrorMessage());
+            }
+        });
+
+        // First pass: capture requestId
+        List<HistoryEvent> pastEvents1 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+
+        String requestId = null;
+        for (OrchestratorAction action : result1.getActions()) {
+            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
+            }
+        }
+        assertNotNull(requestId);
+
+        // Second pass: replay with simple error (exceptionType only, no failureDetails)
+        executor = createExecutor(orchestratorName, ctx -> {
+            try {
+                ctx.callEntity(entityId, "get", null, int.class).await();
+                ctx.complete("should not reach here");
+            } catch (EntityOperationFailedException e) {
+                ctx.complete("caught: " + e.getFailureDetails().getErrorMessage());
+            }
+        });
+
+        String responseJson = failedResponseMessageJsonSimple("Simple error occurred");
+        List<HistoryEvent> pastEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"),
+                eventSentEvent(0),
+                orchestratorCompleted());
+        List<HistoryEvent> newEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                eventRaisedEvent(requestId, responseJson),
+                orchestratorCompleted());
+
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result2.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED, complete.getOrchestrationStatus());
+                assertTrue(complete.getResult().getValue().contains("Simple error occurred"),
+                        "Expected result to contain the simple error message");
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete after catching simple entity failure via EventRaised");
     }
 
     // endregion

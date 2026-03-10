@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
@@ -26,6 +28,8 @@ import java.util.logging.Logger;
 final class TaskOrchestrationExecutor {
 
     private static final String EMPTY_STRING = "";
+    // ObjectMapper for parsing DTFx entity ResponseMessage JSON wrappers in the trigger binding code path
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
@@ -846,11 +850,123 @@ final class TaskOrchestrationExecutor {
             }
             String rawResult = eventRaised.getInput().getValue();
             CompletableTask task = matchingTaskRecord.getTask();
+
+            // In the Azure Functions trigger binding code path, entity operation responses arrive as
+            // standard EventRaised events (not EntityOperationCompleted proto events). DTFx wraps entity
+            // responses in a ResponseMessage JSON format: {"result":"<value>","errorMessage":...,"failureDetails":...}
+            // We detect entity call responses by checking if the task record has an associated entityId.
+            if (matchingTaskRecord.getEntityId() != null) {
+                this.handleEntityResponseFromEventRaised(matchingTaskRecord, rawResult);
+            } else {
+                try {
+                    Object result = this.dataConverter.deserialize(
+                            rawResult,
+                            matchingTaskRecord.getDataType());
+                    task.complete(result);
+                } catch (Exception ex) {
+                    task.completeExceptionally(ex);
+                }
+            }
+        }
+
+        /**
+         * Handles an entity operation response that arrived as an EventRaised event (trigger binding path).
+         * <p>
+         * In the trigger binding code path used by Azure Functions, DTFx.Core wraps entity responses
+         * in a ResponseMessage JSON format rather than using proto EntityOperationCompleted events.
+         * This method parses the ResponseMessage wrapper and extracts the actual operation result.
+         * <p>
+         * The DTFx ResponseMessage class (DurableTask.Core.Entities.EventFormat.ResponseMessage) serializes as:
+         * <ul>
+         *   <li>{@code "result"} — the serialized operation result (always present, may be null)</li>
+         *   <li>{@code "exceptionType"} — the error message string (misleading name: the C# property is
+         *       {@code ErrorMessage} but its {@code [DataMember(Name = "exceptionType")]} annotation overrides
+         *       the JSON key). Omitted when null (EmitDefaultValue=false).</li>
+         *   <li>{@code "failureDetails"} — a FailureDetails object with PascalCase fields
+         *       ({@code ErrorType}, {@code ErrorMessage}, {@code StackTrace}, etc.).
+         *       Omitted when null (EmitDefaultValue=false).</li>
+         * </ul>
+         *
+         * @param matchingTaskRecord the task record for the entity call
+         * @param rawResult the raw JSON string from the EventRaised event
+         */
+        @SuppressWarnings("unchecked")
+        private void handleEntityResponseFromEventRaised(TaskRecord<?> matchingTaskRecord, String rawResult) {
+            CompletableTask task = matchingTaskRecord.getTask();
             try {
-                Object result = this.dataConverter.deserialize(
-                        rawResult,
-                        matchingTaskRecord.getDataType());
-                task.complete(result);
+                // Parse the ResponseMessage JSON wrapper from DTFx
+                JsonNode responseNode = JSON_MAPPER.readTree(rawResult);
+
+                if (responseNode == null || !responseNode.isObject() || !responseNode.has("result")) {
+                    // Not a recognized ResponseMessage format — fall back to direct deserialization.
+                    // This handles the case where the extension may send raw results in the future.
+                    Object result = this.dataConverter.deserialize(rawResult, matchingTaskRecord.getDataType());
+                    task.complete(result);
+                    return;
+                }
+
+                // Check for error in the response.
+                // DTFx ResponseMessage uses "exceptionType" as the JSON key for the ErrorMessage property
+                // (due to [DataMember(Name = "exceptionType")]). These fields are omitted when null.
+                JsonNode exceptionTypeNode = responseNode.get("exceptionType");
+                JsonNode failureDetailsNode = responseNode.get("failureDetails");
+                boolean hasExceptionType = exceptionTypeNode != null && !exceptionTypeNode.isNull();
+                boolean hasFailureDetails = failureDetailsNode != null && !failureDetailsNode.isNull();
+
+                if (hasExceptionType || hasFailureDetails) {
+                    // Entity operation failed — extract error info and complete exceptionally.
+                    // The "exceptionType" JSON field actually contains the error message (misleading name).
+                    String errorMessage = hasExceptionType
+                            ? exceptionTypeNode.asText() : "Entity operation failed";
+                    String errorType = "unknown";
+
+                    if (hasFailureDetails) {
+                        // FailureDetails has PascalCase JSON fields: ErrorType, ErrorMessage, StackTrace, etc.
+                        JsonNode errorTypeNode = failureDetailsNode.get("ErrorType");
+                        if (errorTypeNode != null && !errorTypeNode.isNull()) {
+                            errorType = errorTypeNode.asText();
+                        }
+                        JsonNode detailErrorMsgNode = failureDetailsNode.get("ErrorMessage");
+                        if (detailErrorMsgNode != null && !detailErrorMsgNode.isNull()) {
+                            errorMessage = detailErrorMsgNode.asText();
+                        }
+                    }
+
+                    if (!this.isReplaying) {
+                        final String logErrorType = errorType;
+                        final String logErrorMessage = errorMessage;
+                        this.logger.warning(() -> String.format(
+                                "%s: Entity operation on '%s' failed: [%s] %s",
+                                this.instanceId,
+                                matchingTaskRecord.getEntityId(),
+                                logErrorType,
+                                logErrorMessage));
+                    }
+
+                    FailureDetails details = new FailureDetails(errorType, errorMessage, null, false);
+                    task.completeExceptionally(new EntityOperationFailedException(
+                            matchingTaskRecord.getEntityId(),
+                            matchingTaskRecord.getTaskName(),
+                            details));
+                } else {
+                    // Success — extract the inner result value
+                    JsonNode resultNode = responseNode.get("result");
+                    String innerResult = (resultNode == null || resultNode.isNull()) ? null : resultNode.asText();
+
+                    if (!this.isReplaying) {
+                        this.logger.fine(() -> String.format(
+                                "%s: Entity operation on '%s' completed via EventRaised with result: %s",
+                                this.instanceId,
+                                matchingTaskRecord.getEntityId(),
+                                innerResult != null ? innerResult : "(null)"));
+                    }
+
+                    Object result = this.dataConverter.deserialize(innerResult, matchingTaskRecord.getDataType());
+                    task.complete(result);
+                }
+            } catch (EntityOperationFailedException ex) {
+                // Re-throw entity failures (already handled above via completeExceptionally)
+                task.completeExceptionally(ex);
             } catch (Exception ex) {
                 task.completeExceptionally(ex);
             }
