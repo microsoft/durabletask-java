@@ -316,6 +316,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     /**
      * Tests that inner exception details are preserved without a provider, and no properties are included.
      */
+    @Disabled("Emulator (dts-emulator) does not yet support nested innerFailure in TaskFailureDetails")
     @Test
     void innerExceptionDetailsArePreserved() throws TimeoutException {
         final String orchestratorName = "Parent";
@@ -387,7 +388,6 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
      * Tests that a registered {@link ExceptionPropertiesProvider} extracts custom properties
      * from an activity exception into {@link FailureDetails#getProperties()}.
      */
-    @Disabled("Temporarily disabled to isolate emulator crash")
     @Test
     void customExceptionPropertiesInFailureDetails() throws TimeoutException {
         final String orchestratorName = "OrchestrationWithCustomException";
@@ -496,7 +496,6 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     /**
      * Tests that custom properties survive through a parent -> sub-orchestration -> activity chain.
      */
-    @Disabled("Temporarily disabled to isolate emulator crash")
     @Test
     void nestedOrchestrationExceptionPropertiesPreserved() throws TimeoutException {
         final String parentOrchName = "ParentOrch";
