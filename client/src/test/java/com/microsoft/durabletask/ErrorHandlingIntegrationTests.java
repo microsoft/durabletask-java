@@ -454,7 +454,6 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     /**
      * Tests that properties from a directly-thrown orchestration exception are on the top-level failure.
      */
-    @Disabled("Temporarily disabled to isolate emulator crash")
     @Test
     void orchestrationDirectExceptionWithProperties() throws TimeoutException {
         final String orchestratorName = "OrchestrationWithDirectException";
