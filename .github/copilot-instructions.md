@@ -116,7 +116,7 @@ definitions.
 ## Testing Approach
 
 - **Unit tests:** JUnit-based, in `client/src/test/`
-- **Integration tests:** Run against DTS emulator, in `client/src/test/` (integrationTest source set)
+- **Integration tests:** JUnit tests in `client/src/test/` that run against the DTS emulator via the dedicated Gradle `integrationTest` task (uses JUnit tags to select tests)
 - **End-to-end tests:** Run against Azure Functions host, in `endtoendtests/`
 - **Static analysis:** SpotBugs for bug detection
 

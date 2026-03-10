@@ -49,7 +49,7 @@ jobs:
 
       - name: 🐳 Start DTS Emulator
         run: |
-          docker run --name dts-emulator -d --rm -p 4001:8080 \
+          docker run --name durabletask-emulator -d --rm -p 4001:8080 \
             mcr.microsoft.com/dts/dts-emulator:latest
 
           echo "Waiting for emulator to be ready..."
@@ -130,4 +130,4 @@ jobs:
 
       - name: 🧹 Stop DTS Emulator
         if: always()
-        run: docker stop dts-emulator 2>/dev/null || true
+        run: docker stop durabletask-emulator 2>/dev/null || true

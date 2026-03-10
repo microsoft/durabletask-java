@@ -134,6 +134,11 @@ Create a single Java file that resembles a **minimal real application**:
 - Add comments explaining the customer scenario and why this workflow previously failed.
 - Keep it minimal — only the code needed to reproduce the scenario.
 - The sample must be compilable with `./gradlew build`.
+- Every generated Java file must include the standard Microsoft MIT license header at the top:
+  ```java
+  // Copyright (c) Microsoft Corporation.
+  // Licensed under the MIT License.
+  ```
 
 ### Example Skeleton
 
