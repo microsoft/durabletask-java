@@ -143,7 +143,10 @@ public final class FailureDetails {
      */
     @Nullable
     public Map<String, Object> getProperties() {
-        return this.properties;
+        if (this.properties == null) {
+            return null;
+        }
+        return Collections.unmodifiableMap(this.properties);
     }
 
     /**

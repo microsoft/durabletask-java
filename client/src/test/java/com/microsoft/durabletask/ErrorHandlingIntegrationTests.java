@@ -388,6 +388,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
      * Tests that a registered {@link ExceptionPropertiesProvider} extracts custom properties
      * from an activity exception into {@link FailureDetails#getProperties()}.
      */
+    @Disabled("Emulator (dts-emulator) does not yet support properties in activity-level TaskFailureDetails")
     @Test
     void customExceptionPropertiesInFailureDetails() throws TimeoutException {
         final String orchestratorName = "OrchestrationWithCustomException";
@@ -496,7 +497,7 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
     /**
      * Tests that custom properties survive through a parent -> sub-orchestration -> activity chain.
      */
-    @Disabled("Investigating emulator compatibility")
+    @Disabled("Emulator (dts-emulator) does not yet support properties in activity-level TaskFailureDetails")
     @Test
     void nestedOrchestrationExceptionPropertiesPreserved() throws TimeoutException {
         final String parentOrchName = "ParentOrch";

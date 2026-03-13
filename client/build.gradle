@@ -94,9 +94,7 @@ protobuf {
     }
     generateProtoTasks {
         all()*.plugins { grpc {} }
-        if (project.gradle.startParameter.taskNames.any { it.contains('downloadProtoFiles') }) {
-            all()*.dependsOn downloadProtoFiles
-        }
+        all()*.dependsOn downloadProtoFiles
     }
 }
 
