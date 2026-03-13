@@ -4,6 +4,8 @@ package com.microsoft.durabletask;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
@@ -64,7 +66,11 @@ final class TaskOrchestrationExecutor {
             while (context.processNextEvent()) { /* no method body */ }
             completed = true;
         } catch (OrchestratorBlockedException orchestratorBlockedException) {
-            logger.fine("The orchestrator has yielded and will await for new events.");
+            logger.info(String.format(
+                    "%s: Orchestrator yielded. Waiting for events. Outstanding event keys: %s, Pending actions: %d",
+                    context.instanceId,
+                    context.outstandingEvents.keySet(),
+                    context.pendingActions.size()));
         } catch (ContinueAsNewInterruption continueAsNewInterruption) {
             logger.fine("The orchestrator has continued as new.");
             context.complete(null);
@@ -376,22 +382,31 @@ final class TaskOrchestrationExecutor {
             String requestId = this.newUUID().toString();
             String serializedInput = this.dataConverter.serialize(input);
 
-            EntityOperationSignaledEvent.Builder signalBuilder = EntityOperationSignaledEvent.newBuilder()
-                    .setRequestId(requestId)
-                    .setOperation(operationName)
-                    .setTargetInstanceId(StringValue.of(entityId.toString()));
+            // Build DTFx RequestMessage JSON payload matching the legacy format that the
+            // Azure Functions extension (DTFx backend) understands. The extension processes
+            // entity messages as external events (SendEventAction), NOT the newer proto-native
+            // SendEntityMessageAction which is designed for the DTS backend.
+            ObjectNode requestMessage = JSON_MAPPER.createObjectNode();
+            requestMessage.put("op", operationName);
+            requestMessage.put("signal", true);
             if (serializedInput != null) {
-                signalBuilder.setInput(StringValue.of(serializedInput));
+                requestMessage.put("input", serializedInput);
             }
+            requestMessage.put("id", requestId);
+            String eventName = "op";
             if (options != null && options.getScheduledTime() != null) {
-                signalBuilder.setScheduledTime(DataConverter.getTimestampFromInstant(options.getScheduledTime()));
+                String scheduledTimeStr = options.getScheduledTime().toString();
+                requestMessage.put("due", scheduledTimeStr);
+                eventName = "op@" + scheduledTimeStr;
             }
 
             this.pendingActions.put(id, OrchestratorAction.newBuilder()
                     .setId(id)
-                    .setSendEntityMessage(SendEntityMessageAction.newBuilder()
-                            .setEntityOperationSignaled(signalBuilder)
-                            .build())
+                    .setSendEvent(SendEventAction.newBuilder()
+                            .setInstance(OrchestrationInstance.newBuilder()
+                                    .setInstanceId(entityId.toString()))
+                            .setName(eventName)
+                            .setData(StringValue.of(requestMessage.toString())))
                     .build());
 
             if (!this.isReplaying) {
@@ -429,27 +444,31 @@ final class TaskOrchestrationExecutor {
             String requestId = this.newUUID().toString();
             String serializedInput = this.dataConverter.serialize(input);
 
-            EntityOperationCalledEvent.Builder callBuilder = EntityOperationCalledEvent.newBuilder()
-                    .setRequestId(requestId)
-                    .setOperation(operationName)
-                    .setTargetInstanceId(StringValue.of(entityId.toString()))
-                    .setParentInstanceId(StringValue.of(this.instanceId));
-            if (this.executionId != null) {
-                callBuilder.setParentExecutionId(StringValue.of(this.executionId));
-            }
+            // Build DTFx RequestMessage JSON for entity call (two-way operation).
+            // Uses SendEventAction (external event) instead of SendEntityMessageAction for
+            // compatibility with the Azure Functions extension (DTFx backend).
+            ObjectNode requestMessage = JSON_MAPPER.createObjectNode();
+            requestMessage.put("op", operationName);
             if (serializedInput != null) {
-                callBuilder.setInput(StringValue.of(serializedInput));
+                requestMessage.put("input", serializedInput);
+            }
+            requestMessage.put("id", requestId);
+            requestMessage.put("parent", this.instanceId);
+            if (this.executionId != null) {
+                requestMessage.put("parentExecution", this.executionId);
             }
 
             this.pendingActions.put(id, OrchestratorAction.newBuilder()
                     .setId(id)
-                    .setSendEntityMessage(SendEntityMessageAction.newBuilder()
-                            .setEntityOperationCalled(callBuilder)
-                            .build())
+                    .setSendEvent(SendEventAction.newBuilder()
+                            .setInstance(OrchestrationInstance.newBuilder()
+                                    .setInstanceId(entityId.toString()))
+                            .setName("op")
+                            .setData(StringValue.of(requestMessage.toString())))
                     .build());
 
             if (!this.isReplaying) {
-                this.logger.fine(() -> String.format(
+                this.logger.info(() -> String.format(
                         "%s: calling entity '%s' operation '%s' (#%d) requestId=%s",
                         this.instanceId,
                         entityId,
@@ -520,20 +539,32 @@ final class TaskOrchestrationExecutor {
                 lockSet.add(eid.toString());
             }
 
-            // Send a lock request for each entity in sorted order
-            for (int position = 0; position < sortedIds.size(); position++) {
+            // Send a lock request to the FIRST entity in the sorted lock set.
+            // DTFx entity infrastructure handles chaining the lock acquisition
+            // through subsequent entities in the lock set.
+            {
                 int id = this.sequenceNumber++;
-                EntityLockRequestedEvent.Builder lockBuilder = EntityLockRequestedEvent.newBuilder()
-                        .setCriticalSectionId(criticalSectionId)
-                        .addAllLockSet(lockSet)
-                        .setPosition(position)
-                        .setParentInstanceId(StringValue.of(this.instanceId));
+                ObjectNode lockRequestMessage = JSON_MAPPER.createObjectNode();
+                lockRequestMessage.putNull("op");
+                lockRequestMessage.put("id", criticalSectionId);
+                ArrayNode lockSetArray = lockRequestMessage.putArray("lockset");
+                for (EntityInstanceId eid : sortedIds) {
+                    ObjectNode entityIdNode = JSON_MAPPER.createObjectNode();
+                    entityIdNode.put("name", eid.getName());
+                    entityIdNode.put("key", eid.getKey());
+                    lockSetArray.add(entityIdNode);
+                }
+                lockRequestMessage.put("pos", 0);
+                lockRequestMessage.put("parent", this.instanceId);
 
+                String targetEntityId = lockSet.get(0);
                 this.pendingActions.put(id, OrchestratorAction.newBuilder()
                         .setId(id)
-                        .setSendEntityMessage(SendEntityMessageAction.newBuilder()
-                                .setEntityLockRequested(lockBuilder)
-                                .build())
+                        .setSendEvent(SendEventAction.newBuilder()
+                                .setInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId(targetEntityId))
+                                .setName("op")
+                                .setData(StringValue.of(lockRequestMessage.toString())))
                         .build());
             }
 
@@ -561,16 +592,18 @@ final class TaskOrchestrationExecutor {
                 // Release all locks
                 for (EntityInstanceId lockedEntity : sortedIds) {
                     int unlockId = this.sequenceNumber++;
-                    EntityUnlockSentEvent.Builder unlockBuilder = EntityUnlockSentEvent.newBuilder()
-                            .setCriticalSectionId(criticalSectionId)
-                            .setParentInstanceId(StringValue.of(this.instanceId))
-                            .setTargetInstanceId(StringValue.of(lockedEntity.toString()));
+                    // Build DTFx ReleaseMessage JSON for releasing entity locks
+                    ObjectNode releaseMessage = JSON_MAPPER.createObjectNode();
+                    releaseMessage.put("parent", this.instanceId);
+                    releaseMessage.put("id", criticalSectionId);
 
                     this.pendingActions.put(unlockId, OrchestratorAction.newBuilder()
                             .setId(unlockId)
-                            .setSendEntityMessage(SendEntityMessageAction.newBuilder()
-                                    .setEntityUnlockSent(unlockBuilder)
-                                    .build())
+                            .setSendEvent(SendEventAction.newBuilder()
+                                    .setInstance(OrchestrationInstance.newBuilder()
+                                            .setInstanceId(lockedEntity.toString()))
+                                    .setName("release")
+                                    .setData(StringValue.of(releaseMessage.toString())))
                             .build());
                 }
 
@@ -839,6 +872,13 @@ final class TaskOrchestrationExecutor {
             Queue<TaskRecord<?>> outstandingEventQueue = this.outstandingEvents.get(eventName);
             if (outstandingEventQueue == null) {
                 // No code is waiting for this event. Buffer it in case user-code waits for it later.
+                if (!this.isReplaying) {
+                    this.logger.info(() -> String.format(
+                            "%s: Received EventRaised '%s' but no outstanding waiter found. Buffering as unprocessed. Raw input: %s",
+                            this.instanceId,
+                            eventName,
+                            eventRaised.getInput().getValue()));
+                }
                 this.unprocessedEvents.add(e);
                 return;
             }
@@ -856,6 +896,14 @@ final class TaskOrchestrationExecutor {
             // responses in a ResponseMessage JSON format: {"result":"<value>","errorMessage":...,"failureDetails":...}
             // We detect entity call responses by checking if the task record has an associated entityId.
             if (matchingTaskRecord.getEntityId() != null) {
+                if (!this.isReplaying) {
+                    this.logger.info(() -> String.format(
+                            "%s: Routing EventRaised '%s' to entity response handler for entity '%s'. Raw result: %s",
+                            this.instanceId,
+                            eventName,
+                            matchingTaskRecord.getEntityId(),
+                            rawResult != null ? rawResult : "(null)"));
+                }
                 this.handleEntityResponseFromEventRaised(matchingTaskRecord, rawResult);
             } else {
                 try {
@@ -954,7 +1002,7 @@ final class TaskOrchestrationExecutor {
                     String innerResult = (resultNode == null || resultNode.isNull()) ? null : resultNode.asText();
 
                     if (!this.isReplaying) {
-                        this.logger.fine(() -> String.format(
+                        this.logger.info(() -> String.format(
                                 "%s: Entity operation on '%s' completed via EventRaised with result: %s",
                                 this.instanceId,
                                 matchingTaskRecord.getEntityId(),
@@ -970,6 +1018,14 @@ final class TaskOrchestrationExecutor {
             } catch (Exception ex) {
                 task.completeExceptionally(ex);
             }
+        }
+
+        private void handleEventSent(HistoryEvent e) {
+            // During replay, remove the pending action so we don't re-send already-processed
+            // events. This applies to entity operations (signal, call, lock, unlock) which
+            // now use SendEventAction, as well as regular sendEvent calls.
+            int taskId = e.getEventId();
+            this.pendingActions.remove(taskId);
         }
 
         // region Entity event handlers (Phase 4)
@@ -1003,7 +1059,7 @@ final class TaskOrchestrationExecutor {
 
             Queue<TaskRecord<?>> outstandingQueue = this.outstandingEvents.get(requestId);
             if (outstandingQueue == null) {
-                this.logger.warning("Discarding entity operation completed event with requestId=" + requestId + ": no waiter found");
+                this.logger.warning("Discarding entity operation completed event with requestId=" + requestId + ": no waiter found. Outstanding event keys: " + this.outstandingEvents.keySet());
                 return;
             }
 
@@ -1015,7 +1071,7 @@ final class TaskOrchestrationExecutor {
             String rawResult = completedEvent.hasOutput() ? completedEvent.getOutput().getValue() : null;
 
             if (!this.isReplaying) {
-                this.logger.fine(() -> String.format(
+                this.logger.info(() -> String.format(
                         "%s: Entity operation completed for requestId=%s with output: %s",
                         this.instanceId,
                         requestId,
@@ -1049,7 +1105,7 @@ final class TaskOrchestrationExecutor {
             FailureDetails details = new FailureDetails(failedEvent.getFailureDetails());
 
             if (!this.isReplaying) {
-                this.logger.fine(() -> String.format(
+                this.logger.info(() -> String.format(
                         "%s: Entity operation failed for requestId=%s: %s",
                         this.instanceId,
                         requestId,
@@ -1370,6 +1426,13 @@ final class TaskOrchestrationExecutor {
         }
 
         private void processEvent(HistoryEvent e) {
+            if (!this.isReplaying) {
+                this.logger.info(() -> String.format(
+                        "%s: Processing new event: %s (eventId=%d)",
+                        this.instanceId,
+                        e.getEventTypeCase(),
+                        e.getEventId()));
+            }
             boolean overrideSuspension = e.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONRESUMED || e.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONTERMINATED;
             if (this.isSuspended && !overrideSuspension) {
                 this.handleEventWhileSuspended(e);
@@ -1441,7 +1504,7 @@ final class TaskOrchestrationExecutor {
                         this.handleSubOrchestrationFailed(e);
                         break;
                     case EVENTSENT:
-                        // No action needed — sendEvent is fire-and-forget with no replay validation
+                        this.handleEventSent(e);
                         break;
                     case EVENTRAISED:
                         this.handleEventRaised(e);

@@ -72,6 +72,67 @@ public class EntityFunctions {
         return ctx.callEntity(entityId, "get", null, Integer.class).await();
     }
 
+    /**
+     * Comprehensive orchestration that exercises signal, call, and reset on a counter entity.
+     * Steps: signal add(5) -> call get (expect 5) -> signal add(10) -> call get (expect 15)
+     *        -> signal reset -> call get (expect 0).
+     * Returns a summary string with pass/fail.
+     */
+    @FunctionName("ComprehensiveEntityOrchestration")
+    public String comprehensiveEntityOrchestration(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+        String entityKey = ctx.getInput(String.class);
+        EntityInstanceId counterId = new EntityInstanceId("counter", entityKey);
+        StringBuilder result = new StringBuilder();
+
+        // Test 1: signalEntity (fire-and-forget) — add 5
+        ctx.signalEntity(counterId, "add", 5);
+        result.append("Step 1: Signaled add(5)\n");
+
+        // Test 2: callEntity (request-response) — get current value, should be 5
+        int valueAfterAdd5 = ctx.callEntity(counterId, "get", null, Integer.class).await();
+        result.append("Step 2: callEntity get() returned ").append(valueAfterAdd5).append("\n");
+
+        // Test 3: signalEntity — add 10
+        ctx.signalEntity(counterId, "add", 10);
+        result.append("Step 3: Signaled add(10)\n");
+
+        // Test 4: callEntity — get current value, should be 15
+        int valueAfterAdd10 = ctx.callEntity(counterId, "get", null, Integer.class).await();
+        result.append("Step 4: callEntity get() returned ").append(valueAfterAdd10).append("\n");
+
+        // Test 5: signalEntity — reset
+        ctx.signalEntity(counterId, "reset");
+        result.append("Step 5: Signaled reset()\n");
+
+        // Test 6: callEntity — get current value, should be 0
+        int valueAfterReset = ctx.callEntity(counterId, "get", null, Integer.class).await();
+        result.append("Step 6: callEntity get() returned ").append(valueAfterReset).append("\n");
+
+        // Summary
+        boolean passed = (valueAfterAdd5 == 5) && (valueAfterAdd10 == 15) && (valueAfterReset == 0);
+        result.append("\nAll tests passed: ").append(passed);
+        return result.toString();
+    }
+
+    /**
+     * Orchestration that calls "add" twice with different values to produce a result
+     * that differs from either individual input (proving the entity accumulates state).
+     * Input: JSON with entityKey and addValue fields. Calls add(addValue) then add(addValue + 2).
+     * Returns the final result.
+     */
+    @FunctionName("CallEntityTwiceOrchestration")
+    public int callEntityTwiceOrchestration(
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+        EntityPayload input = ctx.getInput(EntityPayload.class);
+        EntityInstanceId entityId = new EntityInstanceId("counter", input.entityKey);
+        // First add
+        ctx.callEntity(entityId, "add", input.addValue, Integer.class).await();
+        // Second add with a different value
+        int secondValue = input.addValue + 2;
+        return ctx.callEntity(entityId, "add", secondValue, Integer.class).await();
+    }
+
     // ─── HTTP triggers ───
 
     /**
@@ -127,6 +188,76 @@ public class EntityFunctions {
         String instanceId = client.scheduleNewOrchestrationInstance("CallEntityGetOrchestration", key);
         context.getLogger().info("Started CallEntityGetOrchestration: " + instanceId);
         return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    /**
+     * POST /api/StartComprehensiveEntityOrchestration?key={key}
+     */
+    @FunctionName("StartComprehensiveEntityOrchestration")
+    public HttpResponseMessage startComprehensiveEntityOrchestration(
+            @HttpTrigger(name = "req", methods = {HttpMethod.POST},
+                    authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        String key = request.getQueryParameters().getOrDefault("key", "e2e-comprehensive-" + System.currentTimeMillis());
+
+        DurableTaskClient client = durableContext.getClient();
+        String instanceId = client.scheduleNewOrchestrationInstance("ComprehensiveEntityOrchestration", key);
+        context.getLogger().info("Started ComprehensiveEntityOrchestration: " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    /**
+     * POST /api/StartCallEntityTwiceOrchestration?key={key}&value={value}
+     */
+    @FunctionName("StartCallEntityTwiceOrchestration")
+    public HttpResponseMessage startCallEntityTwiceOrchestration(
+            @HttpTrigger(name = "req", methods = {HttpMethod.POST},
+                    authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        String key = request.getQueryParameters().getOrDefault("key", "e2e-twice-" + System.currentTimeMillis());
+        int value = Integer.parseInt(request.getQueryParameters().getOrDefault("value", "3"));
+
+        DurableTaskClient client = durableContext.getClient();
+        EntityPayload payload = new EntityPayload(key, value);
+        String instanceId = client.scheduleNewOrchestrationInstance("CallEntityTwiceOrchestration", payload);
+        context.getLogger().info("Started CallEntityTwiceOrchestration: " + instanceId);
+        return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    /**
+     * GET /api/GetEntityState?name={name}&key={key}
+     * Returns the entity's current state as a JSON integer.
+     */
+    @FunctionName("GetEntityState")
+    public HttpResponseMessage getEntityState(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET},
+                    authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
+            @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
+            final ExecutionContext context) {
+        String name = request.getQueryParameters().get("name");
+        String key = request.getQueryParameters().get("key");
+        if (name == null || key == null) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
+                    .body("Missing 'name' or 'key' query parameter")
+                    .build();
+        }
+
+        EntityInstanceId entityId = new EntityInstanceId(name, key);
+        EntityMetadata metadata = durableContext.getEntityMetadata(entityId, true);
+        if (metadata == null) {
+            return request.createResponseBuilder(HttpStatus.NOT_FOUND)
+                    .body("Entity not found: " + name + "/" + key)
+                    .build();
+        }
+
+        String serializedState = metadata.getSerializedState();
+        context.getLogger().info("Entity " + name + "/" + key + " state: " + serializedState);
+        return request.createResponseBuilder(HttpStatus.OK)
+                .header("Content-Type", "application/json")
+                .body(serializedState)
+                .build();
     }
 
     // ─── Helpers ───
