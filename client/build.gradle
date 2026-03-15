@@ -19,10 +19,22 @@ def jacksonVersion = '2.18.3'
 def openTelemetryVersion = '1.58.0'
 def azureCoreVersion = '1.57.1'
 def azureIdentityVersion = '1.18.1'
-// When build on local, you need to set this value to your local jdk11 directory.
-// Java11 is used to compile and run all the tests.
-// Example for Windows:  C:/Program Files/Java/openjdk-11.0.12_7/
-def PATH_TO_TEST_JAVA_RUNTIME = System.env.JDK_11 ?: System.getProperty("java.home")
+// Java 11 is used to compile and run all tests. Set the JDK_11 env var to your
+// local JDK 11 home directory, e.g. C:/Program Files/Java/openjdk-11.0.12_7/
+// If unset, falls back to the current JDK running Gradle.
+def rawJdkPath = System.env.JDK_11 ?: System.getProperty("java.home")
+// Handle case where JDK_11 points to an executable (e.g., .../bin/javac.exe)
+// instead of the JDK home directory — walk up to the JDK root.
+def PATH_TO_TEST_JAVA_RUNTIME = rawJdkPath
+if (rawJdkPath != null) {
+    def f = new File(rawJdkPath)
+    if (f.isFile()) {
+        PATH_TO_TEST_JAVA_RUNTIME = f.parentFile.parentFile.absolutePath
+    }
+}
+// Append .exe on Windows when invoking javac/java directly
+def isWindows = System.getProperty("os.name").toLowerCase().contains("win")
+def exeSuffix = isWindows ? ".exe" : ""
 
 dependencies {
 
@@ -41,9 +53,6 @@ dependencies {
     implementation "io.opentelemetry:opentelemetry-api:${openTelemetryVersion}"
     implementation "io.opentelemetry:opentelemetry-context:${openTelemetryVersion}"
     
-    testImplementation(platform('org.junit:junit-bom:5.14.2'))
-    testImplementation('org.junit.jupiter:junit-jupiter')
-    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
     testImplementation "io.opentelemetry:opentelemetry-sdk:${openTelemetryVersion}"
     testImplementation "io.opentelemetry:opentelemetry-sdk-trace:${openTelemetryVersion}"
     testImplementation "io.opentelemetry:opentelemetry-sdk-testing:${openTelemetryVersion}"
@@ -60,7 +69,7 @@ compileTestJava {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
     options.fork = true
-    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
+    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac${exeSuffix}"
 }
 
 task downloadProtoFiles {
@@ -110,7 +119,7 @@ sourceSets {
 }
 
 tasks.withType(Test) {
-    executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", 'bin/java')
+    executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", "bin/java${exeSuffix}")
 }
 
 test {

@@ -8,9 +8,6 @@ import java.util.*;
 import com.microsoft.durabletask.*;
 import com.microsoft.durabletask.azurefunctions.DurableClientContext;
 import com.microsoft.durabletask.azurefunctions.DurableClientInput;
-import com.microsoft.durabletask.azurefunctions.DurableHttp;
-import com.microsoft.durabletask.azurefunctions.DurableHttpRequest;
-import com.microsoft.durabletask.azurefunctions.DurableHttpResponse;
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger;
 
 /**

@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-package com.microsoft.durabletask.azurefunctions;
+package com.microsoft.durabletask;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -250,5 +250,217 @@ class DurableHttpRequestTest {
                 deserialized.getHttpRetryOptions().getBackoffCoefficient(), 0.001);
         assertEquals(original.getHttpRetryOptions().getStatusCodesToRetry(),
                 deserialized.getHttpRetryOptions().getStatusCodesToRetry());
+    }
+
+    // ---- Managed Identity serialization tests (parity with .NET DurableHttpTests) ----
+
+    /**
+     * Parity with .NET test: SerializeManagedIdentityOptions (Part 2).
+     * Verifies that a full DurableHttpRequest with ManagedIdentityTokenSource + options
+     * serializes all managed identity fields correctly.
+     */
+    @Test
+    void serializeRequestWithManagedIdentityAndOptions() throws Exception {
+        Map<String, String> headers = Collections.singletonMap("Accept", "application/json");
+        ManagedIdentityOptions options = new ManagedIdentityOptions(
+                URI.create("https://dummy.login.microsoftonline.com/"), "tenant_id");
+        ManagedIdentityTokenSource tokenSource = new ManagedIdentityTokenSource("dummy url", options);
+
+        DurableHttpRequest req = new DurableHttpRequest("GET", URI.create("https://www.dummy-url.com"),
+                headers, null, tokenSource);
+
+        String json = mapper.writeValueAsString(req);
+
+        // Verify top-level fields
+        assertTrue(json.contains("\"method\":\"GET\""));
+        assertTrue(json.contains("\"uri\":\"https://www.dummy-url.com\""));
+        assertTrue(json.contains("\"asynchronousPatternEnabled\":true"));
+
+        // Verify tokenSource with options
+        assertTrue(json.contains("\"kind\":\"AzureManagedIdentity\""));
+        assertTrue(json.contains("\"resource\":\"dummy url\""));
+        assertTrue(json.contains("\"options\""));
+        assertTrue(json.contains("\"authorityhost\":\"https://dummy.login.microsoftonline.com/\""));
+        assertTrue(json.contains("\"tenantid\":\"tenant_id\""));
+
+        // Verify null fields omitted
+        assertFalse(json.contains("\"content\""));
+        assertFalse(json.contains("\"timeout\""));
+        assertFalse(json.contains("\"retryOptions\""));
+    }
+
+    /**
+     * Parity with .NET test: SerializeDurableHttpRequestWithoutManagedIdentityOptions.
+     * Verifies that a DurableHttpRequest with ManagedIdentityTokenSource but NO options
+     * omits the options field in the serialized JSON.
+     */
+    @Test
+    void serializeRequestWithManagedIdentityWithoutOptions() throws Exception {
+        Map<String, String> headers = Collections.singletonMap("Accept", "application/json");
+        ManagedIdentityTokenSource tokenSource = new ManagedIdentityTokenSource("dummy url");
+
+        DurableHttpRequest req = new DurableHttpRequest("GET", URI.create("https://www.dummy-url.com"),
+                headers, null, tokenSource);
+
+        String json = mapper.writeValueAsString(req);
+
+        // Verify tokenSource present
+        assertTrue(json.contains("\"kind\":\"AzureManagedIdentity\""));
+        assertTrue(json.contains("\"resource\":\"dummy url\""));
+
+        // Verify options field is NOT in the JSON (null → omitted)
+        assertFalse(json.contains("\"options\""));
+        assertFalse(json.contains("\"authorityhost\""));
+        assertFalse(json.contains("\"tenantid\""));
+    }
+
+    // ---- Managed Identity deserialization tests ----
+
+    /**
+     * Parity with .NET test: DeserializeManagedIdentityOptions (Part 2).
+     * Verifies that a serialized DurableHttpRequest with ManagedIdentityTokenSource + options
+     * correctly deserializes back with the options fields preserved.
+     */
+    @Test
+    void deserializeRequestWithManagedIdentityAndOptions() throws Exception {
+        Map<String, String> headers = Collections.singletonMap("Accept", "application/json");
+        ManagedIdentityOptions options = new ManagedIdentityOptions(
+                URI.create("https://dummy.login.microsoftonline.com/"), "tenant_id");
+        ManagedIdentityTokenSource tokenSource = new ManagedIdentityTokenSource("dummy url", options);
+
+        DurableHttpRequest original = new DurableHttpRequest("GET", URI.create("https://www.dummy-url.com"),
+                headers, null, tokenSource);
+
+        String json = mapper.writeValueAsString(original);
+        DurableHttpRequest deserialized = mapper.readValue(json, DurableHttpRequest.class);
+
+        // Verify TokenSource is correctly restored
+        assertNotNull(deserialized.getTokenSource());
+        assertInstanceOf(ManagedIdentityTokenSource.class, deserialized.getTokenSource());
+
+        ManagedIdentityTokenSource deserializedToken =
+                (ManagedIdentityTokenSource) deserialized.getTokenSource();
+        assertEquals("dummy url", deserializedToken.getResource());
+        assertNotNull(deserializedToken.getOptions());
+        assertEquals(URI.create("https://dummy.login.microsoftonline.com/"),
+                deserializedToken.getOptions().getAuthorityHost());
+        assertEquals("tenant_id", deserializedToken.getOptions().getTenantId());
+    }
+
+    /**
+     * Parity with .NET test: DeserializeWorkerDurableHttpRequestCorrectly.
+     * Verifies cross-extension compatibility by deserializing a raw JSON payload
+     * (as would be sent from Worker.Extensions.DurableTask) and verifying all fields.
+     */
+    @Test
+    void deserializeWorkerDurableHttpRequestCorrectly() throws Exception {
+        // Raw input mimicking Worker.Extensions.DurableTask with options
+        String rawInputFromWorkerExtensions =
+                "{\"method\":\"GET\","
+                + "\"uri\":\"https://httpbin.org/get\","
+                + "\"headers\":null,"
+                + "\"content\":null,"
+                + "\"tokenSource\":{"
+                +     "\"kind\":\"AzureManagedIdentity\","
+                +     "\"resource\":\"https://graph.microsoft.com/.default\","
+                +     "\"options\":{"
+                +         "\"authorityhost\":\"https://login.microsoftonline.com/\","
+                +         "\"tenantid\":\"test-tenant-id\""
+                +     "}"
+                + "},"
+                + "\"asynchronousPatternEnabled\":false,"
+                + "\"retryOptions\":null,"
+                + "\"timeout\":null}";
+
+        DurableHttpRequest req = mapper.readValue(rawInputFromWorkerExtensions, DurableHttpRequest.class);
+
+        // Validate top-level fields
+        assertNotNull(req);
+        assertEquals("GET", req.getMethod());
+        assertEquals(URI.create("https://httpbin.org/get"), req.getUri());
+        assertNull(req.getContent());
+        assertFalse(req.isAsynchronousPatternEnabled());
+        assertNull(req.getHttpRetryOptions());
+        assertNull(req.getTimeout());
+
+        // Validate the TokenSource was correctly deserialized with options
+        assertNotNull(req.getTokenSource());
+        assertInstanceOf(ManagedIdentityTokenSource.class, req.getTokenSource());
+
+        ManagedIdentityTokenSource tokenSource = (ManagedIdentityTokenSource) req.getTokenSource();
+        assertEquals("https://graph.microsoft.com/.default", tokenSource.getResource());
+        assertNotNull(tokenSource.getOptions());
+        assertEquals(URI.create("https://login.microsoftonline.com/"),
+                tokenSource.getOptions().getAuthorityHost());
+        assertEquals("test-tenant-id", tokenSource.getOptions().getTenantId());
+    }
+
+    // ---- Managed Identity round-trip tests ----
+
+    /**
+     * Full round-trip test: DurableHttpRequest with ManagedIdentityTokenSource + options
+     * serialized then deserialized preserves all fields.
+     */
+    @Test
+    void roundTripWithManagedIdentityAndOptions() throws Exception {
+        Map<String, String> headers = Collections.singletonMap("Accept", "application/json");
+        ManagedIdentityOptions options = new ManagedIdentityOptions(
+                URI.create("https://login.microsoftonline.us/"), "us-gov-tenant");
+        ManagedIdentityTokenSource tokenSource = new ManagedIdentityTokenSource(
+                "https://management.core.windows.net/.default", options);
+        HttpRetryOptions retry = new HttpRetryOptions(Duration.ofSeconds(1), 3);
+
+        DurableHttpRequest original = new DurableHttpRequest("POST",
+                URI.create("https://api.example.com/resource"),
+                headers, "request-body", tokenSource, false, Duration.ofMinutes(5), retry);
+
+        String json = mapper.writeValueAsString(original);
+        DurableHttpRequest deserialized = mapper.readValue(json, DurableHttpRequest.class);
+
+        // Verify all top-level fields
+        assertEquals(original.getMethod(), deserialized.getMethod());
+        assertEquals(original.getUri(), deserialized.getUri());
+        assertEquals(original.getHeaders(), deserialized.getHeaders());
+        assertEquals(original.getContent(), deserialized.getContent());
+        assertEquals(original.isAsynchronousPatternEnabled(), deserialized.isAsynchronousPatternEnabled());
+        assertEquals(original.getTimeout(), deserialized.getTimeout());
+
+        // Verify retry
+        assertNotNull(deserialized.getHttpRetryOptions());
+        assertEquals(original.getHttpRetryOptions().getMaxNumberOfAttempts(),
+                deserialized.getHttpRetryOptions().getMaxNumberOfAttempts());
+
+        // Verify managed identity token source
+        assertNotNull(deserialized.getTokenSource());
+        assertInstanceOf(ManagedIdentityTokenSource.class, deserialized.getTokenSource());
+        ManagedIdentityTokenSource deserializedToken =
+                (ManagedIdentityTokenSource) deserialized.getTokenSource();
+        assertEquals("https://management.core.windows.net/.default", deserializedToken.getResource());
+        assertNotNull(deserializedToken.getOptions());
+        assertEquals(URI.create("https://login.microsoftonline.us/"),
+                deserializedToken.getOptions().getAuthorityHost());
+        assertEquals("us-gov-tenant", deserializedToken.getOptions().getTenantId());
+    }
+
+    /**
+     * Round-trip test: DurableHttpRequest with ManagedIdentityTokenSource but NO options.
+     */
+    @Test
+    void roundTripWithManagedIdentityWithoutOptions() throws Exception {
+        ManagedIdentityTokenSource tokenSource = new ManagedIdentityTokenSource("https://vault.azure.net/.default");
+
+        DurableHttpRequest original = new DurableHttpRequest("GET",
+                URI.create("https://myvault.vault.azure.net/secrets/mysecret"),
+                null, null, tokenSource);
+
+        String json = mapper.writeValueAsString(original);
+        DurableHttpRequest deserialized = mapper.readValue(json, DurableHttpRequest.class);
+
+        assertNotNull(deserialized.getTokenSource());
+        assertInstanceOf(ManagedIdentityTokenSource.class, deserialized.getTokenSource());
+        ManagedIdentityTokenSource deserializedToken =
+                (ManagedIdentityTokenSource) deserialized.getTokenSource();
+        assertEquals("https://vault.azure.net/.default", deserializedToken.getResource());
+        assertNull(deserializedToken.getOptions());
     }
 }

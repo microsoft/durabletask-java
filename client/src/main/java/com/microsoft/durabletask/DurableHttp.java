@@ -1,32 +1,26 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-package com.microsoft.durabletask.azurefunctions;
-
-import com.microsoft.durabletask.Task;
-import com.microsoft.durabletask.TaskOptions;
-import com.microsoft.durabletask.TaskOrchestrationContext;
+package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
 import java.net.URI;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Provides static helper methods for making durable HTTP calls from Azure Functions orchestrator functions.
+ * Provides static helper methods for making durable HTTP calls from orchestrator functions.
  * <p>
- * The {@code callHttp} methods schedule a built-in HTTP activity that is executed by the Durable Functions host.
+ * The {@code callHttp} methods schedule a built-in HTTP activity that is executed by the Durable Task host.
  * The HTTP request and response are serialized and persisted in the orchestration history, making them safe
  * for replay.
  * <p>
  * Example usage:
- * <pre>
- * &#64;FunctionName("MyOrchestrator")
- * public String run(
- *         &#64;DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
- *     DurableHttpRequest request = new DurableHttpRequest("GET", new URI("https://example.com/api/data"));
- *     DurableHttpResponse response = DurableHttp.callHttp(ctx, request).await();
- *     return response.getContent();
- * }
- * </pre>
+ * <pre>{@code
+ * DurableHttpRequest request = new DurableHttpRequest("GET", new URI("https://example.com/api/data"));
+ * DurableHttpResponse response = DurableHttp.callHttp(ctx, request).await();
+ * return response.getContent();
+ * }</pre>
  * <p>
  * <b>Asynchronous HTTP 202 Polling:</b> When {@link DurableHttpRequest#isAsynchronousPatternEnabled()} is
  * {@code true} (the default) and the target endpoint returns an HTTP 202 response with a {@code Location}
@@ -50,9 +44,9 @@ import java.util.Map;
 public final class DurableHttp {
 
     /**
-     * The well-known built-in activity name recognized by the Durable Functions host for HTTP calls.
+     * The well-known built-in activity name recognized by the Durable Task host for HTTP calls.
      */
-    static final String BUILT_IN_HTTP_ACTIVITY_NAME = "BuiltIn::HttpActivity";
+    public static final String BUILT_IN_HTTP_ACTIVITY_NAME = "BuiltIn::HttpActivity";
 
     private DurableHttp() {
         // Static utility class — not instantiable
@@ -64,7 +58,7 @@ public final class DurableHttp {
      * {@link DurableHttpResponse} containing the status code, headers, and content of the HTTP response.
      * <p>
      * If the HTTP call results in a failure (e.g., a connection error), the returned {@code Task} will complete
-     * exceptionally with a {@link com.microsoft.durabletask.TaskFailedException}. Note that HTTP error status
+     * exceptionally with a {@link TaskFailedException}. Note that HTTP error status
      * codes (4xx, 5xx) are <em>not</em> treated as failures — the response will be returned normally with the
      * corresponding status code.
      *
@@ -94,10 +88,12 @@ public final class DurableHttp {
         if (request == null) {
             throw new IllegalArgumentException("request must not be null");
         }
+        // The Durable Functions host expects the input as a JSON array of DurableHttpRequest objects.
+        List<DurableHttpRequest> wrappedInput = Collections.singletonList(request);
         if (options != null) {
-            return ctx.callActivity(BUILT_IN_HTTP_ACTIVITY_NAME, request, options, DurableHttpResponse.class);
+            return ctx.callActivity(BUILT_IN_HTTP_ACTIVITY_NAME, wrappedInput, options, DurableHttpResponse.class);
         }
-        return ctx.callActivity(BUILT_IN_HTTP_ACTIVITY_NAME, request, DurableHttpResponse.class);
+        return ctx.callActivity(BUILT_IN_HTTP_ACTIVITY_NAME, wrappedInput, DurableHttpResponse.class);
     }
 
     /**
