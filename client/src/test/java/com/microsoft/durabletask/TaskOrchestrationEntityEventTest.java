@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
@@ -24,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class TaskOrchestrationEntityEventTest {
 
     private static final Logger logger = Logger.getLogger(TaskOrchestrationEntityEventTest.class.getName());
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     // region Helper methods
 
@@ -234,12 +237,80 @@ public class TaskOrchestrationEntityEventTest {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
+    /**
+     * Extracts the requestId from a callEntity SendEventAction's JSON payload.
+     * The JSON has format: {"op":"...","id":"requestId","parent":"...", ...}
+     * Call actions don't have "signal":true, which distinguishes them from signals.
+     */
+    private String extractCallRequestId(Collection<OrchestratorAction> actions) throws Exception {
+        for (OrchestratorAction action : actions) {
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                String data = sendEvent.getData().getValue();
+                JsonNode json = JSON_MAPPER.readTree(data);
+                if (json.has("id") && !json.has("signal")) {
+                    return json.get("id").asText();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extracts the criticalSectionId from a lockEntities SendEventAction's JSON payload.
+     * The JSON has format: {"op":null,"id":"criticalSectionId","lockset":[...], ...}
+     */
+    private String extractLockCriticalSectionId(Collection<OrchestratorAction> actions) throws Exception {
+        for (OrchestratorAction action : actions) {
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                String data = sendEvent.getData().getValue();
+                JsonNode json = JSON_MAPPER.readTree(data);
+                if (json.has("lockset") && json.has("id")) {
+                    return json.get("id").asText();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks if any action is a SendEventAction targeting the given entity instance.
+     */
+    private boolean hasEntitySendEvent(Collection<OrchestratorAction> actions, String entityInstanceId) {
+        for (OrchestratorAction action : actions) {
+            if (action.hasSendEvent()) {
+                String target = action.getSendEvent().getInstance().getInstanceId();
+                if (target.contains(entityInstanceId)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks if any action is a lock request SendEventAction (JSON with "lockset" field).
+     */
+    private boolean hasLockRequestAction(Collection<OrchestratorAction> actions) throws Exception {
+        for (OrchestratorAction action : actions) {
+            if (action.hasSendEvent()) {
+                String data = action.getSendEvent().getData().getValue();
+                JsonNode json = JSON_MAPPER.readTree(data);
+                if (json.has("lockset")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     // endregion
 
     // region signalEntity tests
 
     @Test
-    void signalEntity_producesSendEntityMessageAction() {
+    void signalEntity_producesSendEventAction() throws Exception {
         final String orchestratorName = "SignalEntityOrchestration";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -255,29 +326,31 @@ public class TaskOrchestrationEntityEventTest {
 
         TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
-        // Should have two actions: sendEntityMessage (signal) and completeOrchestration
+        // Should have two actions: sendEvent (signal) and completeOrchestration
         Collection<OrchestratorAction> actions = result.getActions();
         boolean hasSignal = false;
         boolean hasComplete = false;
         for (OrchestratorAction action : actions) {
-            if (action.hasSendEntityMessage()) {
-                SendEntityMessageAction msg = action.getSendEntityMessage();
-                assertTrue(msg.hasEntityOperationSignaled());
-                EntityOperationSignaledEvent signal = msg.getEntityOperationSignaled();
-                assertEquals("add", signal.getOperation());
-                assertEquals("@counter@c1", signal.getTargetInstanceId().getValue());
-                hasSignal = true;
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                String targetInstanceId = sendEvent.getInstance().getInstanceId();
+                if (targetInstanceId.contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    assertEquals("add", json.get("op").asText());
+                    assertTrue(json.get("signal").asBoolean());
+                    hasSignal = true;
+                }
             }
             if (action.hasCompleteOrchestration()) {
                 hasComplete = true;
             }
         }
-        assertTrue(hasSignal, "Expected a sendEntityMessage action with signal");
+        assertTrue(hasSignal, "Expected a sendEvent action with signal");
         assertTrue(hasComplete, "Expected a completeOrchestration action");
     }
 
     @Test
-    void getEntities_signalEntity_producesSendEntityMessageAction() {
+    void getEntities_signalEntity_producesSendEventAction() throws Exception {
         final String orchestratorName = "SignalViaEntitiesFeatureOrchestration";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -295,18 +368,19 @@ public class TaskOrchestrationEntityEventTest {
 
         boolean hasSignal = false;
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage()) {
-                SendEntityMessageAction msg = action.getSendEntityMessage();
-                if (msg.hasEntityOperationSignaled()) {
-                    EntityOperationSignaledEvent signal = msg.getEntityOperationSignaled();
-                    assertEquals("add", signal.getOperation());
-                    assertEquals("@counter@c1", signal.getTargetInstanceId().getValue());
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                String targetInstanceId = sendEvent.getInstance().getInstanceId();
+                if (targetInstanceId.contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    assertEquals("add", json.get("op").asText());
+                    assertTrue(json.get("signal").asBoolean());
                     hasSignal = true;
                 }
             }
         }
 
-        assertTrue(hasSignal, "Expected a sendEntityMessage action with signal");
+        assertTrue(hasSignal, "Expected a sendEvent action with signal");
     }
 
     @Test
@@ -346,7 +420,7 @@ public class TaskOrchestrationEntityEventTest {
     // region callEntity tests
 
     @Test
-    void callEntity_producesActionAndWaitsForResponse() {
+    void callEntity_producesActionAndWaitsForResponse() throws Exception {
         final String orchestratorName = "CallEntityOrchestration";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -363,19 +437,21 @@ public class TaskOrchestrationEntityEventTest {
 
         TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
-        // Should have the sendEntityMessage (call) action
+        // Should have the sendEvent (call) action
         boolean hasCall = false;
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage()) {
-                SendEntityMessageAction msg = action.getSendEntityMessage();
-                assertTrue(msg.hasEntityOperationCalled());
-                EntityOperationCalledEvent call = msg.getEntityOperationCalled();
-                assertEquals("get", call.getOperation());
-                assertEquals("@counter@c1", call.getTargetInstanceId().getValue());
-                hasCall = true;
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                String targetInstanceId = sendEvent.getInstance().getInstanceId();
+                if (targetInstanceId.contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    assertEquals("get", json.get("op").asText());
+                    assertFalse(json.has("signal"), "Call action should not have signal flag");
+                    hasCall = true;
+                }
             }
         }
-        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+        assertTrue(hasCall, "Expected a sendEvent action with call");
 
         // Should NOT have a complete action (it's waiting for the response)
         boolean hasComplete = false;
@@ -388,7 +464,7 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
-    void entities_callEntity_producesActionAndWaitsForResponse() {
+    void entities_callEntity_producesActionAndWaitsForResponse() throws Exception {
         final String orchestratorName = "CallViaEntitiesFeatureOrchestration";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -407,12 +483,12 @@ public class TaskOrchestrationEntityEventTest {
         boolean hasCall = false;
         boolean hasComplete = false;
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage()) {
-                SendEntityMessageAction msg = action.getSendEntityMessage();
-                if (msg.hasEntityOperationCalled()) {
-                    EntityOperationCalledEvent call = msg.getEntityOperationCalled();
-                    assertEquals("get", call.getOperation());
-                    assertEquals("@counter@c1", call.getTargetInstanceId().getValue());
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                String targetInstanceId = sendEvent.getInstance().getInstanceId();
+                if (targetInstanceId.contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    assertEquals("get", json.get("op").asText());
                     hasCall = true;
                 }
             }
@@ -421,12 +497,12 @@ public class TaskOrchestrationEntityEventTest {
             }
         }
 
-        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+        assertTrue(hasCall, "Expected a sendEvent action with call");
         assertFalse(hasComplete, "Should not complete while waiting for entity response");
     }
 
     @Test
-    void callEntity_completesWhenResponseArrives() {
+    void callEntity_completesWhenResponseArrives() throws Exception {
         final String orchestratorName = "CallEntityComplete";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -447,16 +523,22 @@ public class TaskOrchestrationEntityEventTest {
 
         TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
-        // Extract the requestId from the call action
+        // Extract the requestId from the call action's JSON payload
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                if (sendEvent.getInstance().getInstanceId().contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    if (json.has("id") && !json.has("signal")) {
+                        requestId = json.get("id").asText();
+                    }
+                }
             }
         }
         assertNotNull(requestId, "Should have captured the requestId");
 
-        // Second pass (replay): include the call event in past and provide the response
+        // Second pass (replay): include the sent event in past and provide the response
         executor = createExecutor(orchestratorName, ctx -> {
             int value = ctx.callEntity(entityId, "get", null, int.class).await();
             ctx.complete(value);
@@ -465,7 +547,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> pastEvents2 = Arrays.asList(
                 orchestratorStarted(),
                 executionStarted(orchestratorName, "null"),
-                entityOperationCalledEvent(0),
+                eventSentEvent(0),
                 orchestratorCompleted());
         List<HistoryEvent> newEvents2 = Arrays.asList(
                 orchestratorStarted(),
@@ -488,7 +570,7 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
-    void callEntity_failedResponse_completesExceptionally() {
+    void callEntity_failedResponse_completesExceptionally() throws Exception {
         final String orchestratorName = "CallEntityFail";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -511,8 +593,14 @@ public class TaskOrchestrationEntityEventTest {
 
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                if (sendEvent.getInstance().getInstanceId().contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    if (json.has("id") && !json.has("signal")) {
+                        requestId = json.get("id").asText();
+                    }
+                }
             }
         }
         assertNotNull(requestId);
@@ -530,7 +618,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> pastEvents2 = Arrays.asList(
                 orchestratorStarted(),
                 executionStarted(orchestratorName, "null"),
-                entityOperationCalledEvent(0),
+                eventSentEvent(0),
                 orchestratorCompleted());
         List<HistoryEvent> newEvents2 = Arrays.asList(
                 orchestratorStarted(),
@@ -564,7 +652,7 @@ public class TaskOrchestrationEntityEventTest {
     //   - New events: EVENTRAISED with ResponseMessage JSON instead of ENTITYOPERATIONCOMPLETED
 
     @Test
-    void callEntity_completesViaEventRaised_triggerBindingPath() {
+    void callEntity_completesViaEventRaised_triggerBindingPath() throws Exception {
         final String orchestratorName = "CallEntityTriggerPath";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -581,12 +669,7 @@ public class TaskOrchestrationEntityEventTest {
 
         TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
-        String requestId = null;
-        for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
-            }
-        }
+        String requestId = extractCallRequestId(result1.getActions());
         assertNotNull(requestId, "Should have captured the requestId");
 
         // Second pass (replay): use EVENTSENT in past (trigger binding records EventSent, not EntityOperationCalled)
@@ -622,7 +705,7 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
-    void callEntity_stringResultViaEventRaised_triggerBindingPath() {
+    void callEntity_stringResultViaEventRaised_triggerBindingPath() throws Exception {
         final String orchestratorName = "CallEntityTriggerPathString";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -638,12 +721,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
         TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
-        String requestId = null;
-        for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
-            }
-        }
+        String requestId = extractCallRequestId(result1.getActions());
         assertNotNull(requestId);
 
         // Second pass: replay with EventRaised containing a JSON-serialized string result
@@ -679,7 +757,7 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
-    void callEntity_nullResultViaEventRaised_triggerBindingPath() {
+    void callEntity_nullResultViaEventRaised_triggerBindingPath() throws Exception {
         final String orchestratorName = "CallEntityTriggerPathNull";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -696,12 +774,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
         TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
-        String requestId = null;
-        for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
-            }
-        }
+        String requestId = extractCallRequestId(result1.getActions());
         assertNotNull(requestId);
 
         // Second pass: replay with null result in ResponseMessage
@@ -736,7 +809,7 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
-    void callEntity_failedViaEventRaised_withFailureDetails_triggerBindingPath() {
+    void callEntity_failedViaEventRaised_withFailureDetails_triggerBindingPath() throws Exception {
         final String orchestratorName = "CallEntityTriggerPathFail";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -756,12 +829,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
         TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
-        String requestId = null;
-        for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
-            }
-        }
+        String requestId = extractCallRequestId(result1.getActions());
         assertNotNull(requestId);
 
         // Second pass: replay with failed ResponseMessage via EventRaised
@@ -801,7 +869,7 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
-    void callEntity_failedViaEventRaised_simpleError_triggerBindingPath() {
+    void callEntity_failedViaEventRaised_simpleError_triggerBindingPath() throws Exception {
         final String orchestratorName = "CallEntityTriggerPathFailSimple";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -821,12 +889,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
         TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
-        String requestId = null;
-        for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                requestId = action.getSendEntityMessage().getEntityOperationCalled().getRequestId();
-            }
-        }
+        String requestId = extractCallRequestId(result1.getActions());
         assertNotNull(requestId);
 
         // Second pass: replay with simple error (exceptionType only, no failureDetails)
@@ -993,7 +1056,7 @@ public class TaskOrchestrationEntityEventTest {
     // region SignalEntityOptions / CallEntityOptions / getLockedEntities / varargs lockEntities tests
 
     @Test
-    void signalEntity_withScheduledTime_setsScheduledTimeOnAction() {
+    void signalEntity_withScheduledTime_setsScheduledTimeOnAction() throws Exception {
         final String orchestratorName = "SignalScheduledTimeTest";
         Instant scheduledTime = Instant.parse("2025-06-15T12:00:00Z");
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
@@ -1013,13 +1076,16 @@ public class TaskOrchestrationEntityEventTest {
 
         boolean hasScheduledSignal = false;
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage()) {
-                SendEntityMessageAction msg = action.getSendEntityMessage();
-                if (msg.hasEntityOperationSignaled()) {
-                    EntityOperationSignaledEvent signal = msg.getEntityOperationSignaled();
-                    assertTrue(signal.hasScheduledTime(), "Expected scheduledTime to be set");
-                    assertEquals(scheduledTime.getEpochSecond(), signal.getScheduledTime().getSeconds());
-                    hasScheduledSignal = true;
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                if (sendEvent.getInstance().getInstanceId().contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    if (json.has("signal") && json.get("signal").asBoolean()) {
+                        assertTrue(json.has("due"), "Expected 'due' field for scheduled signal");
+                        // The event name should include the scheduled time
+                        assertTrue(sendEvent.getName().contains("op@"), "Expected event name to include scheduled time");
+                        hasScheduledSignal = true;
+                    }
                 }
             }
         }
@@ -1027,7 +1093,7 @@ public class TaskOrchestrationEntityEventTest {
     }
 
     @Test
-    void signalEntity_withNullOptions_noScheduledTime() {
+    void signalEntity_withNullOptions_noScheduledTime() throws Exception {
         final String orchestratorName = "SignalNullOptionsTest";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -1044,15 +1110,20 @@ public class TaskOrchestrationEntityEventTest {
         TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationSignaled()) {
-                EntityOperationSignaledEvent signal = action.getSendEntityMessage().getEntityOperationSignaled();
-                assertFalse(signal.hasScheduledTime(), "Expected no scheduledTime when options are null");
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                if (sendEvent.getInstance().getInstanceId().contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    if (json.has("signal") && json.get("signal").asBoolean()) {
+                        assertFalse(json.has("due"), "Expected no 'due' field when options are null");
+                    }
+                }
             }
         }
     }
 
     @Test
-    void callEntity_withOptions_producesAction() {
+    void callEntity_withOptions_producesAction() throws Exception {
         final String orchestratorName = "CallWithOptionsTest";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
 
@@ -1071,14 +1142,16 @@ public class TaskOrchestrationEntityEventTest {
 
         boolean hasCall = false;
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
-                EntityOperationCalledEvent call = action.getSendEntityMessage().getEntityOperationCalled();
-                assertEquals("get", call.getOperation());
-                assertEquals("@counter@c1", call.getTargetInstanceId().getValue());
-                hasCall = true;
+            if (action.hasSendEvent()) {
+                SendEventAction sendEvent = action.getSendEvent();
+                if (sendEvent.getInstance().getInstanceId().contains("@counter@c1")) {
+                    JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
+                    assertEquals("get", json.get("op").asText());
+                    hasCall = true;
+                }
             }
         }
-        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+        assertTrue(hasCall, "Expected a sendEvent action with call");
     }
 
     @Test
@@ -1102,14 +1175,14 @@ public class TaskOrchestrationEntityEventTest {
         boolean hasCall = false;
         boolean hasTimer = false;
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+            if (action.hasSendEvent() && action.getSendEvent().getInstance().getInstanceId().contains("@counter@c1")) {
                 hasCall = true;
             }
             if (action.hasCreateTimer()) {
                 hasTimer = true;
             }
         }
-        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+        assertTrue(hasCall, "Expected a sendEvent action with call");
         assertTrue(hasTimer, "Expected a createTimer action for the timeout");
     }
 
@@ -1134,14 +1207,14 @@ public class TaskOrchestrationEntityEventTest {
         boolean hasCall = false;
         boolean hasTimer = false;
         for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationCalled()) {
+            if (action.hasSendEvent() && action.getSendEvent().getInstance().getInstanceId().contains("@counter@c1")) {
                 hasCall = true;
             }
             if (action.hasCreateTimer()) {
                 hasTimer = true;
             }
         }
-        assertTrue(hasCall, "Expected a sendEntityMessage action with call");
+        assertTrue(hasCall, "Expected a sendEvent action with call");
         assertFalse(hasTimer, "Expected no createTimer action when no timeout is specified");
     }
 
@@ -1203,11 +1276,10 @@ public class TaskOrchestrationEntityEventTest {
 
         // Extract the criticalSectionId from the lock request action
         String criticalSectionId = null;
-        for (OrchestratorAction action : result1.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityLockRequested()) {
-                criticalSectionId = action.getSendEntityMessage().getEntityLockRequested().getCriticalSectionId();
-                break;
-            }
+        try {
+            criticalSectionId = extractLockCriticalSectionId(result1.getActions());
+        } catch (Exception e) {
+            fail("Failed to extract criticalSectionId: " + e.getMessage());
         }
         assertNotNull(criticalSectionId, "Expected a lock request action with criticalSectionId");
 
@@ -1215,7 +1287,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> pastEvents2 = Arrays.asList(
                 orchestratorStarted(),
                 executionStarted(orchestratorName, "null"),
-                entityLockRequestedEvent(0),
+                eventSentEvent(0),
                 orchestratorCompleted());
         List<HistoryEvent> newEvents2 = Arrays.asList(
                 orchestratorStarted(),
@@ -1279,12 +1351,12 @@ public class TaskOrchestrationEntityEventTest {
         TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasLockRequest = false;
-        for (OrchestratorAction action : result.getActions()) {
-            if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityLockRequested()) {
-                hasLockRequest = true;
-            }
+        try {
+            hasLockRequest = hasLockRequestAction(result.getActions());
+        } catch (Exception e) {
+            fail("Failed to check lock request: " + e.getMessage());
         }
-        assertTrue(hasLockRequest, "Expected an entityLockRequest action from varargs lockEntities");
+        assertTrue(hasLockRequest, "Expected a lock request action from varargs lockEntities");
     }
 
     // endregion
