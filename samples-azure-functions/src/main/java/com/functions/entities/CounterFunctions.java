@@ -105,8 +105,7 @@ public class CounterFunctions {
                     route = "counters/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = getEntityId(request, id);
         DurableTaskClient client = durableContext.getClient();
 
@@ -132,8 +131,7 @@ public class CounterFunctions {
                     route = "counters/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = getEntityId(request, id);
         DurableTaskClient client = durableContext.getClient();
         client.getEntities().signalEntity(entityId, "delete");
@@ -151,8 +149,7 @@ public class CounterFunctions {
                     route = "counters/{id}/reset",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = getEntityId(request, id);
         DurableTaskClient client = durableContext.getClient();
         client.getEntities().signalEntity(entityId, "reset");

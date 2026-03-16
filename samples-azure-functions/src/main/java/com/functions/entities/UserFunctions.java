@@ -168,8 +168,7 @@ public class UserFunctions {
                     route = "users/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = new EntityInstanceId("User", id);
         DurableTaskClient client = durableContext.getClient();
 
@@ -196,8 +195,7 @@ public class UserFunctions {
                     route = "users/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = new EntityInstanceId("User", id);
         DurableTaskClient client = durableContext.getClient();
         // Even though UserEntity does not have a 'delete' method, the base class TaskEntity handles it
@@ -216,8 +214,7 @@ public class UserFunctions {
                     route = "users/{id}/greet",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = new EntityInstanceId("User", id);
         DurableTaskClient client = durableContext.getClient();
 

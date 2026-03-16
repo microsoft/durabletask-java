@@ -45,8 +45,7 @@ public class LifetimeFunctions {
                     route = "lifetimes/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = new EntityInstanceId("Lifetime", id);
         DurableTaskClient client = durableContext.getClient();
 
@@ -73,8 +72,7 @@ public class LifetimeFunctions {
                     route = "lifetimes/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = new EntityInstanceId("Lifetime", id);
         DurableTaskClient client = durableContext.getClient();
         client.getEntities().signalEntity(entityId, "init");
@@ -93,8 +91,7 @@ public class LifetimeFunctions {
                     route = "lifetimes/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         EntityInstanceId entityId = new EntityInstanceId("Lifetime", id);
         DurableTaskClient client = durableContext.getClient();
 
