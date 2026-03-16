@@ -163,6 +163,8 @@ public class TaskEntityTest {
 
         public void add(String label) {
             // overloaded — should trigger ambiguous match error
+            // 'label' intentionally unused; method exists to create ambiguous overload
+
         }
 
         @Override

@@ -145,7 +145,14 @@ public class EntityFunctions {
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
             final ExecutionContext context) {
         String key = request.getQueryParameters().getOrDefault("key", "e2e-call-" + System.currentTimeMillis());
-        int value = Integer.parseInt(request.getQueryParameters().getOrDefault("value", "5"));
+        int value;
+        try {
+            value = Integer.parseInt(request.getQueryParameters().getOrDefault("value", "5"));
+        } catch (NumberFormatException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
+                    .body("The 'value' parameter must be a valid integer.")
+                    .build();
+        }
 
         DurableTaskClient client = durableContext.getClient();
         EntityPayload payload = new EntityPayload(key, value);
@@ -164,7 +171,14 @@ public class EntityFunctions {
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
             final ExecutionContext context) {
         String key = request.getQueryParameters().getOrDefault("key", "e2e-signal-" + System.currentTimeMillis());
-        int value = Integer.parseInt(request.getQueryParameters().getOrDefault("value", "10"));
+        int value;
+        try {
+            value = Integer.parseInt(request.getQueryParameters().getOrDefault("value", "10"));
+        } catch (NumberFormatException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
+                    .body("The 'value' parameter must be a valid integer.")
+                    .build();
+        }
 
         DurableTaskClient client = durableContext.getClient();
         EntityPayload payload = new EntityPayload(key, value);
@@ -217,7 +231,14 @@ public class EntityFunctions {
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
             final ExecutionContext context) {
         String key = request.getQueryParameters().getOrDefault("key", "e2e-twice-" + System.currentTimeMillis());
-        int value = Integer.parseInt(request.getQueryParameters().getOrDefault("value", "3"));
+        int value;
+        try {
+            value = Integer.parseInt(request.getQueryParameters().getOrDefault("value", "3"));
+        } catch (NumberFormatException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
+                    .body("The 'value' parameter must be a valid integer.")
+                    .build();
+        }
 
         DurableTaskClient client = durableContext.getClient();
         EntityPayload payload = new EntityPayload(key, value);

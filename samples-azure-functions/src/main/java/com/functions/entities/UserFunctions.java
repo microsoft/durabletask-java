@@ -87,8 +87,7 @@ public class UserFunctions {
                     route = "users/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         String name = request.getQueryParameters().get("name");
         String ageStr = request.getQueryParameters().get("age");
 
@@ -130,8 +129,7 @@ public class UserFunctions {
                     route = "users/{id}",
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
-            @BindingName("id") String id,
-            final ExecutionContext context) {
+            @BindingName("id") String id) {
         String name = request.getQueryParameters().get("name");
         String ageStr = request.getQueryParameters().get("age");
 

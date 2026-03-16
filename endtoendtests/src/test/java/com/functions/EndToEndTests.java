@@ -564,7 +564,13 @@ public class EndToEndTests {
         Response response = get("/api/GetEntityState?name=" + entityName + "&key=" + entityKey);
         assertEquals(200, response.getStatusCode(),
                 "GetEntityState should return 200, got: " + response.getStatusCode() + " body: " + response.getBody().asString());
-        return Integer.parseInt(response.getBody().asString().trim());
+        String body = response.getBody().asString().trim();
+        try {
+            return Integer.parseInt(body);
+        } catch (NumberFormatException e) {
+            fail("Expected integer entity state but got: " + body);
+            throw e; // unreachable, but satisfies compiler
+        }
     }
 
     private boolean pollingCheck(String statusQueryGetUri,
