@@ -268,4 +268,145 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     }
 
     // endregion
+
+    // region Typed entity proxy integration tests
+
+    /**
+     * Interface for typed proxy interaction with CounterEntity.
+     */
+    public interface ICounter {
+        void add(int amount);
+        void reset();
+        Task<Integer> get();
+    }
+
+    @Test
+    void typedProxy_signalAndCallEntity() throws TimeoutException, InterruptedException {
+        final String entityName = "Counter";
+        final String orchestratorName = "TypedProxyOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-proxy-test");
+
+        this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    // Use the typed entity proxy
+                    ICounter counter = ctx.createEntityProxy(entityId, ICounter.class);
+
+                    // Void methods → signals
+                    counter.add(10);
+                    counter.add(20);
+                    counter.add(12);
+
+                    // Wait for signals to process, then call to get value
+                    ctx.createTimer(Duration.ofSeconds(3)).await();
+                    int value = counter.get().await();
+                    ctx.complete(value);
+                })
+                .addEntity(entityName, CounterEntity::new)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+
+        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+        OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId, Duration.ofSeconds(30), true);
+
+        assertNotNull(instance);
+        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+        assertEquals(42, instance.readOutputAs(int.class));
+    }
+
+    @Test
+    void typedProxy_viaEntitiesFeature() throws TimeoutException, InterruptedException {
+        final String entityName = "Counter";
+        final String orchestratorName = "TypedProxyFeatureOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-proxy-feature-test");
+
+        this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    // Use the entities() feature to create a proxy
+                    ICounter counter = ctx.entities().createProxy(entityId, ICounter.class);
+
+                    counter.add(100);
+                    ctx.createTimer(Duration.ofSeconds(3)).await();
+                    int value = counter.get().await();
+                    ctx.complete(value);
+                })
+                .addEntity(entityName, CounterEntity::new)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+
+        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+        OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId, Duration.ofSeconds(30), true);
+
+        assertNotNull(instance);
+        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+        assertEquals(100, instance.readOutputAs(int.class));
+    }
+
+    // endregion
+
+    // region Re-entrant entity dispatch integration tests
+
+    /**
+     * Entity that uses re-entrant dispatch to compose operations.
+     */
+    static class BonusCounterEntity extends TaskEntity<Integer> {
+        public void add(int amount) {
+            this.state += amount;
+        }
+
+        public void addWithBonus(int amount) {
+            dispatch("add", amount);           // main add
+            dispatch("add", amount / 10);      // 10% bonus
+        }
+
+        public int get() {
+            return this.state;
+        }
+
+        @Override
+        protected Integer initializeState(TaskEntityOperation operation) {
+            return 0;
+        }
+
+        @Override
+        protected Class<Integer> getStateType() {
+            return Integer.class;
+        }
+    }
+
+    @Test
+    void reentrantDispatch_composesOperations() throws TimeoutException, InterruptedException {
+        final String entityName = "BonusCounter";
+        final String orchestratorName = "ReentrantDispatchOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "bonus-counter-test");
+
+        this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    // Signal entity to add with bonus
+                    ctx.signalEntity(entityId, "addWithBonus", 100);
+
+                    // Wait for signal to process, then get value
+                    ctx.createTimer(Duration.ofSeconds(3)).await();
+                    int value = ctx.callEntity(entityId, "get", Integer.class).await();
+                    ctx.complete(value);
+                })
+                .addEntity(entityName, BonusCounterEntity::new)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+
+        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+        OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                instanceId, Duration.ofSeconds(30), true);
+
+        assertNotNull(instance);
+        assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+        // 100 + 10% bonus = 110
+        assertEquals(110, instance.readOutputAs(int.class));
+    }
+
+    // endregion
 }

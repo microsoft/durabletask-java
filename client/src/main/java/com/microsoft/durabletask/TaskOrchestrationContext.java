@@ -560,6 +560,24 @@ public interface TaskOrchestrationContext {
     }
 
     /**
+     * Creates a typed entity proxy that maps interface method calls to entity operations.
+     * <p>
+     * This is a convenience method equivalent to calling
+     * {@code EntityProxy.create(this, entityId, proxyInterface)}.
+     *
+     * @param entityId       the target entity's instance ID
+     * @param proxyInterface the interface whose methods map to entity operations;
+     *                       {@code void} methods become signals, {@code Task<V>} methods become calls
+     * @param <T>            the proxy interface type
+     * @return a proxy instance that implements {@code proxyInterface}
+     * @throws IllegalArgumentException if {@code proxyInterface} is not an interface
+     * @see EntityProxy#create(TaskOrchestrationContext, EntityInstanceId, Class)
+     */
+    default <T> T createEntityProxy(@Nonnull EntityInstanceId entityId, @Nonnull Class<T> proxyInterface) {
+        return EntityProxy.create(this, entityId, proxyInterface);
+    }
+
+    /**
      * Gets the durable entity feature for this orchestration context.
      * <p>
      * This mirrors the .NET SDK's {@code TaskOrchestrationContext.Entities} surface,

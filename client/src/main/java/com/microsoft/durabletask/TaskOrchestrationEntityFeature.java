@@ -130,6 +130,22 @@ public abstract class TaskOrchestrationEntityFeature {
      * @return the list of currently locked entities, or an empty list
      */
     public abstract List<EntityInstanceId> getLockedEntities();
+
+    /**
+     * Creates a typed entity proxy that maps interface method calls to entity operations.
+     * <p>
+     * This is the feature-based equivalent of
+     * {@link TaskOrchestrationContext#createEntityProxy(EntityInstanceId, Class)}.
+     *
+     * @param entityId       the target entity's instance ID
+     * @param proxyInterface the interface whose methods map to entity operations;
+     *                       {@code void} methods become signals, {@code Task<V>} methods become calls
+     * @param <T>            the proxy interface type
+     * @return a proxy instance that implements {@code proxyInterface}
+     * @throws IllegalArgumentException if {@code proxyInterface} is not an interface
+     * @see EntityProxy#create(TaskOrchestrationContext, EntityInstanceId, Class)
+     */
+    public abstract <T> T createProxy(@Nonnull EntityInstanceId entityId, @Nonnull Class<T> proxyInterface);
 }
 
 final class ContextBackedTaskOrchestrationEntityFeature extends TaskOrchestrationEntityFeature {
@@ -185,5 +201,10 @@ final class ContextBackedTaskOrchestrationEntityFeature extends TaskOrchestratio
     @Override
     public List<EntityInstanceId> getLockedEntities() {
         return this.context.getLockedEntities();
+    }
+
+    @Override
+    public <T> T createProxy(@Nonnull EntityInstanceId entityId, @Nonnull Class<T> proxyInterface) {
+        return EntityProxy.create(this.context, entityId, proxyInterface);
     }
 }

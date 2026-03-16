@@ -191,6 +191,136 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
                 operation.getName() + "'.");
     }
 
+    // region Re-entrant self-dispatch
+
+    /**
+     * Dispatches an operation to this entity instance synchronously (re-entrant self-call).
+     * <p>
+     * This allows one entity operation to invoke another operation on the same entity,
+     * reusing the same state and context. The dispatched operation executes inline — state
+     * mutations are visible immediately to the caller.
+     * <p>
+     * The operation is resolved using the same case-insensitive reflection dispatch as external
+     * operations: entity class methods are tried first, then state object methods (if
+     * {@linkplain #setAllowStateDispatch state dispatch} is enabled), then implicit operations.
+     *
+     * <p>Example:
+     * <pre>{@code
+     * public class BankAccount extends TaskEntity<BankAccountState> {
+     *     public void deposit(int amount) {
+     *         this.state.balance += amount;
+     *     }
+     *
+     *     public void depositWithBonus(int amount) {
+     *         dispatch("deposit", amount);          // re-entrant call
+     *         dispatch("deposit", amount / 10);     // 10% bonus
+     *     }
+     * }
+     * }</pre>
+     *
+     * @param operationName the name of the operation to dispatch (case-insensitive)
+     * @return the operation result, or {@code null} for void operations
+     * @throws IllegalStateException        if called outside of entity execution
+     * @throws UnsupportedOperationException if no matching operation is found
+     */
+    protected Object dispatch(String operationName) {
+        return dispatch(operationName, null);
+    }
+
+    /**
+     * Dispatches an operation with input to this entity instance synchronously (re-entrant self-call).
+     *
+     * @param operationName the name of the operation to dispatch (case-insensitive)
+     * @param input         the input value to pass to the operation, or {@code null}
+     * @return the operation result, or {@code null} for void operations
+     * @throws IllegalStateException        if called outside of entity execution
+     * @throws UnsupportedOperationException if no matching operation is found
+     * @see #dispatch(String)
+     */
+    protected Object dispatch(String operationName, Object input) {
+        if (this.context == null) {
+            throw new IllegalStateException(
+                    "dispatch() can only be called during entity operation execution.");
+        }
+
+        Method method = findMethod(this.getClass(), operationName);
+        Object target = this;
+
+        if (method == null && this.allowStateDispatch && this.state != null) {
+            method = findMethod(this.state.getClass(), operationName);
+            target = this.state;
+        }
+
+        if (method == null) {
+            if ("delete".equalsIgnoreCase(operationName)) {
+                this.state = null;
+                return null;
+            }
+            throw new UnsupportedOperationException(
+                    "Entity '" + this.getClass().getSimpleName() +
+                    "' does not support operation '" + operationName + "'.");
+        }
+
+        return invokeMethodDirect(method, target, input, this.context);
+    }
+
+    /**
+     * Dispatches an operation with input and a typed return value (re-entrant self-call).
+     *
+     * @param operationName the name of the operation to dispatch (case-insensitive)
+     * @param input         the input value to pass to the operation, or {@code null}
+     * @param returnType    the expected return type
+     * @param <V>           the return type
+     * @return the operation result cast to {@code V}
+     * @throws IllegalStateException        if called outside of entity execution
+     * @throws UnsupportedOperationException if no matching operation is found
+     * @throws ClassCastException           if the result cannot be cast to {@code returnType}
+     * @see #dispatch(String, Object)
+     */
+    protected <V> V dispatch(String operationName, Object input, Class<V> returnType) {
+        return returnType.cast(dispatch(operationName, input));
+    }
+
+    /**
+     * Invokes a method with a direct (already-deserialized) input value, without requiring
+     * a {@link TaskEntityOperation}. Used by {@link #dispatch} for re-entrant self-calls.
+     */
+    private static Object invokeMethodDirect(
+            Method method, Object target, Object input, TaskEntityContext context) {
+        Class<?>[] paramTypes = method.getParameterTypes();
+        Object[] args = new Object[paramTypes.length];
+
+        for (int i = 0; i < paramTypes.length; i++) {
+            if (TaskEntityContext.class.isAssignableFrom(paramTypes[i])) {
+                args[i] = context;
+            } else if (TaskEntityOperation.class.isAssignableFrom(paramTypes[i])) {
+                throw new UnsupportedOperationException(
+                        "Cannot dispatch to method '" + method.getName() +
+                        "' that accepts TaskEntityOperation. Use a simpler signature for " +
+                        "operations that support re-entrant dispatch.");
+            } else {
+                args[i] = input;
+            }
+        }
+
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getTargetException();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            throw new RuntimeException(cause);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // endregion
+
     /**
      * Finds a public method on the target class matching the operation name (case-insensitive).
      * Methods inherited from {@code Object} and from {@code TaskEntity} itself are excluded.
