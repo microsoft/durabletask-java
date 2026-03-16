@@ -763,7 +763,7 @@ public class TaskOrchestrationEntityEventTest {
 
         TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
             // Void operation — result is null
-            Void value = ctx.callEntity(entityId, "reset", null, Void.class).await();
+            ctx.callEntity(entityId, "reset", null, Void.class).await();
             ctx.complete("done");
         });
 

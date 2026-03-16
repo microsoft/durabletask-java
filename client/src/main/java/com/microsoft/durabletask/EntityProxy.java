@@ -107,6 +107,9 @@ public final class EntityProxy {
                     case "hashCode":
                         return entityId.hashCode();
                     case "equals":
+                        if (args == null || args.length == 0) {
+                            return false;
+                        }
                         if (args[0] == proxy) {
                             return true;
                         }
