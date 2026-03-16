@@ -12,6 +12,7 @@ import javax.annotation.Nullable;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -160,7 +161,7 @@ public class DurableHttpRequest {
         }
         this.method = method;
         this.uri = uri;
-        this.headers = headers != null ? Collections.unmodifiableMap(headers) : null;
+        this.headers = headers != null ? Collections.unmodifiableMap(new HashMap<>(headers)) : null;
         this.content = content;
         this.tokenSource = tokenSource;
         this.asynchronousPatternEnabled = asynchronousPatternEnabled;

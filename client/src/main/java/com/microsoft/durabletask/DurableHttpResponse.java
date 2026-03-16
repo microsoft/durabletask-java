@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -48,7 +49,7 @@ public class DurableHttpResponse {
             @JsonProperty("headers") @Nullable Map<String, String> headers,
             @JsonProperty("content") @Nullable String content) {
         this.statusCode = statusCode;
-        this.headers = headers != null ? Collections.unmodifiableMap(headers) : null;
+        this.headers = headers != null ? Collections.unmodifiableMap(new HashMap<>(headers)) : null;
         this.content = content;
     }
 

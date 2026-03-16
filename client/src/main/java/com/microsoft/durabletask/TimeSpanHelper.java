@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import java.time.Duration;
+import java.util.Locale;
 
 /**
  * Package-private utility class for converting between Java {@link Duration} and .NET TimeSpan string format.
@@ -48,11 +49,11 @@ final class TimeSpanHelper {
         if (days > 0) {
             sb.append(days).append('.');
         }
-        sb.append(String.format("%02d:%02d:%02d", hours, minutes, seconds));
+        sb.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds));
         if (nanos > 0) {
             // .NET uses 7 fractional digits (100-nanosecond precision)
             long ticks = nanos / 100;
-            sb.append(String.format(".%07d", ticks));
+            sb.append(String.format(Locale.ROOT, ".%07d", ticks));
         }
         return sb.toString();
     }

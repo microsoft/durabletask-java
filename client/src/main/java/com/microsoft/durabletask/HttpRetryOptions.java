@@ -7,7 +7,6 @@ import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonSetter;
 
 import javax.annotation.Nullable;
 import java.time.Duration;
@@ -178,8 +177,15 @@ public class HttpRetryOptions {
      * Sets the backoff coefficient.
      *
      * @param backoffCoefficient the backoff coefficient (must be &gt;= 1.0)
+     * @throws IllegalArgumentException if backoffCoefficient is less than 1.0, NaN, or infinite
      */
     public void setBackoffCoefficient(double backoffCoefficient) {
+        if (Double.isNaN(backoffCoefficient) || Double.isInfinite(backoffCoefficient)) {
+            throw new IllegalArgumentException("backoffCoefficient must be a finite number");
+        }
+        if (backoffCoefficient < 1.0) {
+            throw new IllegalArgumentException("backoffCoefficient must be >= 1.0");
+        }
         this.backoffCoefficient = backoffCoefficient;
     }
 
