@@ -253,7 +253,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         // Should have two actions: sendEntityMessage (signal) and completeOrchestration
         Collection<OrchestratorAction> actions = result.getActions();
@@ -291,7 +291,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasSignal = false;
         for (OrchestratorAction action : result.getActions()) {
@@ -329,7 +329,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
         // This should NOT throw a NonDeterministicOrchestratorException
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         // Should still have the complete action
         boolean hasComplete = false;
@@ -361,7 +361,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         // Should have the sendEntityMessage (call) action
         boolean hasCall = false;
@@ -402,7 +402,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasCall = false;
         boolean hasComplete = false;
@@ -445,7 +445,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         // Extract the requestId from the call action
         String requestId = null;
@@ -472,7 +472,7 @@ public class TaskOrchestrationEntityEventTest {
                 entityOperationCompletedEvent(requestId, "42"),
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         // Should now have a complete action with value 42
         boolean hasComplete = false;
@@ -507,7 +507,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
@@ -537,7 +537,7 @@ public class TaskOrchestrationEntityEventTest {
                 entityOperationFailedEvent(requestId, "java.lang.RuntimeException", "Entity error!"),
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result2.getActions()) {
@@ -579,7 +579,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
@@ -607,7 +607,7 @@ public class TaskOrchestrationEntityEventTest {
                 eventRaisedEvent(requestId, responseJson),  // ResponseMessage JSON wrapper
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result2.getActions()) {
@@ -636,7 +636,7 @@ public class TaskOrchestrationEntityEventTest {
                 orchestratorStarted(),
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
@@ -664,7 +664,7 @@ public class TaskOrchestrationEntityEventTest {
                 eventRaisedEvent(requestId, responseJson),
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result2.getActions()) {
@@ -694,7 +694,7 @@ public class TaskOrchestrationEntityEventTest {
                 orchestratorStarted(),
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
@@ -721,7 +721,7 @@ public class TaskOrchestrationEntityEventTest {
                 eventRaisedEvent(requestId, responseJson),
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result2.getActions()) {
@@ -754,7 +754,7 @@ public class TaskOrchestrationEntityEventTest {
                 orchestratorStarted(),
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
@@ -785,7 +785,7 @@ public class TaskOrchestrationEntityEventTest {
                 eventRaisedEvent(requestId, responseJson),
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result2.getActions()) {
@@ -819,7 +819,7 @@ public class TaskOrchestrationEntityEventTest {
                 orchestratorStarted(),
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         String requestId = null;
         for (OrchestratorAction action : result1.getActions()) {
@@ -850,7 +850,7 @@ public class TaskOrchestrationEntityEventTest {
                 eventRaisedEvent(requestId, responseJson),
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result2.getActions()) {
@@ -887,7 +887,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
         // This should NOT throw (EVENTSENT is a no-op)
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result.getActions()) {
@@ -922,7 +922,7 @@ public class TaskOrchestrationEntityEventTest {
         // The orchestrator already completed, so when the non-determinism is detected,
         // context.fail() throws IllegalStateException ("already completed")
         assertThrows(IllegalStateException.class, () ->
-                executor.execute(pastEvents, newEvents));
+                executor.execute(pastEvents, newEvents, null));
     }
 
     @Test
@@ -943,7 +943,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
         assertThrows(IllegalStateException.class, () ->
-                executor.execute(pastEvents, newEvents));
+                executor.execute(pastEvents, newEvents, null));
     }
 
     @Test
@@ -964,7 +964,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
         assertThrows(IllegalStateException.class, () ->
-                executor.execute(pastEvents, newEvents));
+                executor.execute(pastEvents, newEvents, null));
     }
 
     @Test
@@ -985,7 +985,7 @@ public class TaskOrchestrationEntityEventTest {
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
         assertThrows(IllegalStateException.class, () ->
-                executor.execute(pastEvents, newEvents));
+                executor.execute(pastEvents, newEvents, null));
     }
 
     // endregion
@@ -1009,7 +1009,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasScheduledSignal = false;
         for (OrchestratorAction action : result.getActions()) {
@@ -1041,7 +1041,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         for (OrchestratorAction action : result.getActions()) {
             if (action.hasSendEntityMessage() && action.getSendEntityMessage().hasEntityOperationSignaled()) {
@@ -1067,7 +1067,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasCall = false;
         for (OrchestratorAction action : result.getActions()) {
@@ -1097,7 +1097,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasCall = false;
         boolean hasTimer = false;
@@ -1129,7 +1129,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasCall = false;
         boolean hasTimer = false;
@@ -1165,7 +1165,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result.getActions()) {
@@ -1199,7 +1199,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1);
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
 
         // Extract the criticalSectionId from the lock request action
         String criticalSectionId = null;
@@ -1222,7 +1222,7 @@ public class TaskOrchestrationEntityEventTest {
                 entityLockGrantedEvent(criticalSectionId),
                 orchestratorCompleted());
 
-        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2);
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result2.getActions()) {
@@ -1248,7 +1248,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasComplete = false;
         for (OrchestratorAction action : result.getActions()) {
@@ -1276,7 +1276,7 @@ public class TaskOrchestrationEntityEventTest {
                 executionStarted(orchestratorName, "null"));
         List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
 
-        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents);
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, null);
 
         boolean hasLockRequest = false;
         for (OrchestratorAction action : result.getActions()) {

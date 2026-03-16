@@ -37,6 +37,7 @@ public abstract class TaskOrchestrationEntityFeature {
      * @param input the operation input, or {@code null}
      * @param returnType the expected return type
      * @param options the call options, or {@code null}
+     * @param returnType the expected class type of the entity operation output
      * @param <TResult> the result type
      * @return a task that completes with the operation result
      */

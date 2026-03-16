@@ -660,6 +660,7 @@ public interface TaskOrchestrationContext {
      *
      * @param entityId the unique identifier of the target entity
      * @param operationName the name of the operation to invoke on the entity
+     * @return a {@link Task} that completes when the entity operation completes
      */
     default Task<Void> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName) {
         return this.callEntity(entityId, operationName, null, Void.class);
@@ -671,6 +672,7 @@ public interface TaskOrchestrationContext {
      * @param entityId the unique identifier of the target entity
      * @param operationName the name of the operation to invoke on the entity
      * @param input the serializable input to pass to the entity operation, or {@code null}
+     * @return a {@link Task} that completes when the entity operation completes
      */
     default Task<Void> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input) {
         return this.callEntity(entityId, operationName, input, Void.class);
