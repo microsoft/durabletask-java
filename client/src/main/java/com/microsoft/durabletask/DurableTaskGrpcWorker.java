@@ -11,8 +11,13 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 import com.microsoft.durabletask.util.VersionUtils;
 
 import io.grpc.*;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Scope;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -203,9 +208,109 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         // TODO: Error handling
                         if (!versioningFailed) {
-                            TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
-                                orchestratorRequest.getPastEventsList(),
-                                orchestratorRequest.getNewEventsList());
+                            // Extract ExecutionStartedEvent and its timestamp for trace context
+                            HistoryEvent startedHistoryEvent = Stream.concat(
+                                    orchestratorRequest.getPastEventsList().stream(),
+                                    orchestratorRequest.getNewEventsList().stream())
+                                .filter(event -> event.getEventTypeCase() == HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
+                                .findFirst()
+                                .orElse(null);
+
+                            ExecutionStartedEvent startedEvent = startedHistoryEvent != null
+                                    ? startedHistoryEvent.getExecutionStarted() : null;
+
+                            TraceContext orchTraceCtx = (startedEvent != null && startedEvent.hasParentTraceContext())
+                                    ? startedEvent.getParentTraceContext() : null;
+                            String orchName = startedEvent != null ? startedEvent.getName() : "";
+
+                            // Start the orchestration span BEFORE execution so child spans
+                            // (activities, timers) are nested under it. Use setSpanId() to give
+                            // all dispatches the same span ID for deduplication
+                            // (matching .NET's SetSpanId pattern).
+                            Span orchestrationSpan = null;
+                            TraceContext orchestrationSpanContext = null;
+                            if (orchTraceCtx != null) {
+                                Map<String, String> orchSpanAttrs = new HashMap<>();
+                                orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
+                                orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
+                                orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
+
+                                // Use ExecutionStartedEvent timestamp so the orchestration span
+                                // covers the full lifecycle from creation to completion
+                                Instant spanStartTime = startedHistoryEvent.hasTimestamp()
+                                        ? DataConverter.getInstantFromTimestamp(startedHistoryEvent.getTimestamp())
+                                        : null;
+
+                                orchestrationSpan = TracingHelper.startSpanWithStartTime(
+                                        TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
+                                        orchTraceCtx,
+                                        SpanKind.SERVER,
+                                        orchSpanAttrs,
+                                        spanStartTime);
+
+                                // Use the same span ID across dispatches for deduplication.
+                                // Priority: OrchestrationTraceContext.spanID (if populated by server),
+                                // fallback: derive deterministically from parentTraceContext span ID.
+                                String orchSpanId = null;
+                                if (orchestratorRequest.hasOrchestrationTraceContext()
+                                        && orchestratorRequest.getOrchestrationTraceContext().hasSpanID()
+                                        && orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue() != null
+                                        && !orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue().isEmpty()) {
+                                    orchSpanId = orchestratorRequest.getOrchestrationTraceContext().getSpanID().getValue();
+                                } else {
+                                    // Derive from parent span ID by hashing with instance ID
+                                    String parentSpanId = TracingHelper.extractSpanIdFromTraceparent(
+                                            orchTraceCtx.getTraceParent());
+                                    if (parentSpanId != null) {
+                                        long hash = parentSpanId.hashCode() * 31L
+                                                + orchestratorRequest.getInstanceId().hashCode();
+                                        orchSpanId = String.format("%016x", hash);
+                                    }
+                                }
+                                TracingHelper.setSpanId(orchestrationSpan, orchSpanId);
+
+                                orchestrationSpanContext = TracingHelper.getCurrentTraceContext(orchestrationSpan);
+                            }
+
+                            TaskOrchestratorResult taskOrchestratorResult;
+                            try {
+                                taskOrchestratorResult = taskOrchestrationExecutor.execute(
+                                    orchestratorRequest.getPastEventsList(),
+                                    orchestratorRequest.getNewEventsList(),
+                                    orchestrationSpanContext);
+                            } catch (Throwable e) {
+                                if (e instanceof Error) {
+                                    throw (Error) e;
+                                }
+                                throw new RuntimeException(e);
+                            }
+
+                            // Only end (export) the orchestration span on the completion dispatch.
+                            // Non-completion dispatches: span is started for child parenting but
+                            // never ended, so it won't be exported by the SpanProcessor.
+                            if (orchestrationSpan != null) {
+                                boolean isCompleting = taskOrchestratorResult.getActions().stream()
+                                    .anyMatch(a -> a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION
+                                            || a.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.TERMINATEORCHESTRATION);
+
+                                if (isCompleting) {
+                                    for (OrchestratorAction action : taskOrchestratorResult.getActions()) {
+                                        if (action.getOrchestratorActionTypeCase() == OrchestratorAction.OrchestratorActionTypeCase.COMPLETEORCHESTRATION) {
+                                            CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                                            if (complete.getOrchestrationStatus() == OrchestrationStatus.ORCHESTRATION_STATUS_FAILED) {
+                                                String errorMsg = complete.hasFailureDetails()
+                                                        ? complete.getFailureDetails().getErrorMessage()
+                                                        : "Orchestration failed";
+                                                orchestrationSpan.setStatus(StatusCode.ERROR, errorMsg);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    orchestrationSpan.end();
+                                }
+                                // Non-completion: intentionally NOT ending the span.
+                                // Unended spans are not exported by the SpanProcessor.
+                            }
 
                             OrchestratorResponse response = OrchestratorResponse.newBuilder()
                                     .setInstanceId(orchestratorRequest.getInstanceId())
@@ -248,25 +353,46 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         }                        
                     } else if (requestType == RequestCase.ACTIVITYREQUEST) {
                         ActivityRequest activityRequest = workItem.getActivityRequest();
+                        String activityInstanceId = activityRequest.getOrchestrationInstance().getInstanceId();
+
+                        // Start a tracing span for this activity execution
+                        TraceContext activityTraceCtx = activityRequest.hasParentTraceContext()
+                                ? activityRequest.getParentTraceContext() : null;
+                        Map<String, String> spanAttributes = new HashMap<>();
+                        spanAttributes.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ACTIVITY);
+                        spanAttributes.put(TracingHelper.ATTR_TASK_NAME, activityRequest.getName());
+                        spanAttributes.put(TracingHelper.ATTR_INSTANCE_ID, activityInstanceId);
+                        spanAttributes.put(TracingHelper.ATTR_TASK_ID, String.valueOf(activityRequest.getTaskId()));
+                        Span activitySpan = TracingHelper.startSpan(
+                                TracingHelper.TYPE_ACTIVITY + ":" + activityRequest.getName(),
+                                activityTraceCtx,
+                                SpanKind.SERVER,
+                                spanAttributes);
+                        Scope activityScope = activitySpan.makeCurrent();
 
                         this.workItemExecutor.submit(() -> {
                             String output = null;
                             TaskFailureDetails failureDetails = null;
+                            Throwable activityError = null;
                             try {
                                 output = taskActivityExecutor.execute(
                                     activityRequest.getName(),
                                     activityRequest.getInput().getValue(),
                                     activityRequest.getTaskId());
                             } catch (Throwable e) {
+                                activityError = e;
                                 failureDetails = TaskFailureDetails.newBuilder()
                                     .setErrorType(e.getClass().getName())
                                     .setErrorMessage(e.getMessage())
                                     .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
                                     .build();
+                            } finally {
+                                activityScope.close();
+                                TracingHelper.endSpan(activitySpan, activityError);
                             }
 
                             ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
-                                    .setInstanceId(activityRequest.getOrchestrationInstance().getInstanceId())
+                                    .setInstanceId(activityInstanceId)
                                     .setTaskId(activityRequest.getTaskId())
                                     .setCompletionToken(workItem.getCompletionToken());
 

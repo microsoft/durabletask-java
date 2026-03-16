@@ -44,6 +44,9 @@ dependencies {
     testImplementation(platform('org.junit:junit-bom:5.14.2'))
     testImplementation('org.junit.jupiter:junit-jupiter')
     testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+    testImplementation "io.opentelemetry:opentelemetry-sdk:${openTelemetryVersion}"
+    testImplementation "io.opentelemetry:opentelemetry-sdk-trace:${openTelemetryVersion}"
+    testImplementation "io.opentelemetry:opentelemetry-sdk-testing:${openTelemetryVersion}"
     testImplementation project(':azuremanaged')
     testImplementation "com.azure:azure-core:${azureCoreVersion}"
     testImplementation "com.azure:azure-identity:${azureIdentityVersion}"

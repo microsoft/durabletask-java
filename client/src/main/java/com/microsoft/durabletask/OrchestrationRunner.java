@@ -8,9 +8,14 @@ import com.microsoft.durabletask.DurableTaskGrpcWorkerVersioningOptions.VersionF
 import com.microsoft.durabletask.DurableTaskGrpcWorkerVersioningOptions.VersionMatchStrategy;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.context.Scope;
+
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -146,10 +151,45 @@ public final class OrchestrationRunner {
                 logger,
                 versioningOptions);
 
+        // Extract ExecutionStartedEvent for trace context and orchestration name
+        OrchestratorService.ExecutionStartedEvent startedEvent = java.util.stream.Stream.concat(
+                orchestratorRequest.getPastEventsList().stream(),
+                orchestratorRequest.getNewEventsList().stream())
+            .filter(event -> event.getEventTypeCase() == OrchestratorService.HistoryEvent.EventTypeCase.EXECUTIONSTARTED)
+            .map(OrchestratorService.HistoryEvent::getExecutionStarted)
+            .findFirst()
+            .orElse(null);
+
+        OrchestratorService.TraceContext orchTraceCtx = (startedEvent != null && startedEvent.hasParentTraceContext())
+                ? startedEvent.getParentTraceContext() : null;
+        String orchName = startedEvent != null ? startedEvent.getName() : "";
+
+        Map<String, String> orchSpanAttrs = new HashMap<>();
+        orchSpanAttrs.put(TracingHelper.ATTR_TYPE, TracingHelper.TYPE_ORCHESTRATION);
+        orchSpanAttrs.put(TracingHelper.ATTR_TASK_NAME, orchName);
+        orchSpanAttrs.put(TracingHelper.ATTR_INSTANCE_ID, orchestratorRequest.getInstanceId());
+        Span orchestrationSpan = TracingHelper.startSpan(
+                TracingHelper.TYPE_ORCHESTRATION + ":" + orchName,
+                orchTraceCtx,
+                SpanKind.SERVER,
+                orchSpanAttrs);
+        Scope orchestrationScope = orchestrationSpan.makeCurrent();
+
         // TODO: Error handling
-        TaskOrchestratorResult taskOrchestratorResult = taskOrchestrationExecutor.execute(
-                orchestratorRequest.getPastEventsList(),
-                orchestratorRequest.getNewEventsList());
+        TaskOrchestratorResult taskOrchestratorResult;
+        Throwable orchestrationError = null;
+        try {
+            taskOrchestratorResult = taskOrchestrationExecutor.execute(
+                    orchestratorRequest.getPastEventsList(),
+                    orchestratorRequest.getNewEventsList(),
+                    TracingHelper.getCurrentTraceContext(orchestrationSpan));
+        } catch (Exception e) {
+            orchestrationError = e;
+            throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+        } finally {
+            if (orchestrationScope != null) orchestrationScope.close();
+            TracingHelper.endSpan(orchestrationSpan, orchestrationError);
+        }
 
         OrchestratorService.OrchestratorResponse response = OrchestratorService.OrchestratorResponse.newBuilder()
                 .setInstanceId(orchestratorRequest.getInstanceId())
