@@ -161,10 +161,8 @@ public class TaskEntityTest {
             this.state += amount;
         }
 
-        public void add(String label) {
+        public void add(@SuppressWarnings("unused") String label) {
             // overloaded — should trigger ambiguous match error
-            // 'label' intentionally unused; method exists to create ambiguous overload
-
         }
 
         @Override

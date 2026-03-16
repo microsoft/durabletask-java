@@ -165,9 +165,9 @@ public class EntityQueryPageableTest {
             return new EntityQueryResult(Collections.emptyList(), null);
         });
 
-        for (EntityQueryResult ignored : pageable.byPage()) {
+        pageable.byPage().forEach(result -> {
             // consume
-        }
+        });
     }
 
     @Test
