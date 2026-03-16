@@ -277,8 +277,18 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
      * @throws ClassCastException           if the result cannot be cast to {@code returnType}
      * @see #dispatch(String, Object)
      */
+    @SuppressWarnings("unchecked")
     protected <V> V dispatch(String operationName, Object input, Class<V> returnType) {
-        return returnType.cast(dispatch(operationName, input));
+        Object result = dispatch(operationName, input);
+        if (result == null) {
+            return null;
+        }
+        // Primitive types (int.class, etc.) cannot use Class.cast() with boxed values,
+        // so we let the unchecked cast handle primitive-to-wrapper conversion.
+        if (returnType.isPrimitive()) {
+            return (V) result;
+        }
+        return returnType.cast(result);
     }
 
     /**

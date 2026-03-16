@@ -418,4 +418,225 @@ public class TaskEntityTest {
     }
 
     // endregion
+
+    // region Re-entrant dispatch tests
+
+    /**
+     * Entity that uses dispatch() to compose operations re-entrantly.
+     */
+    static class BonusDepositEntity extends TaskEntity<Integer> {
+
+        public void deposit(int amount) {
+            this.state += amount;
+        }
+
+        public void depositWithBonus(int amount) {
+            // Re-entrant: calls deposit() twice on the same entity
+            dispatch("deposit", amount);           // main deposit
+            dispatch("deposit", amount / 10);      // 10% bonus
+        }
+
+        public int get() {
+            return this.state;
+        }
+
+        @Override
+        protected Integer initializeState(TaskEntityOperation operation) {
+            return 0;
+        }
+
+        @Override
+        protected Class<Integer> getStateType() {
+            return Integer.class;
+        }
+    }
+
+    /**
+     * Entity that uses dispatch() with a typed return value.
+     */
+    static class ComputeEntity extends TaskEntity<Integer> {
+
+        public int double_value(int input) {
+            return input * 2;
+        }
+
+        public int quadruple(int input) {
+            // dispatch → double → then dispatch → double again
+            int doubled = dispatch("double_value", input, int.class);
+            return dispatch("double_value", doubled, int.class);
+        }
+
+        @Override
+        protected Integer initializeState(TaskEntityOperation operation) {
+            return 0;
+        }
+
+        @Override
+        protected Class<Integer> getStateType() {
+            return Integer.class;
+        }
+    }
+
+    /**
+     * Entity that uses dispatch() to call an implicit "delete" operation.
+     */
+    static class SelfDeletingEntity extends TaskEntity<String> {
+
+        public String resetAndDelete() {
+            this.state = "resetting";
+            dispatch("delete");
+            return "deleted";
+        }
+
+        @Override
+        protected String initializeState(TaskEntityOperation operation) {
+            return "initial";
+        }
+
+        @Override
+        protected Class<String> getStateType() {
+            return String.class;
+        }
+    }
+
+    /**
+     * Entity that tests dispatch() to state-dispatched methods.
+     */
+    static class StateDispatchWithReentrancy extends TaskEntity<MyState> {
+
+        public StateDispatchWithReentrancy() {
+            setAllowStateDispatch(true);
+        }
+
+        public int getAndIncrement() {
+            int before = this.state.getValue();
+            dispatch("increment"); // dispatches to MyState.increment() via state dispatch
+            return before;
+        }
+
+        @Override
+        protected Class<MyState> getStateType() {
+            return MyState.class;
+        }
+    }
+
+    @Test
+    void dispatch_basicReentrantCall() throws Exception {
+        BonusDepositEntity entity = new BonusDepositEntity();
+        TaskEntityOperation op = createOperation("depositWithBonus", 100);
+        entity.runAsync(op);
+
+        // 100 + 10% bonus = 110
+        assertEquals(110, entity.state);
+    }
+
+    @Test
+    void dispatch_withTypedReturnValue() throws Exception {
+        ComputeEntity entity = new ComputeEntity();
+        TaskEntityOperation op = createOperation("quadruple", 5);
+        Object result = entity.runAsync(op);
+
+        // 5 * 2 = 10, then 10 * 2 = 20
+        assertEquals(20, result);
+    }
+
+    @Test
+    void dispatch_implicitDelete() throws Exception {
+        SelfDeletingEntity entity = new SelfDeletingEntity();
+        DataConverter converter = new JacksonDataConverter();
+        String serializedState = converter.serialize("existing");
+
+        TaskEntityOperation op = createOperation("resetAndDelete", null, serializedState);
+        Object result = entity.runAsync(op);
+
+        assertEquals("deleted", result);
+        assertNull(entity.state);
+    }
+
+    @Test
+    void dispatch_caseInsensitive() throws Exception {
+        BonusDepositEntity entity = new BonusDepositEntity();
+        // "deposit" is the method, but dispatch uses "DEPOSIT" internally — let's validate
+        // by calling depositWithBonus which dispatches "deposit"
+        TaskEntityOperation op = createOperation("DEPOSITWITHBONUS", 100);
+        entity.runAsync(op);
+        assertEquals(110, entity.state);
+    }
+
+    @Test
+    void dispatch_toStateDispatchedMethod() throws Exception {
+        StateDispatchWithReentrancy entity = new StateDispatchWithReentrancy();
+        DataConverter converter = new JacksonDataConverter();
+        String serializedState = converter.serialize(new MyState());
+
+        TaskEntityOperation op = createOperation("getAndIncrement", null, serializedState);
+        Object result = entity.runAsync(op);
+
+        // Before increment was 0
+        assertEquals(0, result);
+        // State should now be 1 after dispatch("increment")
+        assertEquals(1, entity.state.getValue());
+    }
+
+    @Test
+    void dispatch_unknownOperation_throwsException() throws Exception {
+        BonusDepositEntity entity = new BonusDepositEntity();
+        // First trigger runAsync to set the context on the entity, then test dispatch failure
+        // We use a custom entity that dispatches an unknown operation
+        TaskEntity<Void> failEntity = new TaskEntity<Void>() {
+            public void bad() {
+                dispatch("nonExistent");
+            }
+
+            @Override
+            protected Class<Void> getStateType() {
+                return null;
+            }
+        };
+
+        assertThrows(UnsupportedOperationException.class, () -> {
+            failEntity.runAsync(createOperation("bad"));
+        });
+    }
+
+    @Test
+    void dispatch_outsideExecution_throwsIllegalState() {
+        BonusDepositEntity entity = new BonusDepositEntity();
+        // dispatch() called without runAsync() first (no context set)
+        assertThrows(IllegalStateException.class, () -> {
+            entity.dispatch("deposit", 10);
+        });
+    }
+
+    @Test
+    void dispatch_noInputOverload() throws Exception {
+        CounterEntity entity = new CounterEntity();
+        // Use a wrapper entity that dispatches "reset" with no input
+        TaskEntity<Integer> resetDispatcher = new TaskEntity<Integer>() {
+            public void doReset() {
+                this.state = 42;
+                dispatch("reset"); // reset sets state to 0
+            }
+
+            public void reset() {
+                this.state = 0;
+            }
+
+            @Override
+            protected Integer initializeState(TaskEntityOperation operation) {
+                return 0;
+            }
+
+            @Override
+            protected Class<Integer> getStateType() {
+                return Integer.class;
+            }
+        };
+
+        TaskEntityOperation op = createOperation("doReset");
+        resetDispatcher.runAsync(op);
+        assertEquals(0, resetDispatcher.state);
+    }
+
+    // endregion
 }
