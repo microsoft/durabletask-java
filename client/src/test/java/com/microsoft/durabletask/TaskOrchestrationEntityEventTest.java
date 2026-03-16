@@ -706,7 +706,7 @@ public class TaskOrchestrationEntityEventTest {
 
         // Second pass: replay with null result in ResponseMessage
         executor = createExecutor(orchestratorName, ctx -> {
-            Void value = ctx.callEntity(entityId, "reset", null, Void.class).await();
+            ctx.callEntity(entityId, "reset", null, Void.class).await();
             ctx.complete("done");
         });
 
