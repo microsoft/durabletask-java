@@ -17,6 +17,17 @@ task runWebAppToDurableTaskSchedulerSample(type: JavaExec) {
     mainClass = 'io.durabletask.samples.WebAppToDurableTaskSchedulerSample'
 }
 
+task runTracingPattern(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.TracingPattern'
+}
+
+task printClasspath {
+    doLast {
+        println sourceSets.main.runtimeClasspath.asPath
+    }
+}
+
 dependencies {
     implementation project(':client')
     implementation project(':azuremanaged')
@@ -24,6 +35,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation platform("org.springframework.boot:spring-boot-dependencies:2.7.18")
     implementation 'org.springframework.boot:spring-boot-starter'
+
+    // OpenTelemetry for tracing sample
+    implementation "io.opentelemetry:opentelemetry-sdk:1.58.0"
+    implementation "io.opentelemetry:opentelemetry-sdk-trace:1.58.0"
+    implementation "io.opentelemetry:opentelemetry-exporter-otlp:1.58.0"
 
     // https://github.com/grpc/grpc-java#download
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
