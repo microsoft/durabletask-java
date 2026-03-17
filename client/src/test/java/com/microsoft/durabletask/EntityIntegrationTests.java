@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class EntityIntegrationTests extends IntegrationTestBase {
+    private static final Duration ENTITY_ORCHESTRATION_TIMEOUT = Duration.ofSeconds(30);
 
     // region Test entity classes
 
@@ -57,7 +59,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     @Test
     void signalEntityAndGetState() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-signal-test");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-signal-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addEntity(entityName, CounterEntity::new)
@@ -83,7 +85,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     @Test
     void signalEntityMultipleSignals() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-multi-signal");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-multi-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addEntity(entityName, CounterEntity::new)
@@ -110,7 +112,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     @Test
     void signalEntityResetAndGet() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-reset");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-reset-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addEntity(entityName, CounterEntity::new)
@@ -140,7 +142,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     void orchestrationCallsEntity() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
         final String orchestratorName = "CallEntityOrchestration";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-orch-call");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-orch-call-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -159,7 +161,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
 
         String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
         OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId, defaultTimeout, true);
+            instanceId, ENTITY_ORCHESTRATION_TIMEOUT, true);
 
         assertNotNull(instance);
         assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -170,7 +172,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     void orchestrationSignalsEntityFireAndForget() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
         final String orchestratorName = "SignalEntityOrchestration";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-orch-signal");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-orch-signal-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -184,7 +186,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
 
         String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
         OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId, defaultTimeout, true);
+            instanceId, ENTITY_ORCHESTRATION_TIMEOUT, true);
 
         assertNotNull(instance);
         assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -209,7 +211,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     void signalEntity_caseInsensitiveName_entityProcessesSignal() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
         // Use mixed case for the entity ID — should still work since names are lowercased
-        EntityInstanceId entityId = new EntityInstanceId("COUNTER", "counter-case-test");
+        EntityInstanceId entityId = new EntityInstanceId("COUNTER", "counter-case-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addEntity(entityName, CounterEntity::new)
@@ -236,7 +238,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     void orchestration_lockAndCallEntity_succeeds() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
         final String orchestratorName = "LockEntityOrchestration";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-lock-test");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-lock-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -260,7 +262,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
 
         String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
         OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId, defaultTimeout, true);
+            instanceId, ENTITY_ORCHESTRATION_TIMEOUT, true);
 
         assertNotNull(instance);
         assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -284,7 +286,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     void typedProxy_signalAndCallEntity() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
         final String orchestratorName = "TypedProxyOrchestration";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-proxy-test");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-proxy-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -308,7 +310,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
 
         String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
         OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId, Duration.ofSeconds(30), true);
+            instanceId, ENTITY_ORCHESTRATION_TIMEOUT, true);
 
         assertNotNull(instance);
         assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -319,7 +321,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     void typedProxy_viaEntitiesFeature() throws TimeoutException, InterruptedException {
         final String entityName = "Counter";
         final String orchestratorName = "TypedProxyFeatureOrchestration";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-proxy-feature-test");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-pf-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -338,7 +340,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
 
         String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
         OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId, Duration.ofSeconds(30), true);
+            instanceId, ENTITY_ORCHESTRATION_TIMEOUT, true);
 
         assertNotNull(instance);
         assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
@@ -381,7 +383,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     void reentrantDispatch_composesOperations() throws TimeoutException, InterruptedException {
         final String entityName = "BonusCounter";
         final String orchestratorName = "ReentrantDispatchOrchestration";
-        EntityInstanceId entityId = new EntityInstanceId(entityName, "bonus-counter-test");
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "bonus-counter-" + UUID.randomUUID());
 
         this.createWorkerBuilder()
                 .addOrchestrator(orchestratorName, ctx -> {
@@ -400,7 +402,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
 
         String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
         OrchestrationMetadata instance = client.waitForInstanceCompletion(
-                instanceId, Duration.ofSeconds(30), true);
+            instanceId, ENTITY_ORCHESTRATION_TIMEOUT, true);
 
         assertNotNull(instance);
         assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());

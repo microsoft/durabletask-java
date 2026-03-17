@@ -37,6 +37,7 @@ final class TaskOrchestrationExecutor {
     private final Logger logger;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final boolean useNativeEntityActions;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
@@ -44,11 +45,22 @@ final class TaskOrchestrationExecutor {
             Duration maximumTimerInterval,
             Logger logger,
             DurableTaskGrpcWorkerVersioningOptions versioningOptions) {
+        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions, false);
+    }
+
+    public TaskOrchestrationExecutor(
+            HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
+            DataConverter dataConverter,
+            Duration maximumTimerInterval,
+            Logger logger,
+            DurableTaskGrpcWorkerVersioningOptions versioningOptions,
+            boolean useNativeEntityActions) {
         this.orchestrationFactories = orchestrationFactories;
         this.dataConverter = dataConverter;
         this.maximumTimerInterval = maximumTimerInterval;
         this.logger = logger;
         this.versioningOptions = versioningOptions;
+        this.useNativeEntityActions = useNativeEntityActions;
     }
 
     public TaskOrchestratorResult execute(
@@ -410,32 +422,49 @@ final class TaskOrchestrationExecutor {
             String requestId = this.newUUID().toString();
             String serializedInput = this.dataConverter.serialize(input);
 
-            // Build DTFx RequestMessage JSON payload matching the legacy format that the
-            // Azure Functions extension (DTFx backend) understands. The extension processes
-            // entity messages as external events (SendEventAction), NOT the newer proto-native
-            // SendEntityMessageAction which is designed for the DTS backend.
-            ObjectNode requestMessage = JSON_MAPPER.createObjectNode();
-            requestMessage.put("op", operationName);
-            requestMessage.put("signal", true);
-            if (serializedInput != null) {
-                requestMessage.put("input", serializedInput);
+            if (TaskOrchestrationExecutor.this.useNativeEntityActions) {
+                // Proto-native SendEntityMessageAction for DTS/standalone sidecar backends
+                EntityOperationSignaledEvent.Builder signalBuilder = EntityOperationSignaledEvent.newBuilder()
+                        .setRequestId(requestId)
+                        .setOperation(operationName)
+                        .setTargetInstanceId(StringValue.of(entityId.toString()));
+                if (serializedInput != null) {
+                    signalBuilder.setInput(StringValue.of(serializedInput));
+                }
+                if (options != null && options.getScheduledTime() != null) {
+                    signalBuilder.setScheduledTime(
+                            DataConverter.getTimestampFromInstant(options.getScheduledTime()));
+                }
+                this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                        .setId(id)
+                        .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                                .setEntityOperationSignaled(signalBuilder))
+                        .build());
+            } else {
+                // Legacy DTFx RequestMessage JSON for Azure Functions extension compatibility.
+                // Uses SendEventAction (external event) instead of SendEntityMessageAction.
+                ObjectNode requestMessage = JSON_MAPPER.createObjectNode();
+                requestMessage.put("op", operationName);
+                requestMessage.put("signal", true);
+                if (serializedInput != null) {
+                    requestMessage.put("input", serializedInput);
+                }
+                requestMessage.put("id", requestId);
+                String eventName = "op";
+                if (options != null && options.getScheduledTime() != null) {
+                    String scheduledTimeStr = options.getScheduledTime().toString();
+                    requestMessage.put("due", scheduledTimeStr);
+                    eventName = "op@" + scheduledTimeStr;
+                }
+                this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                        .setId(id)
+                        .setSendEvent(SendEventAction.newBuilder()
+                                .setInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId(entityId.toString()))
+                                .setName(eventName)
+                                .setData(StringValue.of(requestMessage.toString())))
+                        .build());
             }
-            requestMessage.put("id", requestId);
-            String eventName = "op";
-            if (options != null && options.getScheduledTime() != null) {
-                String scheduledTimeStr = options.getScheduledTime().toString();
-                requestMessage.put("due", scheduledTimeStr);
-                eventName = "op@" + scheduledTimeStr;
-            }
-
-            this.pendingActions.put(id, OrchestratorAction.newBuilder()
-                    .setId(id)
-                    .setSendEvent(SendEventAction.newBuilder()
-                            .setInstance(OrchestrationInstance.newBuilder()
-                                    .setInstanceId(entityId.toString()))
-                            .setName(eventName)
-                            .setData(StringValue.of(requestMessage.toString())))
-                    .build());
 
             if (!this.isReplaying) {
                 this.logger.fine(() -> String.format(
@@ -472,28 +501,46 @@ final class TaskOrchestrationExecutor {
             String requestId = this.newUUID().toString();
             String serializedInput = this.dataConverter.serialize(input);
 
-            // Build DTFx RequestMessage JSON for entity call (two-way operation).
-            // Uses SendEventAction (external event) instead of SendEntityMessageAction for
-            // compatibility with the Azure Functions extension (DTFx backend).
-            ObjectNode requestMessage = JSON_MAPPER.createObjectNode();
-            requestMessage.put("op", operationName);
-            if (serializedInput != null) {
-                requestMessage.put("input", serializedInput);
+            if (TaskOrchestrationExecutor.this.useNativeEntityActions) {
+                // Proto-native SendEntityMessageAction for DTS/standalone sidecar backends
+                EntityOperationCalledEvent.Builder callBuilder = EntityOperationCalledEvent.newBuilder()
+                        .setRequestId(requestId)
+                        .setOperation(operationName)
+                        .setTargetInstanceId(StringValue.of(entityId.toString()));
+                if (serializedInput != null) {
+                    callBuilder.setInput(StringValue.of(serializedInput));
+                }
+                callBuilder.setParentInstanceId(StringValue.of(this.instanceId));
+                if (this.executionId != null) {
+                    callBuilder.setParentExecutionId(StringValue.of(this.executionId));
+                }
+                this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                        .setId(id)
+                        .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                                .setEntityOperationCalled(callBuilder))
+                        .build());
+            } else {
+                // Legacy DTFx RequestMessage JSON for Azure Functions extension compatibility.
+                // Uses SendEventAction (external event) instead of SendEntityMessageAction.
+                ObjectNode requestMessage = JSON_MAPPER.createObjectNode();
+                requestMessage.put("op", operationName);
+                if (serializedInput != null) {
+                    requestMessage.put("input", serializedInput);
+                }
+                requestMessage.put("id", requestId);
+                requestMessage.put("parent", this.instanceId);
+                if (this.executionId != null) {
+                    requestMessage.put("parentExecution", this.executionId);
+                }
+                this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                        .setId(id)
+                        .setSendEvent(SendEventAction.newBuilder()
+                                .setInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId(entityId.toString()))
+                                .setName("op")
+                                .setData(StringValue.of(requestMessage.toString())))
+                        .build());
             }
-            requestMessage.put("id", requestId);
-            requestMessage.put("parent", this.instanceId);
-            if (this.executionId != null) {
-                requestMessage.put("parentExecution", this.executionId);
-            }
-
-            this.pendingActions.put(id, OrchestratorAction.newBuilder()
-                    .setId(id)
-                    .setSendEvent(SendEventAction.newBuilder()
-                            .setInstance(OrchestrationInstance.newBuilder()
-                                    .setInstanceId(entityId.toString()))
-                            .setName("op")
-                            .setData(StringValue.of(requestMessage.toString())))
-                    .build());
 
             if (!this.isReplaying) {
                 this.logger.info(() -> String.format(
@@ -572,28 +619,42 @@ final class TaskOrchestrationExecutor {
             // through subsequent entities in the lock set.
             {
                 int id = this.sequenceNumber++;
-                ObjectNode lockRequestMessage = JSON_MAPPER.createObjectNode();
-                lockRequestMessage.putNull("op");
-                lockRequestMessage.put("id", criticalSectionId);
-                ArrayNode lockSetArray = lockRequestMessage.putArray("lockset");
-                for (EntityInstanceId eid : sortedIds) {
-                    ObjectNode entityIdNode = JSON_MAPPER.createObjectNode();
-                    entityIdNode.put("name", eid.getName());
-                    entityIdNode.put("key", eid.getKey());
-                    lockSetArray.add(entityIdNode);
-                }
-                lockRequestMessage.put("pos", 0);
-                lockRequestMessage.put("parent", this.instanceId);
+                if (TaskOrchestrationExecutor.this.useNativeEntityActions) {
+                    // Proto-native lock request for DTS/standalone sidecar backends
+                    this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                            .setId(id)
+                            .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                                    .setEntityLockRequested(EntityLockRequestedEvent.newBuilder()
+                                            .setCriticalSectionId(criticalSectionId)
+                                            .addAllLockSet(lockSet)
+                                            .setPosition(0)
+                                            .setParentInstanceId(StringValue.of(this.instanceId))))
+                            .build());
+                } else {
+                    // Legacy DTFx JSON for Azure Functions extension compatibility
+                    ObjectNode lockRequestMessage = JSON_MAPPER.createObjectNode();
+                    lockRequestMessage.putNull("op");
+                    lockRequestMessage.put("id", criticalSectionId);
+                    ArrayNode lockSetArray = lockRequestMessage.putArray("lockset");
+                    for (EntityInstanceId eid : sortedIds) {
+                        ObjectNode entityIdNode = JSON_MAPPER.createObjectNode();
+                        entityIdNode.put("name", eid.getName());
+                        entityIdNode.put("key", eid.getKey());
+                        lockSetArray.add(entityIdNode);
+                    }
+                    lockRequestMessage.put("pos", 0);
+                    lockRequestMessage.put("parent", this.instanceId);
 
-                String targetEntityId = lockSet.get(0);
-                this.pendingActions.put(id, OrchestratorAction.newBuilder()
-                        .setId(id)
-                        .setSendEvent(SendEventAction.newBuilder()
-                                .setInstance(OrchestrationInstance.newBuilder()
-                                        .setInstanceId(targetEntityId))
-                                .setName("op")
-                                .setData(StringValue.of(lockRequestMessage.toString())))
-                        .build());
+                    String targetEntityId = lockSet.get(0);
+                    this.pendingActions.put(id, OrchestratorAction.newBuilder()
+                            .setId(id)
+                            .setSendEvent(SendEventAction.newBuilder()
+                                    .setInstance(OrchestrationInstance.newBuilder()
+                                            .setInstanceId(targetEntityId))
+                                    .setName("op")
+                                    .setData(StringValue.of(lockRequestMessage.toString())))
+                            .build());
+                }
             }
 
             // Store the lock set so handleEntityLockGranted can populate lockedEntityIds
@@ -620,19 +681,30 @@ final class TaskOrchestrationExecutor {
                 // Release all locks
                 for (EntityInstanceId lockedEntity : sortedIds) {
                     int unlockId = this.sequenceNumber++;
-                    // Build DTFx ReleaseMessage JSON for releasing entity locks
-                    ObjectNode releaseMessage = JSON_MAPPER.createObjectNode();
-                    releaseMessage.put("parent", this.instanceId);
-                    releaseMessage.put("id", criticalSectionId);
-
-                    this.pendingActions.put(unlockId, OrchestratorAction.newBuilder()
-                            .setId(unlockId)
-                            .setSendEvent(SendEventAction.newBuilder()
-                                    .setInstance(OrchestrationInstance.newBuilder()
-                                            .setInstanceId(lockedEntity.toString()))
-                                    .setName("release")
-                                    .setData(StringValue.of(releaseMessage.toString())))
-                            .build());
+                    if (TaskOrchestrationExecutor.this.useNativeEntityActions) {
+                        // Proto-native unlock for DTS/standalone sidecar backends
+                        this.pendingActions.put(unlockId, OrchestratorAction.newBuilder()
+                                .setId(unlockId)
+                                .setSendEntityMessage(SendEntityMessageAction.newBuilder()
+                                        .setEntityUnlockSent(EntityUnlockSentEvent.newBuilder()
+                                                .setCriticalSectionId(criticalSectionId)
+                                                .setParentInstanceId(StringValue.of(this.instanceId))
+                                                .setTargetInstanceId(StringValue.of(lockedEntity.toString()))))
+                                .build());
+                    } else {
+                        // Legacy DTFx ReleaseMessage JSON for Azure Functions extension compatibility
+                        ObjectNode releaseMessage = JSON_MAPPER.createObjectNode();
+                        releaseMessage.put("parent", this.instanceId);
+                        releaseMessage.put("id", criticalSectionId);
+                        this.pendingActions.put(unlockId, OrchestratorAction.newBuilder()
+                                .setId(unlockId)
+                                .setSendEvent(SendEventAction.newBuilder()
+                                        .setInstance(OrchestrationInstance.newBuilder()
+                                                .setInstanceId(lockedEntity.toString()))
+                                        .setName("release")
+                                        .setData(StringValue.of(releaseMessage.toString())))
+                                .build());
+                    }
                 }
 
                 this.isInCriticalSection = false;
@@ -1084,8 +1156,8 @@ final class TaskOrchestrationExecutor {
 
         private void handleEventSent(HistoryEvent e) {
             // During replay, remove the pending action so we don't re-send already-processed
-            // events. This applies to entity operations (signal, call, lock, unlock) which
-            // now use SendEventAction, as well as regular sendEvent calls.
+            // events. When using the legacy Azure Functions path (useNativeEntityActions=false),
+            // this also applies to entity operations which use SendEventAction.
             int taskId = e.getEventId();
             this.pendingActions.remove(taskId);
         }
