@@ -44,9 +44,44 @@ public final class OrchestrationRunner {
     public static <R> String loadAndRun(
             String base64EncodedOrchestratorRequest,
             OrchestratorFunction<R> orchestratorFunc) {
-        // Example string: CiBhOTMyYjdiYWM5MmI0MDM5YjRkMTYxMDIwNzlmYTM1YSIaCP///////////wESCwi254qRBhDk+rgocgAicgj///////////8BEgwIs+eKkQYQzMXjnQMaVwoLSGVsbG9DaXRpZXMSACJGCiBhOTMyYjdiYWM5MmI0MDM5YjRkMTYxMDIwNzlmYTM1YRIiCiA3ODEwOTA2N2Q4Y2Q0ODg1YWU4NjQ0OTNlMmRlMGQ3OA==
+        return loadAndRun(base64EncodedOrchestratorRequest, orchestratorFunc, null, null);
+    }
+
+    /**
+     * Loads orchestration history from {@code base64EncodedOrchestratorRequest} and uses it to execute the
+     * orchestrator function with large payload externalization support.
+     *
+     * @param base64EncodedOrchestratorRequest the base64-encoded protobuf payload
+     * @param orchestratorFunc a function that implements the orchestrator logic
+     * @param store the payload store for externalizing/resolving large payloads
+     * @param <R> the type of the orchestrator function output
+     * @return a base64-encoded protobuf payload of orchestrator actions
+     */
+    public static <R> String loadAndRun(
+            String base64EncodedOrchestratorRequest,
+            OrchestratorFunction<R> orchestratorFunc,
+            PayloadStore store) {
+        return loadAndRun(base64EncodedOrchestratorRequest, orchestratorFunc, store, new LargePayloadOptions.Builder().build());
+    }
+
+    /**
+     * Loads orchestration history from {@code base64EncodedOrchestratorRequest} and uses it to execute the
+     * orchestrator function with large payload externalization support and custom options.
+     *
+     * @param base64EncodedOrchestratorRequest the base64-encoded protobuf payload
+     * @param orchestratorFunc a function that implements the orchestrator logic
+     * @param store the payload store for externalizing/resolving large payloads
+     * @param options the large payload configuration options
+     * @param <R> the type of the orchestrator function output
+     * @return a base64-encoded protobuf payload of orchestrator actions
+     */
+    public static <R> String loadAndRun(
+            String base64EncodedOrchestratorRequest,
+            OrchestratorFunction<R> orchestratorFunc,
+            PayloadStore store,
+            LargePayloadOptions options) {
         byte[] decodedBytes = Base64.getDecoder().decode(base64EncodedOrchestratorRequest);
-        byte[] resultBytes = loadAndRun(decodedBytes, orchestratorFunc);
+        byte[] resultBytes = loadAndRun(decodedBytes, orchestratorFunc, store, options);
         return Base64.getEncoder().encodeToString(resultBytes);
     }
 
@@ -63,6 +98,42 @@ public final class OrchestrationRunner {
     public static <R> byte[] loadAndRun(
             byte[] orchestratorRequestBytes,
             OrchestratorFunction<R> orchestratorFunc) {
+        return loadAndRun(orchestratorRequestBytes, orchestratorFunc, null, null);
+    }
+
+    /**
+     * Loads orchestration history from {@code orchestratorRequestBytes} and uses it to execute the
+     * orchestrator function with large payload externalization support.
+     *
+     * @param orchestratorRequestBytes the protobuf payload
+     * @param orchestratorFunc a function that implements the orchestrator logic
+     * @param store the payload store for externalizing/resolving large payloads
+     * @param <R> the type of the orchestrator function output
+     * @return a protobuf-encoded payload of orchestrator actions
+     */
+    public static <R> byte[] loadAndRun(
+            byte[] orchestratorRequestBytes,
+            OrchestratorFunction<R> orchestratorFunc,
+            PayloadStore store) {
+        return loadAndRun(orchestratorRequestBytes, orchestratorFunc, store, new LargePayloadOptions.Builder().build());
+    }
+
+    /**
+     * Loads orchestration history from {@code orchestratorRequestBytes} and uses it to execute the
+     * orchestrator function with large payload externalization support and custom options.
+     *
+     * @param orchestratorRequestBytes the protobuf payload
+     * @param orchestratorFunc a function that implements the orchestrator logic
+     * @param store the payload store for externalizing/resolving large payloads
+     * @param options the large payload configuration options
+     * @param <R> the type of the orchestrator function output
+     * @return a protobuf-encoded payload of orchestrator actions
+     */
+    public static <R> byte[] loadAndRun(
+            byte[] orchestratorRequestBytes,
+            OrchestratorFunction<R> orchestratorFunc,
+            PayloadStore store,
+            LargePayloadOptions options) {
         if (orchestratorFunc == null) {
             throw new IllegalArgumentException("orchestratorFunc must not be null");
         }
@@ -73,7 +144,7 @@ public final class OrchestrationRunner {
             ctx.complete(output);
         };
 
-        return loadAndRun(orchestratorRequestBytes, orchestration);
+        return loadAndRun(orchestratorRequestBytes, orchestration, store, options);
     }
 
     /**
@@ -88,8 +159,41 @@ public final class OrchestrationRunner {
     public static String loadAndRun(
             String base64EncodedOrchestratorRequest,
             TaskOrchestration orchestration) {
+        return loadAndRun(base64EncodedOrchestratorRequest, orchestration, null, null);
+    }
+
+    /**
+     * Loads orchestration history and executes the orchestration with large payload externalization support.
+     *
+     * @param base64EncodedOrchestratorRequest the base64-encoded protobuf payload
+     * @param orchestration the orchestration to execute
+     * @param store the payload store for externalizing/resolving large payloads
+     * @return a base64-encoded protobuf payload of orchestrator actions
+     */
+    public static String loadAndRun(
+            String base64EncodedOrchestratorRequest,
+            TaskOrchestration orchestration,
+            PayloadStore store) {
+        return loadAndRun(base64EncodedOrchestratorRequest, orchestration, store, new LargePayloadOptions.Builder().build());
+    }
+
+    /**
+     * Loads orchestration history and executes the orchestration with large payload externalization
+     * support and custom options.
+     *
+     * @param base64EncodedOrchestratorRequest the base64-encoded protobuf payload
+     * @param orchestration the orchestration to execute
+     * @param store the payload store for externalizing/resolving large payloads
+     * @param options the large payload configuration options
+     * @return a base64-encoded protobuf payload of orchestrator actions
+     */
+    public static String loadAndRun(
+            String base64EncodedOrchestratorRequest,
+            TaskOrchestration orchestration,
+            PayloadStore store,
+            LargePayloadOptions options) {
         byte[] decodedBytes = Base64.getDecoder().decode(base64EncodedOrchestratorRequest);
-        byte[] resultBytes = loadAndRun(decodedBytes, orchestration);
+        byte[] resultBytes = loadAndRun(decodedBytes, orchestration, store, options);
         return Base64.getEncoder().encodeToString(resultBytes);
     }
 
@@ -103,6 +207,33 @@ public final class OrchestrationRunner {
      * @throws IllegalArgumentException if either parameter is {@code null} or if {@code orchestratorRequestBytes} is not valid protobuf
      */
     public static byte[] loadAndRun(byte[] orchestratorRequestBytes, TaskOrchestration orchestration) {
+        return loadAndRun(orchestratorRequestBytes, orchestration, null, null);
+    }
+
+    /**
+     * Loads orchestration history and executes the orchestration with large payload externalization support.
+     *
+     * @param orchestratorRequestBytes the protobuf payload
+     * @param orchestration the orchestration to execute
+     * @param store the payload store for externalizing/resolving large payloads
+     * @return a protobuf-encoded payload of orchestrator actions
+     */
+    public static byte[] loadAndRun(byte[] orchestratorRequestBytes, TaskOrchestration orchestration, PayloadStore store) {
+        return loadAndRun(orchestratorRequestBytes, orchestration, store, new LargePayloadOptions.Builder().build());
+    }
+
+    /**
+     * Loads orchestration history and executes the orchestration with large payload externalization
+     * support and custom options.
+     *
+     * @param orchestratorRequestBytes the protobuf payload
+     * @param orchestration the orchestration to execute
+     * @param store the payload store for externalizing/resolving large payloads
+     * @param options the large payload configuration options
+     * @return a protobuf-encoded payload of orchestrator actions
+     */
+    public static byte[] loadAndRun(byte[] orchestratorRequestBytes, TaskOrchestration orchestration,
+                                     PayloadStore store, LargePayloadOptions options) {
         if (orchestratorRequestBytes == null || orchestratorRequestBytes.length == 0) {
             throw new IllegalArgumentException("triggerStateProtoBytes must not be null or empty");
         }
@@ -116,6 +247,15 @@ public final class OrchestrationRunner {
             orchestratorRequest = OrchestratorService.OrchestratorRequest.parseFrom(orchestratorRequestBytes);
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalArgumentException("triggerStateProtoBytes was not valid protobuf", e);
+        }
+
+        // Resolve externalized payload URI tokens in incoming request
+        PayloadHelper payloadHelper = null;
+        if (store != null) {
+            LargePayloadOptions resolvedOptions = options != null ? options : new LargePayloadOptions.Builder().build();
+            payloadHelper = new PayloadHelper(store, resolvedOptions);
+            orchestratorRequest = PayloadInterceptionHelper.resolveOrchestratorRequestPayloads(
+                orchestratorRequest, payloadHelper);
         }
 
         // Register the passed orchestration as the default ("*") orchestration
@@ -196,6 +336,13 @@ public final class OrchestrationRunner {
                 .addAllActions(taskOrchestratorResult.getActions())
                 .setCustomStatus(StringValue.of(taskOrchestratorResult.getCustomStatus()))
                 .build();
+
+        // Externalize large payloads in outgoing response
+        if (payloadHelper != null) {
+            response = PayloadInterceptionHelper.externalizeOrchestratorResponsePayloads(
+                response, payloadHelper);
+        }
+
         return response.toByteArray();
     }
 }

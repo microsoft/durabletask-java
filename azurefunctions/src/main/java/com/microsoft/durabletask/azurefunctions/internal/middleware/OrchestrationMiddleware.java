@@ -12,9 +12,15 @@ import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareContext;
 import com.microsoft.durabletask.CompositeTaskFailedException;
 import com.microsoft.durabletask.DataConverter;
 import com.microsoft.durabletask.OrchestrationRunner;
+import com.microsoft.durabletask.PayloadStore;
 import com.microsoft.durabletask.TaskFailedException;
+import com.microsoft.durabletask.azureblobpayloads.BlobPayloadStore;
+import com.microsoft.durabletask.azureblobpayloads.BlobPayloadStoreOptions;
 import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
 import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
+
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Durable Function Orchestration Middleware
@@ -25,6 +31,23 @@ import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 public class OrchestrationMiddleware implements Middleware {
 
     private static final String ORCHESTRATION_TRIGGER = "DurableOrchestrationTrigger";
+    private static final Logger logger = Logger.getLogger(OrchestrationMiddleware.class.getName());
+
+    /**
+     * Environment variable for the Azure Storage connection string used for large payload externalization.
+     */
+    private static final String ENV_STORAGE_CONNECTION_STRING = "DURABLETASK_STORAGE_CONNECTION_STRING";
+
+    /**
+     * Fallback environment variable (standard Azure Functions storage connection).
+     */
+    private static final String ENV_AZURE_WEB_JOBS_STORAGE = "AzureWebJobsStorage";
+
+    private final PayloadStore payloadStore;
+
+    public OrchestrationMiddleware() {
+        this.payloadStore = initializePayloadStore();
+    }
 
     @Override
     public void invoke(MiddlewareContext context, MiddlewareChain chain) throws Exception {
@@ -70,7 +93,32 @@ public class OrchestrationMiddleware implements Middleware {
                 // requires update on OrchestratorFunction API.
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }
-        });
+        }, this.payloadStore);
         context.updateReturnValue(orchestratorOutputEncodedProtoBytes);
+    }
+
+    private static PayloadStore initializePayloadStore() {
+        // Check for explicit large-payload storage connection string
+        String connectionString = System.getenv(ENV_STORAGE_CONNECTION_STRING);
+        if (connectionString == null || connectionString.isEmpty()) {
+            // Fall back to standard Azure Functions storage connection
+            connectionString = System.getenv(ENV_AZURE_WEB_JOBS_STORAGE);
+        }
+
+        if (connectionString == null || connectionString.isEmpty()) {
+            logger.fine("No storage connection string configured for large payload externalization");
+            return null;
+        }
+
+        try {
+            BlobPayloadStoreOptions options = new BlobPayloadStoreOptions.Builder()
+                .setConnectionString(connectionString)
+                .build();
+            logger.info("Large payload externalization enabled using Azure Blob Storage");
+            return new BlobPayloadStore(options);
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Failed to initialize BlobPayloadStore; large payloads will not be externalized", e);
+            return null;
+        }
     }
 }
