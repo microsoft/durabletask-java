@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -183,6 +184,14 @@ class DurableHttpRequestTest {
     }
 
     // ---- JSON deserialization tests ----
+
+    @Test
+    @DisplayName("deserialize: omitted asynchronousPatternEnabled defaults to true")
+    void deserializeWithoutAsyncPattern_defaultsToTrue() throws Exception {
+        String json = "{\"method\":\"GET\",\"uri\":\"https://example.com\"}";
+        DurableHttpRequest req = mapper.readValue(json, DurableHttpRequest.class);
+        assertTrue(req.isAsynchronousPatternEnabled());
+    }
 
     @Test
     void deserializeMinimalRequest() throws Exception {

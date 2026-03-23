@@ -150,7 +150,7 @@ public class DurableHttpRequest {
             @JsonProperty("headers") @Nullable Map<String, String> headers,
             @JsonProperty("content") @Nullable String content,
             @JsonProperty("tokenSource") @Nullable TokenSource tokenSource,
-            @JsonProperty("asynchronousPatternEnabled") boolean asynchronousPatternEnabled,
+            @JsonProperty("asynchronousPatternEnabled") @Nullable Boolean asynchronousPatternEnabled,
             @JsonProperty("timeout") @Nullable String timeout,
             @JsonProperty("retryOptions") @Nullable HttpRetryOptions httpRetryOptions) {
         if (method == null || method.trim().isEmpty()) {
@@ -164,7 +164,8 @@ public class DurableHttpRequest {
         this.headers = headers != null ? Collections.unmodifiableMap(new HashMap<>(headers)) : null;
         this.content = content;
         this.tokenSource = tokenSource;
-        this.asynchronousPatternEnabled = asynchronousPatternEnabled;
+        this.asynchronousPatternEnabled = asynchronousPatternEnabled != null
+                ? asynchronousPatternEnabled : true;
         this.timeout = timeout;
         this.httpRetryOptions = httpRetryOptions;
     }

@@ -168,8 +168,12 @@ public class HttpRetryOptions {
      * Sets the maximum retry interval.
      *
      * @param maxRetryInterval the maximum duration between retries
+     * @throws IllegalArgumentException if maxRetryInterval is negative or zero
      */
     public void setMaxRetryInterval(Duration maxRetryInterval) {
+        if (maxRetryInterval != null && (maxRetryInterval.isNegative() || maxRetryInterval.isZero())) {
+            throw new IllegalArgumentException("maxRetryInterval must be positive");
+        }
         this.maxRetryInterval = maxRetryInterval;
     }
 

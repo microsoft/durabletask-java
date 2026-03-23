@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import javax.annotation.Nullable;
+import java.util.Locale;
 
 /**
  * A {@link TokenSource} implementation that uses Azure Managed Identity to acquire OAuth 2.0 access tokens.
@@ -132,8 +133,10 @@ public class ManagedIdentityTokenSource extends TokenSource {
      * Auto-normalizes well-known Azure resource URIs by appending {@code /.default} if not present.
      */
     private static String normalizeResource(String resource) {
+        String lowerResource = resource.toLowerCase(Locale.ROOT);
         for (String base : KNOWN_RESOURCE_BASES) {
-            if (resource.startsWith(base) && !resource.endsWith(DEFAULT_SUFFIX)) {
+            if ((lowerResource.equals(base) || lowerResource.startsWith(base + "/"))
+                    && !lowerResource.endsWith(DEFAULT_SUFFIX)) {
                 return resource + DEFAULT_SUFFIX;
             }
         }
