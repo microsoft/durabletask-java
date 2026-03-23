@@ -377,7 +377,6 @@ public class LargePayloadIntegrationTests extends IntegrationTestBase {
     @Test
     void continueAsNew_withLargeInput_isExternalized() throws TimeoutException {
         final String orchestratorName = "ContinueAsNewOrch";
-        final int payloadSize = 1_000_000;
         final int maxIterations = 3;
 
         InMemoryPayloadStore store = new InMemoryPayloadStore();
