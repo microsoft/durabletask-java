@@ -93,7 +93,7 @@ public class HttpManagementPayload {
      * @return The HTTP URL for posting instance restart commands.
      */
     public String getRestartPostUri() {
-        return restartPostUri;
+        return this.restartPostUri;
     }
 
     /**
@@ -120,7 +120,7 @@ public class HttpManagementPayload {
      * @return The HTTP URL for posting instance rewind commands.
      */
     public String getRewindPostUri() {
-        return rewindPostUri;
+        return this.rewindPostUri;
     }
 
 }

@@ -1,6 +1,5 @@
-package com.functions;
+package com.microsoft.durabletask.azurefunctions;
 
-import com.microsoft.durabletask.azurefunctions.HttpManagementPayload;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -73,5 +72,12 @@ public class HttpManagementPayloadTest {
     public void getResumePostUri_ReturnsCorrectUrl() {
         HttpManagementPayload payload = createPayload();
         assertEquals(INSTANCE_STATUS_URL + "/resume?reason={text}&" + QUERY_STRING, payload.getResumePostUri());
+    }
+
+    @Test
+    @DisplayName("getRewindPostUri should return correct URL")
+    public void getRewindPostUri_ReturnsCorrectUrl() {
+        HttpManagementPayload payload = createPayload();
+        assertEquals(INSTANCE_STATUS_URL + "/rewind?reason={text}&" + QUERY_STRING, payload.getRewindPostUri());
     }
 }
