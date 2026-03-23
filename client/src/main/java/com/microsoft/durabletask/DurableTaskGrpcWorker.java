@@ -304,13 +304,33 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     .setCompletionToken(workItem.getCompletionToken())
                                     .build();
 
-                            // Externalize large payloads in outgoing response
-                            if (this.payloadHelper != null) {
-                                response = externalizeOrchestratorResponsePayloads(response);
+                            // Externalize large payloads and send (with optional chunking).
+                            // If externalization or chunking fails, report as orchestration failure.
+                            try {
+                                if (this.payloadHelper != null) {
+                                    response = externalizeOrchestratorResponsePayloads(response);
+                                }
+                                sendOrchestratorResponse(response);
+                            } catch (IllegalArgumentException | IllegalStateException e) {
+                                logger.log(Level.WARNING,
+                                    "Failed to send orchestrator response for instance '" +
+                                    orchestratorRequest.getInstanceId() + "': " + e.getMessage(), e);
+                                CompleteOrchestrationAction failAction = CompleteOrchestrationAction.newBuilder()
+                                    .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                                    .setFailureDetails(TaskFailureDetails.newBuilder()
+                                        .setErrorType(e.getClass().getName())
+                                        .setErrorMessage(e.getMessage())
+                                        .build())
+                                    .build();
+                                OrchestratorResponse failResponse = OrchestratorResponse.newBuilder()
+                                    .setInstanceId(orchestratorRequest.getInstanceId())
+                                    .setCompletionToken(workItem.getCompletionToken())
+                                    .addActions(OrchestratorAction.newBuilder()
+                                        .setCompleteOrchestration(failAction)
+                                        .build())
+                                    .build();
+                                this.sidecarClient.completeOrchestratorTask(failResponse);
                             }
-
-                            // Chunk the response if it exceeds gRPC message size limit
-                            sendOrchestratorResponse(response);
                         } else {
                             switch(versioningOptions.getFailureStrategy()) {
                                 case FAIL:

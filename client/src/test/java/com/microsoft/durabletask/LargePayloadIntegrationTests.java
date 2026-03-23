@@ -624,38 +624,24 @@ public class LargePayloadIntegrationTests extends IntegrationTestBase {
     @Test
     void autochunk_singleActionExceedsChunkSize_failsWithClearError() throws TimeoutException {
         final String orchestratorName = "AutochunkOversizedOrch";
-        final String activityName = "OversizedActivity";
-        // Create an activity that returns a payload larger than 1MB chunk size
-        // Since externalization threshold is set very high, this will NOT be externalized
-        // and will try to be sent as a single action exceeding the chunk size
+        // Create an orchestrator that completes with a payload larger than 1MB chunk size.
+        // Externalization is NOT configured so the large payload stays inline in the
+        // CompleteOrchestration action, which exceeds the chunk size.
         final int payloadSize = 1_200_000;
 
-        // Use a store but set threshold very high so the payload won't be externalized
-        InMemoryPayloadStore store = new InMemoryPayloadStore();
-        LargePayloadOptions options = new LargePayloadOptions.Builder()
-            .setThresholdBytes(1_048_576) // 1 MiB — max allowed threshold
-            .setMaxExternalizedPayloadBytes(10_000_000)
-            .build();
-
         TestDurableTaskWorkerBuilder workerBuilder = this.createWorkerBuilder();
-        workerBuilder.innerBuilder.useExternalizedPayloads(store, options);
         workerBuilder.innerBuilder.setCompleteOrchestratorResponseChunkSizeBytes(
             DurableTaskGrpcWorkerBuilder.MIN_CHUNK_SIZE_BYTES);
         workerBuilder.addOrchestrator(orchestratorName, ctx -> {
-            String result = ctx.callActivity(activityName, null, String.class).await();
-            ctx.complete(result.length());
-        });
-        workerBuilder.addActivity(activityName, ctx -> {
             StringBuilder sb = new StringBuilder(payloadSize);
             for (int i = 0; i < payloadSize; i++) {
                 sb.append('Z');
             }
-            return sb.toString();
+            ctx.complete(sb.toString());
         });
         DurableTaskGrpcWorker worker = workerBuilder.buildAndStart();
 
         DurableTaskGrpcClientBuilder clientBuilder = this.createClientBuilder();
-        clientBuilder.useExternalizedPayloads(store, options);
         DurableTaskClient client = clientBuilder.build();
 
         try (worker; client) {
@@ -718,7 +704,7 @@ public class LargePayloadIntegrationTests extends IntegrationTestBase {
     @Test
     void continueAsNew_withLargeCustomStatusAndFinalOutput() throws TimeoutException {
         final String orchestratorName = "ContinueAsNewAllOrch";
-        final int payloadSize = 800_000;
+        final int payloadSize = 1_000_000;
         final int iterations = 3;
 
         InMemoryPayloadStore store = new InMemoryPayloadStore();
@@ -771,8 +757,8 @@ public class LargePayloadIntegrationTests extends IntegrationTestBase {
         final String parentOrchName = "CombinedParentOrch";
         final String childOrchName = "CombinedChildOrch";
         final String activityName = "CombinedActivity";
-        final int subOrchPayloadSize = 650_000;
-        final int activityPayloadSize = 820_000;
+        final int subOrchPayloadSize = 1_000_000;
+        final int activityPayloadSize = 1_000_000;
 
         InMemoryPayloadStore store = new InMemoryPayloadStore();
         LargePayloadOptions options = new LargePayloadOptions.Builder().build();
