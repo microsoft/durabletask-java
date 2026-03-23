@@ -60,7 +60,8 @@ compileTestJava {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
     options.fork = true
-    def javacExe = org.gradle.internal.os.OperatingSystem.current().isWindows() ? "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac.exe" : "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
+    def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+    def javacExe = isWindows ? "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac.exe" : "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac"
     options.forkOptions.executable = javacExe
 }
 
@@ -111,7 +112,8 @@ sourceSets {
 }
 
 tasks.withType(Test) {
-    def javaExe = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'bin/java.exe' : 'bin/java'
+    def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+    def javaExe = isWindows ? 'bin/java.exe' : 'bin/java'
     executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", javaExe)
 }
 

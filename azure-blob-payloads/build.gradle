@@ -76,7 +76,7 @@ publishing {
 }
 
 signing {
-    required { gradle.taskGraph.hasTask("publish") }
+    required { !project.hasProperty("skipSigning") && gradle.taskGraph.hasTask("publish") }
     sign publishing.publications.mavenJava
 }
 

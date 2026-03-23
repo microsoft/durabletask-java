@@ -440,8 +440,6 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.close();
     }
 
-    private static final int MAX_GRPC_PAYLOAD_SIZE_BYTES = 4_089_446;
-
     /**
      * Sends an orchestrator response, chunking it if it exceeds the configured chunk size.
      */
@@ -454,13 +452,22 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
         List<OrchestratorAction> allActions = response.getActionsList();
         if (allActions.isEmpty()) {
-            // No actions to chunk — send as-is
-            this.sidecarClient.completeOrchestratorTask(response);
-            return;
+            // No actions to chunk and the serialized response already exceeds the configured
+            // chunk size. Sending this response as-is would likely exceed the gRPC message
+            // size limit and fail at runtime, so fail fast with a clear error message.
+            throw new IllegalStateException(
+                "OrchestratorResponse without actions exceeds the configured chunk size (" +
+                this.chunkSizeBytes + " bytes). Enable large-payload externalization to Azure " +
+                "Blob Storage or reduce the size of non-action fields.");
         }
 
-        // Compute envelope overhead (response without actions)
-        OrchestratorResponse envelope = response.toBuilder().clearActions().build();
+        // Compute envelope overhead (response without actions, but with chunk metadata fields).
+        // Include isPartial and chunkIndex since those are added to every chunk.
+        OrchestratorResponse envelope = response.toBuilder()
+            .clearActions()
+            .setIsPartial(true)
+            .setChunkIndex(com.google.protobuf.Int32Value.of(0))
+            .build();
         int envelopeSize = envelope.getSerializedSize();
         int maxActionsSize = this.chunkSizeBytes - envelopeSize;
 
@@ -476,20 +483,24 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
         for (OrchestratorAction action : allActions) {
             int actionSize = action.getSerializedSize();
-            if (actionSize > maxActionsSize) {
+            // Account for protobuf framing overhead per repeated field entry:
+            // field tag (1 byte) + length varint
+            int framingOverhead = 1 + com.google.protobuf.CodedOutputStream.computeUInt32SizeNoTag(actionSize);
+            int actionWireSize = actionSize + framingOverhead;
+            if (actionWireSize > maxActionsSize) {
                 throw new IllegalStateException(
                     "A single orchestrator action exceeds the gRPC message size limit (" +
-                    actionSize + " bytes). Enable large-payload externalization to Azure Blob Storage " +
+                    actionWireSize + " bytes). Enable large-payload externalization to Azure Blob Storage " +
                     "to handle payloads of this size.");
             }
 
-            if (currentChunkSize + actionSize > maxActionsSize && !currentChunk.isEmpty()) {
+            if (currentChunkSize + actionWireSize > maxActionsSize && !currentChunk.isEmpty()) {
                 chunks.add(currentChunk);
                 currentChunk = new ArrayList<>();
                 currentChunkSize = 0;
             }
             currentChunk.add(action);
-            currentChunkSize += actionSize;
+            currentChunkSize += actionWireSize;
         }
         if (!currentChunk.isEmpty()) {
             chunks.add(currentChunk);
