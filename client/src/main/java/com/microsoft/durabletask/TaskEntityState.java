@@ -60,6 +60,10 @@ public class TaskEntityState {
             deleteState();
         } else {
             this.serializedState = this.dataConverter.serialize(state);
+            if (this.serializedState == null) {
+                deleteState();
+                return;
+            }
             this.stateExists = true;
         }
     }

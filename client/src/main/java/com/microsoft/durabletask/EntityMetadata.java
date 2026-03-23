@@ -21,6 +21,7 @@ public class EntityMetadata {
     private final String serializedState;
     private final boolean includesState;
     private final DataConverter dataConverter;
+    private EntityInstanceId cachedEntityInstanceId;
 
     /**
      * Creates a new {@code EntityMetadata} instance.
@@ -65,7 +66,10 @@ public class EntityMetadata {
      * @return the parsed entity instance ID
      */
     public EntityInstanceId getEntityInstanceId() {
-        return EntityInstanceId.fromString(this.instanceId);
+        if (this.cachedEntityInstanceId == null) {
+            this.cachedEntityInstanceId = EntityInstanceId.fromString(this.instanceId);
+        }
+        return this.cachedEntityInstanceId;
     }
 
     /**

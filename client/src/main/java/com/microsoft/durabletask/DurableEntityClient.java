@@ -207,14 +207,7 @@ public abstract class DurableEntityClient {
      */
     public <T> TypedEntityQueryPageable<T> getAllEntities(EntityQuery query, Class<T> stateType) {
         // Create a copy with includeState=true so we don't mutate the caller's query
-        EntityQuery typedQuery = new EntityQuery()
-                .setInstanceIdStartsWith(query.getInstanceIdStartsWith())
-                .setLastModifiedFrom(query.getLastModifiedFrom())
-                .setLastModifiedTo(query.getLastModifiedTo())
-                .setIncludeState(true)
-                .setIncludeTransient(query.isIncludeTransient())
-                .setPageSize(query.getPageSize())
-                .setContinuationToken(query.getContinuationToken());
+        EntityQuery typedQuery = query.copy().setIncludeState(true);
         EntityQueryPageable inner = new EntityQueryPageable(typedQuery, this::queryEntities);
         return new TypedEntityQueryPageable<>(inner, stateType);
     }

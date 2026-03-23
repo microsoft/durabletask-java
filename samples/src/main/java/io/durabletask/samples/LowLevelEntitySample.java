@@ -44,8 +44,8 @@ final class LowLevelEntitySample {
                             EntityInstanceId kvId = new EntityInstanceId("KeyValue", "config");
 
                             // Use the low-level ITaskEntity entity
-                            ctx.callEntity(kvId, "set", new KeyValuePair("color", "blue")).await();
-                            ctx.callEntity(kvId, "set", new KeyValuePair("size", "large")).await();
+                            ctx.callEntity(kvId, "set", new KeyValuePair("color", "blue"), Void.class).await();
+                            ctx.callEntity(kvId, "set", new KeyValuePair("size", "large"), Void.class).await();
                             String color = ctx.callEntity(kvId, "get", "color", String.class).await();
 
                             ctx.complete("color=" + color);

@@ -73,9 +73,16 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
      */
     private boolean allowStateDispatch = false;
 
-    // Cache for resolved methods, keyed by (class, operationName).
-    // Uses Optional<Method> so that "not found" results are also cached.
-    private static final Map<String, Optional<Method>> methodCache = new ConcurrentHashMap<>();
+    // Per-class cache for resolved methods, keyed by operation name (lowercased).
+    // Uses ClassValue to scope the cache per entity class, matching the .NET model
+    // where MethodInfo caching is per-type. GC can collect entries when classes are unloaded.
+    private static final ClassValue<Map<String, Optional<Method>>> methodCache =
+            new ClassValue<Map<String, Optional<Method>>>() {
+                @Override
+                protected Map<String, Optional<Method>> computeValue(Class<?> type) {
+                    return new ConcurrentHashMap<>();
+                }
+            };
 
     /**
      * Creates a new {@code TaskEntity} instance.
@@ -142,6 +149,7 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
     public Object runAsync(TaskEntityOperation operation) throws Exception {
         // Set the context before dispatch so subclass methods can access it
         this.context = operation.getContext();
+        this.implicitDeleteHandled = false;
 
         // Step 1: Load or initialize state
         Class<TState> stateType = getStateType();
@@ -172,18 +180,22 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
             result = handleImplicitOperations(operation);
         }
 
-        // Step 5: Save state back only on success (the executor handles rollback on failure)
-        if (stateType != null) {
+        // Step 5: Save state back only on success (the executor handles rollback on failure).
+        // Skip if the operation was an implicit delete, which already called deleteState().
+        if (stateType != null && !implicitDeleteHandled) {
             operation.getState().setState(this.state);
         }
 
         return result;
     }
 
+    private boolean implicitDeleteHandled;
+
     private Object handleImplicitOperations(TaskEntityOperation operation) {
         if ("delete".equalsIgnoreCase(operation.getName())) {
             operation.getState().deleteState();
             this.state = null;
+            this.implicitDeleteHandled = true;
             return null;
         }
         throw new UnsupportedOperationException(
@@ -337,8 +349,12 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
      */
     @Nullable
     private static Method findMethod(Class<?> targetClass, String operationName) {
-        String cacheKey = targetClass.getName() + "#" + operationName.toLowerCase();
-        return methodCache.computeIfAbsent(cacheKey, k -> {
+        Map<String, Optional<Method>> classCache = methodCache.get(targetClass);
+        String key = operationName.toLowerCase();
+        return classCache.computeIfAbsent(key, k -> findMethodUncached(targetClass, k)).orElse(null);
+    }
+
+    private static Optional<Method> findMethodUncached(Class<?> targetClass, String operationName) {
             List<Method> matches = new ArrayList<>();
             for (Method m : targetClass.getMethods()) {
                 // Skip static methods — only instance methods should be dispatchable
@@ -373,7 +389,6 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
                         targetClass.getName() + ". Entity operation methods must have unique names.");
             }
             return matches.isEmpty() ? Optional.empty() : Optional.of(matches.get(0));
-        }).orElse(null);
     }
 
     /**

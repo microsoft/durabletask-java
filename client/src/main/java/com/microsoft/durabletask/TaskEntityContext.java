@@ -4,8 +4,6 @@ package com.microsoft.durabletask;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Provides contextual information and side-effecting capabilities to a durable entity during operation execution.

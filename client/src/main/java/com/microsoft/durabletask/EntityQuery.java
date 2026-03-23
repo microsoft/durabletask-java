@@ -198,4 +198,21 @@ public final class EntityQuery {
     public String getContinuationToken() {
         return this.continuationToken;
     }
+
+    /**
+     * Creates a shallow copy of this query.
+     *
+     * @return a new {@code EntityQuery} with the same field values
+     */
+    public EntityQuery copy() {
+        EntityQuery copy = new EntityQuery();
+        copy.instanceIdStartsWith = this.instanceIdStartsWith;
+        copy.lastModifiedFrom = this.lastModifiedFrom;
+        copy.lastModifiedTo = this.lastModifiedTo;
+        copy.includeState = this.includeState;
+        copy.includeTransient = this.includeTransient;
+        copy.pageSize = this.pageSize;
+        copy.continuationToken = this.continuationToken;
+        return copy;
+    }
 }

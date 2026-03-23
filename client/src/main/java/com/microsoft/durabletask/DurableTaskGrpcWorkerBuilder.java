@@ -147,6 +147,12 @@ public final class DurableTaskGrpcWorkerBuilder {
      * or entities that manage their own lifecycle.
      * <p>
      * The entity name is derived from the simple class name of the provided entity instance.
+     * <p>
+     * <b>Thread safety warning:</b> Because the same instance handles all operation batches,
+     * the entity implementation must be thread-safe if concurrent entity work items are enabled.
+     * Implementations that extend {@link TaskEntity} store mutable state in instance fields and
+     * are <b>not</b> safe for singleton registration. Use {@link #addEntity(Class)} or
+     * {@link #addEntity(String, Class)} instead to create a new instance per batch.
      *
      * @param entity the entity instance to register
      * @return this builder object
@@ -163,6 +169,12 @@ public final class DurableTaskGrpcWorkerBuilder {
      * Registers an entity singleton with a specific name for the constructed {@link DurableTaskGrpcWorker}.
      * <p>
      * The same entity instance is reused for every operation batch.
+     * <p>
+     * <b>Thread safety warning:</b> Because the same instance handles all operation batches,
+     * the entity implementation must be thread-safe if concurrent entity work items are enabled.
+     * Implementations that extend {@link TaskEntity} store mutable state in instance fields and
+     * are <b>not</b> safe for singleton registration. Use {@link #addEntity(String, Class)} instead
+     * to create a new instance per batch.
      *
      * @param name   the name of the entity type
      * @param entity the entity instance to register

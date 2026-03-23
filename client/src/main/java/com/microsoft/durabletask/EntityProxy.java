@@ -127,7 +127,6 @@ public final class EntityProxy {
             }
 
             String operationName = method.getName();
-            Object input = (args != null && args.length == 1) ? args[0] : null;
 
             if (args != null && args.length > 1) {
                 throw new UnsupportedOperationException(
@@ -135,6 +134,8 @@ public final class EntityProxy {
                         "Method '" + operationName + "' has " + args.length + " parameters. " +
                         "Use a single wrapper object to pass multiple values.");
             }
+
+            Object input = (args != null && args.length == 1) ? args[0] : null;
 
             Class<?> returnType = method.getReturnType();
 
