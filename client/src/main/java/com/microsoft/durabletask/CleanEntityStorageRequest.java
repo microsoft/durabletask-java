@@ -105,5 +105,5 @@ public final class CleanEntityStorageRequest {
         return this.continueUntilComplete;
     }
 
-    private boolean continueUntilComplete;
+    private boolean continueUntilComplete = true;
 }
