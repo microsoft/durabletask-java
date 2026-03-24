@@ -147,20 +147,6 @@ public abstract class TaskOrchestrationEntityFeature {
     }
 
     /**
-     * Signals an entity operation with options but no input.
-     *
-     * @param entityId the target entity
-     * @param operationName the operation name
-     * @param options signal options such as scheduled delivery time
-     */
-    public void signalEntity(
-            @Nonnull EntityInstanceId entityId,
-            @Nonnull String operationName,
-            @Nonnull SignalEntityOptions options) {
-        this.signalEntity(entityId, operationName, null, options);
-    }
-
-    /**
      * Acquires one or more entity locks.
      *
      * @param entityIds the entity IDs to lock

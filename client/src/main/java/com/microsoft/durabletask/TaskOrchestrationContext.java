@@ -630,19 +630,6 @@ public interface TaskOrchestrationContext {
     }
 
     /**
-     * Sends a fire-and-forget signal to a durable entity with the specified options but no input.
-     * <p>
-     * This is useful for scheduling a signal for future delivery without passing any input data.
-     *
-     * @param entityId the unique identifier of the target entity
-     * @param operationName the name of the operation to invoke on the entity
-     * @param options signal options such as scheduled delivery time
-     */
-    default void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nonnull SignalEntityOptions options) {
-        this.signalEntity(entityId, operationName, null, options);
-    }
-
-    /**
      * Sends a fire-and-forget signal to a durable entity with the specified input and options.
      * <p>
      * Signals are one-way messages that do not return a result. The target entity will execute the specified
