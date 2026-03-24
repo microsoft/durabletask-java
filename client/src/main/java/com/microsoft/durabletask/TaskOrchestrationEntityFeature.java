@@ -63,6 +63,52 @@ public abstract class TaskOrchestrationEntityFeature {
     }
 
     /**
+     * Calls an operation on an entity and waits for it to complete (no input, no return value).
+     *
+     * @param entityId the target entity
+     * @param operationName the name of the operation
+     * @return a task that completes when the operation completes
+     */
+    public Task<Void> callEntity(
+            @Nonnull EntityInstanceId entityId,
+            @Nonnull String operationName) {
+        return this.callEntity(entityId, operationName, null, Void.class, null);
+    }
+
+    /**
+     * Calls an operation on an entity with options and waits for the result (no input).
+     *
+     * @param entityId the target entity
+     * @param operationName the name of the operation
+     * @param returnType the expected return type
+     * @param options the call options, or {@code null}
+     * @param <TResult> the result type
+     * @return a task that completes with the operation result
+     */
+    public <TResult> Task<TResult> callEntity(
+            @Nonnull EntityInstanceId entityId,
+            @Nonnull String operationName,
+            @Nonnull Class<TResult> returnType,
+            @Nullable CallEntityOptions options) {
+        return this.callEntity(entityId, operationName, null, returnType, options);
+    }
+
+    /**
+     * Calls an operation on an entity with options and waits for it to complete (no input, no return value).
+     *
+     * @param entityId the target entity
+     * @param operationName the name of the operation
+     * @param options the call options, or {@code null}
+     * @return a task that completes when the operation completes
+     */
+    public Task<Void> callEntity(
+            @Nonnull EntityInstanceId entityId,
+            @Nonnull String operationName,
+            @Nullable CallEntityOptions options) {
+        return this.callEntity(entityId, operationName, null, Void.class, options);
+    }
+
+    /**
      * Signals an entity operation without waiting for completion.
      *
      * @param entityId the target entity
@@ -98,6 +144,20 @@ public abstract class TaskOrchestrationEntityFeature {
             @Nonnull String operationName,
             @Nullable Object input) {
         this.signalEntity(entityId, operationName, input, null);
+    }
+
+    /**
+     * Signals an entity operation with options but no input.
+     *
+     * @param entityId the target entity
+     * @param operationName the operation name
+     * @param options signal options such as scheduled delivery time
+     */
+    public void signalEntity(
+            @Nonnull EntityInstanceId entityId,
+            @Nonnull String operationName,
+            @Nonnull SignalEntityOptions options) {
+        this.signalEntity(entityId, operationName, null, options);
     }
 
     /**

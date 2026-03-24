@@ -630,6 +630,19 @@ public interface TaskOrchestrationContext {
     }
 
     /**
+     * Sends a fire-and-forget signal to a durable entity with the specified options but no input.
+     * <p>
+     * This is useful for scheduling a signal for future delivery without passing any input data.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param options signal options such as scheduled delivery time
+     */
+    default void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nonnull SignalEntityOptions options) {
+        this.signalEntity(entityId, operationName, null, options);
+    }
+
+    /**
      * Sends a fire-and-forget signal to a durable entity with the specified input and options.
      * <p>
      * Signals are one-way messages that do not return a result. The target entity will execute the specified
@@ -695,6 +708,32 @@ public interface TaskOrchestrationContext {
      */
     default <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nonnull Class<V> returnType) {
         return this.callEntity(entityId, operationName, null, returnType);
+    }
+
+    /**
+     * Calls an operation on a durable entity with options and waits for the result (no input).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param returnType the expected class type of the entity operation output
+     * @param options call options such as timeout, or {@code null}
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    default <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nonnull Class<V> returnType, @Nullable CallEntityOptions options) {
+        return this.callEntity(entityId, operationName, null, returnType, options);
+    }
+
+    /**
+     * Calls an operation on a durable entity with options and waits for it to complete (no input, no return value).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param options call options such as timeout, or {@code null}
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    default Task<Void> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable CallEntityOptions options) {
+        return this.callEntity(entityId, operationName, null, Void.class, options);
     }
 
     /**
