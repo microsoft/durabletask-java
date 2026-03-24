@@ -580,7 +580,6 @@ public class TaskEntityTest {
 
     @Test
     void dispatch_unknownOperation_throwsException() throws Exception {
-        BonusDepositEntity entity = new BonusDepositEntity();
         // First trigger runAsync to set the context on the entity, then test dispatch failure
         // We use a custom entity that dispatches an unknown operation
         TaskEntity<Void> failEntity = new TaskEntity<Void>() {
@@ -610,7 +609,6 @@ public class TaskEntityTest {
 
     @Test
     void dispatch_noInputOverload() throws Exception {
-        CounterEntity entity = new CounterEntity();
         // Use a wrapper entity that dispatches "reset" with no input
         TaskEntity<Integer> resetDispatcher = new TaskEntity<Integer>() {
             public void doReset() {
