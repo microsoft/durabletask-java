@@ -1,8 +1,11 @@
 ## Unreleased
-
 * Add getSuspendPostUri and getResumePostUri getters to HttpManagementPayload ([#264](https://github.com/microsoft/durabletask-java/pull/264))
+
+## v1.8.0
 * Adding rewind client API ([#253](https://github.com/microsoft/durabletask-java/pull/253)). Note: orchestration processing for rewind is supported with Azure Functions but not with the standalone `GrpcDurableTaskWorker`.
+* Add permissions to build-validation workflow ([#265](https://github.com/microsoft/durabletask-java/pull/265))
 * Add distributed tracing (OpenTelemetry) support with W3C Trace Context propagation ([#266](https://github.com/microsoft/durabletask-java/pull/266))
+* Add GitHub Copilot agents for automated PR verification, daily code review, and issue triage ([#269](https://github.com/microsoft/durabletask-java/pull/269))
 
 ## v1.7.0
 * Add descriptive error when orchestration type is not registered ([#261](https://github.com/microsoft/durabletask-java/pull/261))
