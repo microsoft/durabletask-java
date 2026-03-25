@@ -20,7 +20,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,6 +32,7 @@ import java.util.stream.Stream;
  */
 public final class DurableTaskGrpcWorker implements AutoCloseable {
     private static final int DEFAULT_PORT = 4001;
+    static final int DEFAULT_MAX_WORK_ITEM_THREADS = 100;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcWorker.class.getPackage().getName());
     private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
 
@@ -43,6 +45,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
     private final int maxConcurrentEntityWorkItems;
+    private final int maxConcurrentActivityWorkItems;
     private final ExecutorService workItemExecutor;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
@@ -52,6 +55,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.activityFactories.putAll(builder.activityFactories);
         this.entityFactories.putAll(builder.entityFactories);
         this.maxConcurrentEntityWorkItems = builder.maxConcurrentEntityWorkItems;
+        this.maxConcurrentActivityWorkItems = builder.maxConcurrentActivityWorkItems;
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
@@ -77,11 +81,17 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
-        this.workItemExecutor = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "durabletask-worker");
-            t.setDaemon(true);
-            return t;
-        });
+        int maxThreads = builder.maxWorkItemThreads > 0 ? builder.maxWorkItemThreads : DEFAULT_MAX_WORK_ITEM_THREADS;
+        this.workItemExecutor = new ThreadPoolExecutor(
+                0, maxThreads,
+                60L, TimeUnit.SECONDS,
+                new SynchronousQueue<>(),
+                r -> {
+                    Thread t = new Thread(r, "durabletask-worker");
+                    t.setDaemon(true);
+                    return t;
+                },
+                new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
     /**
@@ -159,6 +169,9 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         while (true) {
             try {
                 GetWorkItemsRequest.Builder requestBuilder = GetWorkItemsRequest.newBuilder();
+                if (this.maxConcurrentActivityWorkItems > 0) {
+                    requestBuilder.setMaxConcurrentActivityWorkItems(this.maxConcurrentActivityWorkItems);
+                }
                 if (!this.entityFactories.isEmpty()) {
                     // Signal to the sidecar that this worker can handle entity work items
                     requestBuilder.setMaxConcurrentEntityWorkItems(this.maxConcurrentEntityWorkItems);
@@ -392,20 +405,32 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 TracingHelper.endSpan(activitySpan, activityError);
                             }
 
-                            ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
-                                    .setInstanceId(activityInstanceId)
-                                    .setTaskId(activityRequest.getTaskId())
-                                    .setCompletionToken(workItem.getCompletionToken());
+                            try {
+                                ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
+                                        .setInstanceId(activityInstanceId)
+                                        .setTaskId(activityRequest.getTaskId())
+                                        .setCompletionToken(workItem.getCompletionToken());
 
-                            if (output != null) {
-                                responseBuilder.setResult(StringValue.of(output));
+                                if (output != null) {
+                                    responseBuilder.setResult(StringValue.of(output));
+                                }
+
+                                if (failureDetails != null) {
+                                    responseBuilder.setFailureDetails(failureDetails);
+                                }
+
+                                this.sidecarClient.completeActivityTask(responseBuilder.build());
+                            } catch (Exception e) {
+                                logger.log(Level.WARNING,
+                                        String.format("Failed to complete activity '%s' for instance '%s'. Abandoning work item.",
+                                                activityRequest.getName(),
+                                                activityInstanceId),
+                                        e);
+                                this.sidecarClient.abandonTaskActivityWorkItem(
+                                        AbandonActivityTaskRequest.newBuilder()
+                                                .setCompletionToken(workItem.getCompletionToken())
+                                                .build());
                             }
-
-                            if (failureDetails != null) {
-                                responseBuilder.setFailureDetails(failureDetails);
-                            }
-
-                            this.sidecarClient.completeActivityTask(responseBuilder.build());
                         });
                     } else if (requestType == RequestCase.ENTITYREQUEST) {
                         EntityBatchRequest entityRequest = workItem.getEntityRequest();
@@ -432,79 +457,79 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         this.workItemExecutor.submit(() -> {
                             try {
                                 // Convert V2 (history-based) format to V1 (flat) format
-                            EntityBatchRequest.Builder batchBuilder = EntityBatchRequest.newBuilder()
-                                    .setInstanceId(entityRequestV2.getInstanceId());
-                            if (entityRequestV2.hasEntityState()) {
-                                batchBuilder.setEntityState(entityRequestV2.getEntityState());
-                            }
-
-                            List<OperationInfo> operationInfos = new ArrayList<>();
-                            for (HistoryEvent event : entityRequestV2.getOperationRequestsList()) {
-                                if (event.hasEntityOperationSignaled()) {
-                                    EntityOperationSignaledEvent signaled = event.getEntityOperationSignaled();
-                                    OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
-                                            .setRequestId(signaled.getRequestId())
-                                            .setOperation(signaled.getOperation());
-                                    if (signaled.hasInput()) {
-                                        opBuilder.setInput(signaled.getInput());
-                                    }
-                                    batchBuilder.addOperations(opBuilder.build());
-                                    // Fire-and-forget: no response destination
-                                    operationInfos.add(OperationInfo.newBuilder()
-                                            .setRequestId(signaled.getRequestId())
-                                            .build());
-                                } else if (event.hasEntityOperationCalled()) {
-                                    EntityOperationCalledEvent called = event.getEntityOperationCalled();
-                                    OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
-                                            .setRequestId(called.getRequestId())
-                                            .setOperation(called.getOperation());
-                                    if (called.hasInput()) {
-                                        opBuilder.setInput(called.getInput());
-                                    }
-                                    batchBuilder.addOperations(opBuilder.build());
-                                    // Two-way call: include response destination
-                                    OperationInfo.Builder infoBuilder = OperationInfo.newBuilder()
-                                            .setRequestId(called.getRequestId());
-                                    if (called.hasParentInstanceId()) {
-                                        OrchestrationInstance.Builder destBuilder = OrchestrationInstance.newBuilder()
-                                                .setInstanceId(called.getParentInstanceId().getValue());
-                                        if (called.hasParentExecutionId()) {
-                                            destBuilder.setExecutionId(StringValue.of(called.getParentExecutionId().getValue()));
-                                        }
-                                        infoBuilder.setResponseDestination(destBuilder.build());
-                                    }
-                                    operationInfos.add(infoBuilder.build());
-                                } else {
-                                    logger.log(Level.WARNING,
-                                            "Skipping unsupported history event type in ENTITYREQUESTV2: {0}",
-                                            event.getEventTypeCase());
+                                EntityBatchRequest.Builder batchBuilder = EntityBatchRequest.newBuilder()
+                                        .setInstanceId(entityRequestV2.getInstanceId());
+                                if (entityRequestV2.hasEntityState()) {
+                                    batchBuilder.setEntityState(entityRequestV2.getEntityState());
                                 }
-                            }
 
-                            EntityBatchRequest batchRequest = batchBuilder.build();
-                            EntityBatchResult result = taskEntityExecutor.execute(batchRequest);
+                                List<OperationInfo> operationInfos = new ArrayList<>();
+                                for (HistoryEvent event : entityRequestV2.getOperationRequestsList()) {
+                                    if (event.hasEntityOperationSignaled()) {
+                                        EntityOperationSignaledEvent signaled = event.getEntityOperationSignaled();
+                                        OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
+                                                .setRequestId(signaled.getRequestId())
+                                                .setOperation(signaled.getOperation());
+                                        if (signaled.hasInput()) {
+                                            opBuilder.setInput(signaled.getInput());
+                                        }
+                                        batchBuilder.addOperations(opBuilder.build());
+                                        // Fire-and-forget: no response destination
+                                        operationInfos.add(OperationInfo.newBuilder()
+                                                .setRequestId(signaled.getRequestId())
+                                                .build());
+                                    } else if (event.hasEntityOperationCalled()) {
+                                        EntityOperationCalledEvent called = event.getEntityOperationCalled();
+                                        OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
+                                                .setRequestId(called.getRequestId())
+                                                .setOperation(called.getOperation());
+                                        if (called.hasInput()) {
+                                            opBuilder.setInput(called.getInput());
+                                        }
+                                        batchBuilder.addOperations(opBuilder.build());
+                                        // Two-way call: include response destination
+                                        OperationInfo.Builder infoBuilder = OperationInfo.newBuilder()
+                                                .setRequestId(called.getRequestId());
+                                        if (called.hasParentInstanceId()) {
+                                            OrchestrationInstance.Builder destBuilder = OrchestrationInstance.newBuilder()
+                                                    .setInstanceId(called.getParentInstanceId().getValue());
+                                            if (called.hasParentExecutionId()) {
+                                                destBuilder.setExecutionId(StringValue.of(called.getParentExecutionId().getValue()));
+                                            }
+                                            infoBuilder.setResponseDestination(destBuilder.build());
+                                        }
+                                        operationInfos.add(infoBuilder.build());
+                                    } else {
+                                        logger.log(Level.WARNING,
+                                                "Skipping unsupported history event type in ENTITYREQUESTV2: {0}",
+                                                event.getEventTypeCase());
+                                    }
+                                }
 
-                            // Attach completion token and operation infos for response routing
-                            EntityBatchResult.Builder responseBuilder = result.toBuilder()
-                                    .setCompletionToken(workItem.getCompletionToken());
-                            // Trim operationInfos to match actual result count
-                            int resultCount = result.getResultsCount();
-                            if (operationInfos.size() > resultCount) {
-                                responseBuilder.addAllOperationInfos(operationInfos.subList(0, resultCount));
-                            } else {
-                                responseBuilder.addAllOperationInfos(operationInfos);
+                                EntityBatchRequest batchRequest = batchBuilder.build();
+                                EntityBatchResult result = taskEntityExecutor.execute(batchRequest);
+
+                                // Attach completion token and operation infos for response routing
+                                EntityBatchResult.Builder responseBuilder = result.toBuilder()
+                                        .setCompletionToken(workItem.getCompletionToken());
+                                // Trim operationInfos to match actual result count
+                                int resultCount = result.getResultsCount();
+                                if (operationInfos.size() > resultCount) {
+                                    responseBuilder.addAllOperationInfos(operationInfos.subList(0, resultCount));
+                                } else {
+                                    responseBuilder.addAllOperationInfos(operationInfos);
+                                }
+                                this.sidecarClient.completeEntityTask(responseBuilder.build());
+                            } catch (Exception e) {
+                                logger.log(Level.WARNING,
+                                        String.format("Failed to execute V2 entity batch for '%s'. Abandoning work item.",
+                                                entityRequestV2.getInstanceId()),
+                                        e);
+                                this.sidecarClient.abandonTaskEntityWorkItem(
+                                        AbandonEntityTaskRequest.newBuilder()
+                                                .setCompletionToken(workItem.getCompletionToken())
+                                                .build());
                             }
-                            this.sidecarClient.completeEntityTask(responseBuilder.build());
-                        } catch (Exception e) {
-                            logger.log(Level.WARNING,
-                                    String.format("Failed to execute V2 entity batch for '%s'. Abandoning work item.",
-                                            entityRequestV2.getInstanceId()),
-                                    e);
-                            this.sidecarClient.abandonTaskEntityWorkItem(
-                                    AbandonEntityTaskRequest.newBuilder()
-                                            .setCompletionToken(workItem.getCompletionToken())
-                                            .build());
-                        }
                         });
                     }
                     else if (requestType == RequestCase.HEALTHPING)

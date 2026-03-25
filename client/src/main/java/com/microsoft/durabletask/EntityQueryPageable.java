@@ -109,7 +109,7 @@ public final class EntityQueryPageable implements Iterable<EntityMetadata> {
                 return;
             }
 
-            EntityQuery pageQuery = cloneQuery(baseQuery);
+            EntityQuery pageQuery = baseQuery.copy();
             pageQuery.setContinuationToken(continuationToken);
 
             EntityQueryResult result = queryExecutor.apply(pageQuery);
@@ -146,7 +146,7 @@ public final class EntityQueryPageable implements Iterable<EntityMetadata> {
                 throw new NoSuchElementException();
             }
 
-            EntityQuery pageQuery = cloneQuery(baseQuery);
+            EntityQuery pageQuery = baseQuery.copy();
             if (!firstPage) {
                 pageQuery.setContinuationToken(continuationToken);
             }
@@ -161,20 +161,5 @@ public final class EntityQueryPageable implements Iterable<EntityMetadata> {
 
             return result;
         }
-    }
-
-    private static EntityQuery cloneQuery(EntityQuery source) {
-        EntityQuery clone = new EntityQuery();
-        if (source.getInstanceIdStartsWith() != null) {
-            // Use raw setter value since the source is already normalized
-            clone.setInstanceIdStartsWith(source.getInstanceIdStartsWith());
-        }
-        clone.setLastModifiedFrom(source.getLastModifiedFrom());
-        clone.setLastModifiedTo(source.getLastModifiedTo());
-        clone.setIncludeState(source.isIncludeState());
-        clone.setIncludeTransient(source.isIncludeTransient());
-        clone.setPageSize(source.getPageSize());
-        clone.setContinuationToken(source.getContinuationToken());
-        return clone;
     }
 }

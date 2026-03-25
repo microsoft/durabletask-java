@@ -14,6 +14,7 @@ public final class CleanEntityStorageRequest {
     private String continuationToken;
     private boolean removeEmptyEntities = true;
     private boolean releaseOrphanedLocks = true;
+    private boolean continueUntilComplete = false;
 
     /**
      * Creates a new {@code CleanEntityStorageRequest} with default settings.
@@ -104,6 +105,4 @@ public final class CleanEntityStorageRequest {
     public boolean isContinueUntilComplete() {
         return this.continueUntilComplete;
     }
-
-    private boolean continueUntilComplete = false;
 }

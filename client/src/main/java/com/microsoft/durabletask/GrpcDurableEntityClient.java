@@ -74,7 +74,7 @@ final class GrpcDurableEntityClient extends DurableEntityClient {
             return null;
         }
 
-        return toEntityMetadata(response.getEntity());
+        return toEntityMetadata(response.getEntity(), includeState);
     }
 
     @Override
@@ -111,7 +111,7 @@ final class GrpcDurableEntityClient extends DurableEntityClient {
         List<EntityMetadata> entities = new ArrayList<>();
         for (com.microsoft.durabletask.implementation.protobuf.OrchestratorService.EntityMetadata protoEntity
                 : response.getEntitiesList()) {
-            entities.add(toEntityMetadata(protoEntity));
+            entities.add(toEntityMetadata(protoEntity, query.isIncludeState()));
         }
 
         String continuationToken = response.hasContinuationToken()
@@ -156,7 +156,8 @@ final class GrpcDurableEntityClient extends DurableEntityClient {
     }
 
     private EntityMetadata toEntityMetadata(
-            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.EntityMetadata protoEntity) {
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.EntityMetadata protoEntity,
+            boolean includeState) {
         Instant lastModifiedTime = DataConverter.getInstantFromTimestamp(protoEntity.getLastModifiedTime());
         String lockedBy = protoEntity.hasLockedBy() ? protoEntity.getLockedBy().getValue() : null;
         String serializedState = protoEntity.hasSerializedState()
@@ -169,7 +170,7 @@ final class GrpcDurableEntityClient extends DurableEntityClient {
                 protoEntity.getBacklogQueueSize(),
                 lockedBy,
                 serializedState,
-                protoEntity.hasSerializedState(),
+                includeState,
                 this.dataConverter);
     }
 }

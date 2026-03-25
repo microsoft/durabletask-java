@@ -38,20 +38,26 @@ public class UserEntity extends TaskEntity<UserState> {
     /**
      * Starts a greeting orchestration for this user.
      * <p>
-     * Demonstrates using {@link TaskEntityContext} to schedule a new orchestration
-     * from within an entity operation. The context is accessible via {@code this.context}.
+     * Demonstrates binding {@link TaskEntityContext} as a method parameter.
+     * The SDK automatically injects the context when dispatching to this method.
+     * This is equivalent to .NET's {@code Greet(TaskEntityContext context, string? message = null)}.
+     * <p>
+     * When using {@code TaskEntity<T>}, the context is also accessible via {@code this.context},
+     * but parameter binding works for both entity-based and state-dispatch modes.
      *
+     * @param context the entity context, automatically injected by the dispatch engine
      * @param message optional custom greeting message (may be null)
      */
-    public void greet(String message) {
+    public void greet(TaskEntityContext context, String message) {
         if (this.state.getName() == null) {
             throw new IllegalStateException("User has not been initialized.");
         }
 
-        // Access the TaskEntityContext to schedule an orchestration from within the entity
+        // Get access to TaskEntityContext by adding it as a parameter. Can be with or without
+        // an input parameter. Order does not matter.
         GreetingInput input = new GreetingInput(
                 this.state.getName(), this.state.getAge(), message);
-        this.context.startNewOrchestration("GreetingOrchestration", input);
+        context.startNewOrchestration("GreetingOrchestration", input);
     }
 
     @Override

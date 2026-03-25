@@ -61,8 +61,9 @@ public class TaskEntityState {
         } else {
             this.serializedState = this.dataConverter.serialize(state);
             if (this.serializedState == null) {
-                deleteState();
-                return;
+                throw new IllegalStateException(
+                        "DataConverter.serialize() returned null for a non-null state object of type "
+                        + state.getClass().getName() + ". This indicates a broken DataConverter implementation.");
             }
             this.stateExists = true;
         }

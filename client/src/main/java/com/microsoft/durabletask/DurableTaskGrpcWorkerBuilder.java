@@ -22,6 +22,8 @@ public final class DurableTaskGrpcWorkerBuilder {
     Duration maximumTimerInterval;
     DurableTaskGrpcWorkerVersioningOptions versioningOptions;
     int maxConcurrentEntityWorkItems = 1;
+    int maxConcurrentActivityWorkItems;
+    int maxWorkItemThreads;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -254,6 +256,42 @@ public final class DurableTaskGrpcWorkerBuilder {
             throw new IllegalArgumentException("maxConcurrentEntityWorkItems must be at least 1.");
         }
         this.maxConcurrentEntityWorkItems = maxConcurrentEntityWorkItems;
+        return this;
+    }
+
+    /**
+     * Sets the maximum number of activity work items that can be processed concurrently by this worker.
+     * <p>
+     * The sidecar enforces this limit by controlling how many activity work items are dispatched
+     * to this worker at a time. The default value is 10.
+     *
+     * @param maxConcurrentActivityWorkItems the maximum number of concurrent activity work items (must be at least 1)
+     * @return this builder object
+     * @throws IllegalArgumentException if the value is less than 1
+     */
+    public DurableTaskGrpcWorkerBuilder maxConcurrentActivityWorkItems(int maxConcurrentActivityWorkItems) {
+        if (maxConcurrentActivityWorkItems < 1) {
+            throw new IllegalArgumentException("maxConcurrentActivityWorkItems must be at least 1.");
+        }
+        this.maxConcurrentActivityWorkItems = maxConcurrentActivityWorkItems;
+        return this;
+    }
+
+    /**
+     * Sets the maximum number of threads used for processing activity and entity work items.
+     * <p>
+     * The default value is {@value DurableTaskGrpcWorker#DEFAULT_MAX_WORK_ITEM_THREADS}.
+     * Threads are created on demand and idle threads are reclaimed after 60 seconds.
+     *
+     * @param maxWorkItemThreads the maximum number of work item threads (must be at least 1)
+     * @return this builder object
+     * @throws IllegalArgumentException if the value is less than 1
+     */
+    public DurableTaskGrpcWorkerBuilder maxWorkItemThreads(int maxWorkItemThreads) {
+        if (maxWorkItemThreads < 1) {
+            throw new IllegalArgumentException("maxWorkItemThreads must be at least 1.");
+        }
+        this.maxWorkItemThreads = maxWorkItemThreads;
         return this;
     }
 

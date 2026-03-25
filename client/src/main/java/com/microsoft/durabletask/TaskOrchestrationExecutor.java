@@ -81,7 +81,7 @@ final class TaskOrchestrationExecutor {
             while (context.processNextEvent()) { /* no method body */ }
             completed = true;
         } catch (OrchestratorBlockedException orchestratorBlockedException) {
-            logger.info(String.format(
+            logger.fine(String.format(
                     "%s: Orchestrator yielded. Waiting for events. Outstanding event keys: %s, Pending actions: %d",
                     context.instanceId,
                     context.outstandingEvents.keySet(),
@@ -489,7 +489,7 @@ final class TaskOrchestrationExecutor {
             Helpers.throwIfArgumentNull(returnType, "returnType");
 
             // Validate critical section: calls must target locked entities to prevent deadlocks
-            if (this.isInCriticalSection && this.lockedEntityIds != null
+            if (this.isInCriticalSection
                     && !this.lockedEntityIds.contains(entityId.toString())) {
                 throw new IllegalStateException(String.format(
                         "Cannot call entity '%s' from within a critical section because it is not locked. " +
@@ -543,7 +543,7 @@ final class TaskOrchestrationExecutor {
             }
 
             if (!this.isReplaying) {
-                this.logger.info(() -> String.format(
+                this.logger.fine(() -> String.format(
                         "%s: calling entity '%s' operation '%s' (#%d) requestId=%s",
                         this.instanceId,
                         entityId,
@@ -676,8 +676,16 @@ final class TaskOrchestrationExecutor {
             eventQueue.add(record);
 
             // Wrap the result so that when the lock is granted, we return an AutoCloseable
-            // that releases all locks on close()
+            // that releases all locks on close(). The boolean guard ensures idempotency
+            // so that double-close (common with try-with-resources) doesn't emit duplicate
+            // unlock actions and corrupt the sequenceNumber for replay.
+            final boolean[] released = { false };
             return lockTask.thenApply(ignored -> (AutoCloseable) () -> {
+                if (released[0]) {
+                    return;
+                }
+                released[0] = true;
+
                 // Release all locks
                 for (EntityInstanceId lockedEntity : sortedIds) {
                     int unlockId = this.sequenceNumber++;
@@ -1007,7 +1015,7 @@ final class TaskOrchestrationExecutor {
             if (outstandingEventQueue == null) {
                 // No code is waiting for this event. Buffer it in case user-code waits for it later.
                 if (!this.isReplaying) {
-                    this.logger.info(() -> String.format(
+                    this.logger.fine(() -> String.format(
                             "%s: Received EventRaised '%s' but no outstanding waiter found. Buffering as unprocessed. Raw input: %s",
                             this.instanceId,
                             eventName,
@@ -1031,7 +1039,7 @@ final class TaskOrchestrationExecutor {
             // We detect entity call responses by checking if the task record has an associated entityId.
             if (matchingTaskRecord.getEntityId() != null) {
                 if (!this.isReplaying) {
-                    this.logger.info(() -> String.format(
+                    this.logger.fine(() -> String.format(
                             "%s: Routing EventRaised '%s' to entity response handler for entity '%s'. Raw result: %s",
                             this.instanceId,
                             eventName,
@@ -1136,7 +1144,7 @@ final class TaskOrchestrationExecutor {
                     String innerResult = (resultNode == null || resultNode.isNull()) ? null : resultNode.asText();
 
                     if (!this.isReplaying) {
-                        this.logger.info(() -> String.format(
+                        this.logger.fine(() -> String.format(
                                 "%s: Entity operation on '%s' completed via EventRaised with result: %s",
                                 this.instanceId,
                                 matchingTaskRecord.getEntityId(),
@@ -1205,7 +1213,7 @@ final class TaskOrchestrationExecutor {
             String rawResult = completedEvent.hasOutput() ? completedEvent.getOutput().getValue() : null;
 
             if (!this.isReplaying) {
-                this.logger.info(() -> String.format(
+                this.logger.fine(() -> String.format(
                         "%s: Entity operation completed for requestId=%s with output: %s",
                         this.instanceId,
                         requestId,
@@ -1287,6 +1295,11 @@ final class TaskOrchestrationExecutor {
             this.isInCriticalSection = true;
             this.currentCriticalSectionId = criticalSectionId;
             this.lockedEntityIds = this.pendingLockSets.remove(criticalSectionId);
+            if (this.lockedEntityIds == null) {
+                throw new NonDeterministicOrchestratorException(
+                        "Lock granted for criticalSectionId=" + criticalSectionId
+                        + " but no pending lock set was found. This indicates a non-deterministic orchestration.");
+            }
 
             if (!this.isReplaying) {
                 this.logger.fine(() -> String.format(
@@ -1600,7 +1613,7 @@ final class TaskOrchestrationExecutor {
 
         private void processEvent(HistoryEvent e) {
             if (!this.isReplaying) {
-                this.logger.info(() -> String.format(
+                this.logger.fine(() -> String.format(
                         "%s: Processing new event: %s (eventId=%d)",
                         this.instanceId,
                         e.getEventTypeCase(),

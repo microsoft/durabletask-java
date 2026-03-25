@@ -32,7 +32,7 @@ public class TaskEntityOperation {
      * @param state           the entity state
      * @param dataConverter   the data converter for deserializing input
      */
-    public TaskEntityOperation(
+    TaskEntityOperation(
             @Nonnull String name,
             @Nullable String serializedInput,
             @Nonnull TaskEntityContext context,

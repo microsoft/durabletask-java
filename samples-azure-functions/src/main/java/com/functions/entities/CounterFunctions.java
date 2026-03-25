@@ -15,12 +15,16 @@ import java.util.Optional;
 /**
  * Azure Functions for the Counter entity sample.
  * <p>
- * Demonstrates three entity dispatch modes:
+ * Demonstrates four entity dispatch modes:
  * <ul>
  *   <li>{@code mode=entity} (default) — dispatches to {@link CounterEntity} ({@code TaskEntity<Integer>})</li>
  *   <li>{@code mode=state} — dispatches to {@link StateCounterEntity} (POJO state dispatch)</li>
+ *   <li>{@code mode=static} — dispatches to {@link CounterEntity} under a different function name ({@code Counter_Alt})</li>
  *   <li>{@code mode=manual} — dispatches to {@link ManualCounterEntity} ({@code ITaskEntity})</li>
  * </ul>
+ * <p>
+ * {@code Counter} and {@code Counter_Alt} use the same entity implementation but are registered under
+ * different function names, creating separate entity ID namespaces when persisted in the backend.
  * <p>
  * This mirrors the .NET {@code Counter.cs} and {@code CounterApis} from
  * {@code durabletask-dotnet/samples/AzureFunctionsApp/Entities/}.
@@ -47,6 +51,19 @@ public class CounterFunctions {
     public String counterStateEntity(
             @DurableEntityTrigger(name = "req") String req) {
         return EntityRunner.loadAndRun(req, StateCounterEntity::new);
+    }
+
+    /**
+     * Alternative entity function that reuses {@link CounterEntity} under a different function name.
+     * <p>
+     * This creates a separate entity ID namespace ({@code counter_alt}) from the primary
+     * {@code Counter} function, even though both use the same entity implementation.
+     * This mirrors .NET's {@code Counter_Alt} / {@code DispatchStaticAsync} pattern.
+     */
+    @FunctionName("Counter_Alt")
+    public String counterAltEntity(
+            @DurableEntityTrigger(name = "req") String req) {
+        return EntityRunner.loadAndRun(req, CounterEntity::new);
     }
 
     /**
@@ -173,6 +190,10 @@ public class CounterFunctions {
                     name = "counter_state";
                     break;
                 case "2":
+                case "static":
+                    name = "counter_alt";
+                    break;
+                case "3":
                 case "manual":
                     name = "counter_manual";
                     break;
