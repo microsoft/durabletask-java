@@ -10,6 +10,22 @@ version = '1.8.0'
 archivesBaseName = 'durabletask-azure-functions'
 
 def protocVersion = '3.25.8'
+// Java 11 is used to compile and run all tests. Set the JDK_11 env var to your
+// local JDK 11 home directory, e.g. C:/Program Files/Java/openjdk-11.0.12_7/
+// If unset, falls back to the current JDK running Gradle.
+def rawJdkPath = System.env.JDK_11 ?: System.getProperty("java.home")
+// Handle case where JDK_11 points to an executable (e.g., .../bin/javac.exe)
+// instead of the JDK home directory — walk up to the JDK root.
+def PATH_TO_TEST_JAVA_RUNTIME = rawJdkPath
+if (rawJdkPath != null) {
+    def f = new File(rawJdkPath)
+    if (f.isFile()) {
+        PATH_TO_TEST_JAVA_RUNTIME = f.parentFile.parentFile.absolutePath
+    }
+}
+// Append .exe on Windows when invoking javac/java directly
+def isWindows = System.getProperty("os.name").toLowerCase().contains("win")
+def exeSuffix = isWindows ? ".exe" : ""
 
 repositories {
     maven {
@@ -22,17 +38,29 @@ dependencies {
     implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '3.2.3'
     implementation "com.google.protobuf:protobuf-java:${protocVersion}"
     compileOnly "com.microsoft.azure.functions:azure-functions-java-spi:1.1.0"
+
+    // Test dependencies
+    testImplementation 'org.mockito:mockito-core:5.21.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
     testImplementation platform('org.junit:junit-bom:5.14.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-test {
-    useJUnitPlatform()
-}
-
 sourceCompatibility = JavaVersion.VERSION_1_8
 targetCompatibility = JavaVersion.VERSION_1_8
+
+compileTestJava {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    options.fork = true
+    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac${exeSuffix}"
+}
+
+test {
+    useJUnitPlatform()
+    executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/java${exeSuffix}"
+}
 
 publishing {
     repositories {
