@@ -1,5 +1,6 @@
 ## Unreleased
 * Add support for calls to HTTP endpoints ([#271](https://github.com/microsoft/durabletask-java/pull/271))
+* Add getSuspendPostUri and getResumePostUri getters to HttpManagementPayload ([#264](https://github.com/microsoft/durabletask-java/pull/264))
 
 ## v1.8.0
 * Adding rewind client API ([#253](https://github.com/microsoft/durabletask-java/pull/253)). Note: orchestration processing for rewind is supported with Azure Functions but not with the standalone `GrpcDurableTaskWorker`.
