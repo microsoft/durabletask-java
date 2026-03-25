@@ -3,12 +3,15 @@
 
 package com.microsoft.durabletask;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -307,6 +310,265 @@ public class ErrorHandlingIntegrationTests extends IntegrationTestBase {
             assertEquals("com.microsoft.durabletask.TaskFailedException", details.getErrorType());
             assertNotNull(details.getStackTrace());
             return details;
+        }
+    }
+
+    /**
+     * Tests that inner exception details are preserved without a provider, and no properties are included.
+     */
+    @Disabled("Emulator (dts-emulator) does not yet support nested innerFailure in TaskFailureDetails")
+    @Test
+    void innerExceptionDetailsArePreserved() throws TimeoutException {
+        final String orchestratorName = "Parent";
+        final String subOrchestratorName = "Sub";
+        final String activityName = "ThrowException";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    ctx.callSubOrchestrator(subOrchestratorName, "", String.class).await();
+                })
+                .addOrchestrator(subOrchestratorName, ctx -> {
+                    ctx.callActivity(activityName).await();
+                })
+                .addActivity(activityName, ctx -> {
+                    throw new RuntimeException("first",
+                            new IllegalArgumentException("second",
+                                    new IllegalStateException("third")));
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            // Top-level: parent orchestration failed with TaskFailedException wrapping the sub-orchestration
+            FailureDetails topLevel = instance.getFailureDetails();
+            assertNotNull(topLevel);
+            assertEquals("com.microsoft.durabletask.TaskFailedException", topLevel.getErrorType());
+            assertTrue(topLevel.getErrorMessage().contains(subOrchestratorName));
+
+            // Level 1: sub-orchestration failed with TaskFailedException wrapping the activity
+            assertNotNull(topLevel.getInnerFailure());
+            FailureDetails subOrchFailure = topLevel.getInnerFailure();
+            assertEquals("com.microsoft.durabletask.TaskFailedException", subOrchFailure.getErrorType());
+            assertTrue(subOrchFailure.getErrorMessage().contains(activityName));
+
+            // Level 2: actual exception from the activity - RuntimeException("first")
+            assertNotNull(subOrchFailure.getInnerFailure());
+            FailureDetails activityFailure = subOrchFailure.getInnerFailure();
+            assertEquals("java.lang.RuntimeException", activityFailure.getErrorType());
+            assertEquals("first", activityFailure.getErrorMessage());
+
+            // Level 3: inner cause - IllegalArgumentException("second")
+            assertNotNull(activityFailure.getInnerFailure());
+            FailureDetails innerCause1 = activityFailure.getInnerFailure();
+            assertEquals("java.lang.IllegalArgumentException", innerCause1.getErrorType());
+            assertEquals("second", innerCause1.getErrorMessage());
+
+            // Level 4: innermost cause - IllegalStateException("third")
+            assertNotNull(innerCause1.getInnerFailure());
+            FailureDetails innerCause2 = innerCause1.getInnerFailure();
+            assertEquals("java.lang.IllegalStateException", innerCause2.getErrorType());
+            assertEquals("third", innerCause2.getErrorMessage());
+            assertNull(innerCause2.getInnerFailure());
+
+            // No provider registered, so no properties at any level
+            assertNull(topLevel.getProperties());
+            assertNull(subOrchFailure.getProperties());
+            assertNull(activityFailure.getProperties());
+            assertNull(innerCause1.getProperties());
+            assertNull(innerCause2.getProperties());
+        }
+    }
+
+    /**
+     * Tests that a registered {@link ExceptionPropertiesProvider} extracts custom properties
+     * from an activity exception into {@link FailureDetails#getProperties()}.
+     */
+    @Disabled("Emulator (dts-emulator) does not yet support properties in activity-level TaskFailureDetails")
+    @Test
+    void customExceptionPropertiesInFailureDetails() throws TimeoutException {
+        final String orchestratorName = "OrchestrationWithCustomException";
+        final String activityName = "BusinessActivity";
+
+        ExceptionPropertiesProvider provider = exception -> {
+            if (exception instanceof IllegalArgumentException) {
+                Map<String, Object> props = new HashMap<>();
+                props.put("paramName", exception.getMessage());
+                return props;
+            }
+            if (exception instanceof BusinessValidationException) {
+                BusinessValidationException bve = (BusinessValidationException) exception;
+                Map<String, Object> props = new HashMap<>();
+                props.put("errorCode", bve.errorCode);
+                props.put("retryCount", bve.retryCount);
+                props.put("isCritical", bve.isCritical);
+                return props;
+            }
+            return null;
+        };
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .exceptionPropertiesProvider(provider)
+                .addOrchestrator(orchestratorName, ctx -> {
+                    ctx.callActivity(activityName).await();
+                })
+                .addActivity(activityName, ctx -> {
+                    throw new BusinessValidationException(
+                            "Business logic validation failed",
+                            "VALIDATION_FAILED",
+                            3,
+                            true);
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            FailureDetails topLevel = instance.getFailureDetails();
+            assertNotNull(topLevel);
+            assertEquals("com.microsoft.durabletask.TaskFailedException", topLevel.getErrorType());
+
+            // The activity failure is in the inner failure
+            assertNotNull(topLevel.getInnerFailure());
+            FailureDetails innerFailure = topLevel.getInnerFailure();
+            assertTrue(innerFailure.getErrorType().contains("BusinessValidationException"));
+            assertEquals("Business logic validation failed", innerFailure.getErrorMessage());
+
+            // Verify custom properties are included
+            assertNotNull(innerFailure.getProperties());
+            assertEquals(3, innerFailure.getProperties().size());
+            assertEquals("VALIDATION_FAILED", innerFailure.getProperties().get("errorCode"));
+            assertEquals(3.0, innerFailure.getProperties().get("retryCount"));
+            assertEquals(true, innerFailure.getProperties().get("isCritical"));
+        }
+    }
+
+    /**
+     * Tests that properties from a directly-thrown orchestration exception are on the top-level failure.
+     */
+    @Test
+    void orchestrationDirectExceptionWithProperties() throws TimeoutException {
+        final String orchestratorName = "OrchestrationWithDirectException";
+        final String paramName = "testParameter";
+
+        ExceptionPropertiesProvider provider = exception -> {
+            if (exception instanceof IllegalArgumentException) {
+                Map<String, Object> props = new HashMap<>();
+                props.put("paramName", exception.getMessage());
+                return props;
+            }
+            return null;
+        };
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .exceptionPropertiesProvider(provider)
+                .addOrchestrator(orchestratorName, ctx -> {
+                    throw new IllegalArgumentException(paramName);
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, "");
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            FailureDetails details = instance.getFailureDetails();
+            assertNotNull(details);
+            assertEquals("java.lang.IllegalArgumentException", details.getErrorType());
+            assertTrue(details.getErrorMessage().contains(paramName));
+
+            // Verify custom properties from provider
+            assertNotNull(details.getProperties());
+            assertEquals(1, details.getProperties().size());
+            assertEquals(paramName, details.getProperties().get("paramName"));
+        }
+    }
+
+    /**
+     * Tests that custom properties survive through a parent -> sub-orchestration -> activity chain.
+     */
+    @Disabled("Emulator (dts-emulator) does not yet support properties in activity-level TaskFailureDetails")
+    @Test
+    void nestedOrchestrationExceptionPropertiesPreserved() throws TimeoutException {
+        final String parentOrchName = "ParentOrch";
+        final String subOrchName = "SubOrch";
+        final String activityName = "ActivityWithProps";
+        final String errorCode = "ERR_123";
+
+        ExceptionPropertiesProvider provider = exception -> {
+            if (exception instanceof BusinessValidationException) {
+                BusinessValidationException bve = (BusinessValidationException) exception;
+                Map<String, Object> props = new HashMap<>();
+                props.put("errorCode", bve.errorCode);
+                props.put("retryCount", bve.retryCount);
+                props.put("isCritical", bve.isCritical);
+                return props;
+            }
+            return null;
+        };
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .exceptionPropertiesProvider(provider)
+                .addOrchestrator(parentOrchName, ctx -> {
+                    ctx.callSubOrchestrator(subOrchName, "", String.class).await();
+                })
+                .addOrchestrator(subOrchName, ctx -> {
+                    ctx.callActivity(activityName).await();
+                })
+                .addActivity(activityName, ctx -> {
+                    throw new BusinessValidationException("nested error", errorCode, 5, false);
+                })
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(parentOrchName, "");
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(instanceId, defaultTimeout, true);
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+            // Parent -> TaskFailedException wrapping sub-orch
+            FailureDetails topLevel = instance.getFailureDetails();
+            assertNotNull(topLevel);
+            assertTrue(topLevel.isCausedBy(TaskFailedException.class));
+
+            // Sub-orch -> TaskFailedException wrapping activity
+            assertNotNull(topLevel.getInnerFailure());
+            assertTrue(topLevel.getInnerFailure().isCausedBy(TaskFailedException.class));
+
+            // Activity -> BusinessValidationException with properties
+            assertNotNull(topLevel.getInnerFailure().getInnerFailure());
+            FailureDetails activityFailure = topLevel.getInnerFailure().getInnerFailure();
+            assertTrue(activityFailure.getErrorType().contains("BusinessValidationException"));
+
+            // Verify properties survived the full chain
+            assertNotNull(activityFailure.getProperties());
+            assertEquals(errorCode, activityFailure.getProperties().get("errorCode"));
+            assertEquals(5.0, activityFailure.getProperties().get("retryCount"));
+            assertEquals(false, activityFailure.getProperties().get("isCritical"));
+        }
+    }
+
+    static class BusinessValidationException extends RuntimeException {
+        final String errorCode;
+        final int retryCount;
+        final boolean isCritical;
+
+        BusinessValidationException(String message, String errorCode, int retryCount, boolean isCritical) {
+            super(message);
+            this.errorCode = errorCode;
+            this.retryCount = retryCount;
+            this.isCritical = isCritical;
         }
     }
 }
