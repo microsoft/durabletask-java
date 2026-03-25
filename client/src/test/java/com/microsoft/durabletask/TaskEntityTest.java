@@ -224,7 +224,7 @@ public class TaskEntityTest {
     void reflectionDispatch_voidMethodNoArgs() throws Exception {
         CounterEntity entity = new CounterEntity();
         TaskEntityOperation op = createOperation("reset");
-        entity.runAsync(op);
+        entity.run(op);
         assertEquals(0, entity.state);
     }
 
@@ -233,7 +233,7 @@ public class TaskEntityTest {
         CounterEntity entity = new CounterEntity();
         // Set initial state to 0
         TaskEntityOperation op = createOperation("add", 5);
-        entity.runAsync(op);
+        entity.run(op);
         assertEquals(5, entity.state);
     }
 
@@ -243,7 +243,7 @@ public class TaskEntityTest {
         // Pre-load entity state to 42 and call "get"
         DataConverter converter = new JacksonDataConverter();
         String serializedState = converter.serialize(42);
-        Object result = entity.runAsync(createOperation("get", null, serializedState));
+        Object result = entity.run(createOperation("get", null, serializedState));
         assertEquals(42, result);
     }
 
@@ -253,20 +253,20 @@ public class TaskEntityTest {
 
         // Method is "add" but call with "ADD"
         TaskEntityOperation addOp = createOperation("ADD", 10);
-        entity.runAsync(addOp);
+        entity.run(addOp);
         // After "add", state was saved to the operation's state
         String serializedState = addOp.getState().getSerializedState();
         assertEquals(10, entity.state);
 
         // Method is "get" but call with "Get" — carry state forward
-        Object result = entity.runAsync(createOperation("Get", null, serializedState));
+        Object result = entity.run(createOperation("Get", null, serializedState));
         assertEquals(10, result);
     }
 
     @Test
     void reflectionDispatch_methodWithContextParam() throws Exception {
         EntityWithContextParam entity = new EntityWithContextParam();
-        Object result = entity.runAsync(createOperation("info"));
+        Object result = entity.run(createOperation("info"));
         assertNotNull(result);
         assertTrue(result.toString().contains("testentity"));
         assertTrue(result.toString().contains("testKey"));
@@ -275,7 +275,7 @@ public class TaskEntityTest {
     @Test
     void reflectionDispatch_methodWithTwoParams() throws Exception {
         EntityWithTwoParams entity = new EntityWithTwoParams();
-        Object result = entity.runAsync(createOperation("greet", "World"));
+        Object result = entity.run(createOperation("greet", "World"));
         assertEquals("Hello, World from testKey", result);
     }
 
@@ -290,7 +290,7 @@ public class TaskEntityTest {
         String serializedState = converter.serialize(42);
 
         TaskEntityOperation op = createOperation("delete", null, serializedState);
-        entity.runAsync(op);
+        entity.run(op);
 
         assertFalse(op.getState().hasState());
         assertNull(entity.state);
@@ -303,7 +303,7 @@ public class TaskEntityTest {
         String serializedState = converter.serialize(42);
 
         TaskEntityOperation op = createOperation("DELETE", null, serializedState);
-        entity.runAsync(op);
+        entity.run(op);
 
         assertFalse(op.getState().hasState());
     }
@@ -319,7 +319,7 @@ public class TaskEntityTest {
         String serializedState = converter.serialize(new MyState());
 
         TaskEntityOperation op = createOperation("increment", null, serializedState);
-        entity.runAsync(op);
+        entity.run(op);
 
         // State should have been incremented
         assertEquals(1, entity.state.getValue());
@@ -334,7 +334,7 @@ public class TaskEntityTest {
         // "increment" exists on MyState but not on NoStateDispatchEntity.
         // With allowStateDispatch=false, it should throw UnsupportedOperationException.
         assertThrows(UnsupportedOperationException.class, () -> {
-            entity.runAsync(createOperation("increment", null, serializedState));
+            entity.run(createOperation("increment", null, serializedState));
         });
     }
 
@@ -354,7 +354,7 @@ public class TaskEntityTest {
         AmbiguousEntity entity = new AmbiguousEntity();
         // "add" has two overloads: add(int) and add(String) — should throw
         assertThrows(IllegalStateException.class, () -> {
-            entity.runAsync(createOperation("add", 5));
+            entity.run(createOperation("add", 5));
         });
     }
 
@@ -366,7 +366,7 @@ public class TaskEntityTest {
     void unknownOperation_throwsException() {
         CounterEntity entity = new CounterEntity();
         assertThrows(UnsupportedOperationException.class, () -> {
-            entity.runAsync(createOperation("nonExistentOperation"));
+            entity.run(createOperation("nonExistentOperation"));
         });
     }
 
@@ -374,7 +374,7 @@ public class TaskEntityTest {
     void throwingOperation_propagatesException() {
         ThrowingEntity entity = new ThrowingEntity();
         RuntimeException ex = assertThrows(RuntimeException.class, () -> {
-            entity.runAsync(createOperation("fail"));
+            entity.run(createOperation("fail"));
         });
         assertEquals("Intentional failure", ex.getMessage());
     }
@@ -387,7 +387,7 @@ public class TaskEntityTest {
     void stateInitialization_defaultInitializer() throws Exception {
         CounterEntity entity = new CounterEntity();
         TaskEntityOperation op = createOperation("get");
-        Object result = entity.runAsync(op);
+        Object result = entity.run(op);
         // initializeState returns 0 for CounterEntity
         assertEquals(0, result);
     }
@@ -399,7 +399,7 @@ public class TaskEntityTest {
         String serializedState = converter.serialize(99);
 
         TaskEntityOperation op = createOperation("get", null, serializedState);
-        Object result = entity.runAsync(op);
+        Object result = entity.run(op);
         assertEquals(99, result);
     }
 
@@ -407,7 +407,7 @@ public class TaskEntityTest {
     void statePersistence_stateIsSavedAfterOperation() throws Exception {
         CounterEntity entity = new CounterEntity();
         TaskEntityOperation op = createOperation("add", 5);
-        entity.runAsync(op);
+        entity.run(op);
 
         // State should have been saved back
         assertTrue(op.getState().hasState());
@@ -524,7 +524,7 @@ public class TaskEntityTest {
     void dispatch_basicReentrantCall() throws Exception {
         BonusDepositEntity entity = new BonusDepositEntity();
         TaskEntityOperation op = createOperation("depositWithBonus", 100);
-        entity.runAsync(op);
+        entity.run(op);
 
         // 100 + 10% bonus = 110
         assertEquals(110, entity.state);
@@ -534,7 +534,7 @@ public class TaskEntityTest {
     void dispatch_withTypedReturnValue() throws Exception {
         ComputeEntity entity = new ComputeEntity();
         TaskEntityOperation op = createOperation("quadruple", 5);
-        Object result = entity.runAsync(op);
+        Object result = entity.run(op);
 
         // 5 * 2 = 10, then 10 * 2 = 20
         assertEquals(20, result);
@@ -547,7 +547,7 @@ public class TaskEntityTest {
         String serializedState = converter.serialize("existing");
 
         TaskEntityOperation op = createOperation("resetAndDelete", null, serializedState);
-        Object result = entity.runAsync(op);
+        Object result = entity.run(op);
 
         assertEquals("deleted", result);
         assertNull(entity.state);
@@ -559,7 +559,7 @@ public class TaskEntityTest {
         // "deposit" is the method, but dispatch uses "DEPOSIT" internally — let's validate
         // by calling depositWithBonus which dispatches "deposit"
         TaskEntityOperation op = createOperation("DEPOSITWITHBONUS", 100);
-        entity.runAsync(op);
+        entity.run(op);
         assertEquals(110, entity.state);
     }
 
@@ -570,7 +570,7 @@ public class TaskEntityTest {
         String serializedState = converter.serialize(new MyState());
 
         TaskEntityOperation op = createOperation("getAndIncrement", null, serializedState);
-        Object result = entity.runAsync(op);
+        Object result = entity.run(op);
 
         // Before increment was 0
         assertEquals(0, result);
@@ -580,7 +580,7 @@ public class TaskEntityTest {
 
     @Test
     void dispatch_unknownOperation_throwsException() throws Exception {
-        // First trigger runAsync to set the context on the entity, then test dispatch failure
+        // First trigger run() to set the context on the entity, then test dispatch failure
         // We use a custom entity that dispatches an unknown operation
         TaskEntity<Void> failEntity = new TaskEntity<Void>() {
             public void bad() {
@@ -594,14 +594,14 @@ public class TaskEntityTest {
         };
 
         assertThrows(UnsupportedOperationException.class, () -> {
-            failEntity.runAsync(createOperation("bad"));
+            failEntity.run(createOperation("bad"));
         });
     }
 
     @Test
     void dispatch_outsideExecution_throwsIllegalState() {
         BonusDepositEntity entity = new BonusDepositEntity();
-        // dispatch() called without runAsync() first (no context set)
+        // dispatch() called without run() first (no context set)
         assertThrows(IllegalStateException.class, () -> {
             entity.dispatch("deposit", 10);
         });
@@ -632,7 +632,7 @@ public class TaskEntityTest {
         };
 
         TaskEntityOperation op = createOperation("doReset");
-        resetDispatcher.runAsync(op);
+        resetDispatcher.run(op);
         assertEquals(0, resetDispatcher.state);
     }
 

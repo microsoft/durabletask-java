@@ -23,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
@@ -34,6 +35,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private static final int DEFAULT_PORT = 4001;
     static final int DEFAULT_MAX_WORK_ITEM_THREADS = 100;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcWorker.class.getPackage().getName());
+    private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(0);
     private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
@@ -87,7 +89,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(),
                 r -> {
-                    Thread t = new Thread(r, "durabletask-worker");
+                    Thread t = new Thread(r, "durabletask-worker-" + THREAD_COUNTER.incrementAndGet());
                     t.setDaemon(true);
                     return t;
                 },
@@ -119,15 +121,14 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             }
         } catch (InterruptedException e) {
             this.workItemExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
 
         if (this.managedSidecarChannel != null) {
             try {
                 this.managedSidecarChannel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                // Best effort. Also note that AutoClose documentation recommends NOT having
-                // close() methods throw InterruptedException:
-                // https://docs.oracle.com/javase/7/docs/api/java/lang/AutoCloseable.html
+                Thread.currentThread().interrupt();
             }
         }
     }
@@ -514,6 +515,13 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                         .setCompletionToken(workItem.getCompletionToken());
                                 // Trim operationInfos to match actual result count
                                 int resultCount = result.getResultsCount();
+                                if (operationInfos.size() != resultCount) {
+                                    logger.log(Level.WARNING,
+                                            String.format("Entity '%s': operationInfos size (%d) does not match result count (%d). Trimming.",
+                                                    entityRequestV2.getInstanceId(),
+                                                    operationInfos.size(),
+                                                    resultCount));
+                                }
                                 if (operationInfos.size() > resultCount) {
                                     responseBuilder.addAllOperationInfos(operationInfos.subList(0, resultCount));
                                 } else {

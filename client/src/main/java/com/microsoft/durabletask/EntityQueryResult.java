@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -20,7 +21,7 @@ public final class EntityQueryResult {
      * @param continuationToken the continuation token for fetching the next page, or {@code null} if no more results
      */
     EntityQueryResult(List<EntityMetadata> entities, @Nullable String continuationToken) {
-        this.entities = entities;
+        this.entities = entities != null ? Collections.unmodifiableList(entities) : Collections.emptyList();
         this.continuationToken = continuationToken;
     }
 

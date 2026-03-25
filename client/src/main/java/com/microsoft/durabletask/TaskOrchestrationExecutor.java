@@ -137,7 +137,7 @@ final class TaskOrchestrationExecutor {
         // Entity integration state (Phase 4)
         private String executionId;
         private boolean isInCriticalSection;
-        private String currentCriticalSectionId;
+
         private Set<String> lockedEntityIds;
         private final Map<String, Set<String>> pendingLockSets = new HashMap<>();
 
@@ -524,6 +524,7 @@ final class TaskOrchestrationExecutor {
                 // Uses SendEventAction (external event) instead of SendEntityMessageAction.
                 ObjectNode requestMessage = JSON_MAPPER.createObjectNode();
                 requestMessage.put("op", operationName);
+                requestMessage.put("signal", false);
                 if (serializedInput != null) {
                     requestMessage.put("input", serializedInput);
                 }
@@ -596,6 +597,11 @@ final class TaskOrchestrationExecutor {
             Helpers.throwIfArgumentNull(entityIds, "entityIds");
             if (entityIds.isEmpty()) {
                 throw new IllegalArgumentException("entityIds must not be empty");
+            }
+            for (EntityInstanceId eid : entityIds) {
+                if (eid == null) {
+                    throw new IllegalArgumentException("entityIds must not contain null elements");
+                }
             }
             if (this.isInCriticalSection) {
                 throw new IllegalStateException(
@@ -716,7 +722,6 @@ final class TaskOrchestrationExecutor {
                 }
 
                 this.isInCriticalSection = false;
-                this.currentCriticalSectionId = null;
                 this.lockedEntityIds = null;
 
                 if (!this.isReplaying) {
@@ -1141,7 +1146,8 @@ final class TaskOrchestrationExecutor {
                 } else {
                     // Success — extract the inner result value
                     JsonNode resultNode = responseNode.get("result");
-                    String innerResult = (resultNode == null || resultNode.isNull()) ? null : resultNode.asText();
+                    String innerResult = (resultNode == null || resultNode.isNull()) ? null
+                            : (resultNode.isTextual() ? resultNode.asText() : resultNode.toString());
 
                     if (!this.isReplaying) {
                         this.logger.fine(() -> String.format(
@@ -1293,7 +1299,6 @@ final class TaskOrchestrationExecutor {
             }
 
             this.isInCriticalSection = true;
-            this.currentCriticalSectionId = criticalSectionId;
             this.lockedEntityIds = this.pendingLockSets.remove(criticalSectionId);
             if (this.lockedEntityIds == null) {
                 throw new NonDeterministicOrchestratorException(

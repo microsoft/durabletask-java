@@ -239,8 +239,8 @@ public class TaskOrchestrationEntityEventTest {
 
     /**
      * Extracts the requestId from a callEntity SendEventAction's JSON payload.
-     * The JSON has format: {"op":"...","id":"requestId","parent":"...", ...}
-     * Call actions don't have "signal":true, which distinguishes them from signals.
+     * The JSON has format: {"op":"...","signal":false,"id":"requestId","parent":"...", ...}
+     * Call actions have "signal":false, which distinguishes them from signals ("signal":true).
      */
     private String extractCallRequestId(Collection<OrchestratorAction> actions) throws Exception {
         for (OrchestratorAction action : actions) {
@@ -248,7 +248,7 @@ public class TaskOrchestrationEntityEventTest {
                 SendEventAction sendEvent = action.getSendEvent();
                 String data = sendEvent.getData().getValue();
                 JsonNode json = JSON_MAPPER.readTree(data);
-                if (json.has("id") && !json.has("signal")) {
+                if (json.has("id") && json.has("signal") && !json.get("signal").asBoolean()) {
                     return json.get("id").asText();
                 }
             }
@@ -446,7 +446,7 @@ public class TaskOrchestrationEntityEventTest {
                 if (targetInstanceId.contains("@counter@c1")) {
                     JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
                     assertEquals("get", json.get("op").asText());
-                    assertFalse(json.has("signal"), "Call action should not have signal flag");
+                    assertFalse(json.get("signal").asBoolean(), "Call action should have signal=false");
                     hasCall = true;
                 }
             }
@@ -530,7 +530,7 @@ public class TaskOrchestrationEntityEventTest {
                 SendEventAction sendEvent = action.getSendEvent();
                 if (sendEvent.getInstance().getInstanceId().contains("@counter@c1")) {
                     JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
-                    if (json.has("id") && !json.has("signal")) {
+                    if (json.has("id") && json.has("signal") && !json.get("signal").asBoolean()) {
                         requestId = json.get("id").asText();
                     }
                 }
@@ -597,7 +597,7 @@ public class TaskOrchestrationEntityEventTest {
                 SendEventAction sendEvent = action.getSendEvent();
                 if (sendEvent.getInstance().getInstanceId().contains("@counter@c1")) {
                     JsonNode json = JSON_MAPPER.readTree(sendEvent.getData().getValue());
-                    if (json.has("id") && !json.has("signal")) {
+                    if (json.has("id") && json.has("signal") && !json.get("signal").asBoolean()) {
                         requestId = json.get("id").asText();
                     }
                 }

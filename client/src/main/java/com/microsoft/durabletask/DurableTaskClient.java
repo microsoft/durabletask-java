@@ -420,7 +420,7 @@ public abstract class DurableTaskClient implements AutoCloseable {
     }
 
     /**
-     * Fetches the metadata for a durable entity instance, excluding its state.
+     * Fetches the metadata for a durable entity instance, including its state.
      *
      * @param entityId the entity instance ID to query
      * @return the entity metadata, or {@code null} if the entity does not exist

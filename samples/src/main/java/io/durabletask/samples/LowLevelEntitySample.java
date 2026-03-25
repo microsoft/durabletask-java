@@ -162,7 +162,7 @@ final class LowLevelEntitySample {
      */
     public static class KeyValueEntity implements ITaskEntity {
         @Override
-        public Object runAsync(TaskEntityOperation operation) throws Exception {
+        public Object run(TaskEntityOperation operation) throws Exception {
             // Load current state (a Map stored as JSON)
             @SuppressWarnings("unchecked")
             java.util.Map<String, String> store = operation.getState().getState(java.util.Map.class);

@@ -146,7 +146,7 @@ public abstract class TaskEntity<TState> implements ITaskEntity {
     protected abstract Class<TState> getStateType();
 
     @Override
-    public Object runAsync(TaskEntityOperation operation) throws Exception {
+    public Object run(TaskEntityOperation operation) throws Exception {
         // Set the context before dispatch so subclass methods can access it
         this.context = operation.getContext();
         this.implicitDeleteHandled = false;

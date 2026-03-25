@@ -133,7 +133,7 @@ final class TaskEntityExecutor {
                         operationName, serializedInput, context, entityState, this.dataConverter);
 
                 // Execute
-                Object result = entity.runAsync(operation);
+                Object result = entity.run(operation);
 
                 Instant endTime = Instant.now();
 
@@ -331,7 +331,8 @@ final class TaskEntityExecutor {
         List<OperationAction> getCommittedActions(int startId) {
             List<OperationAction> actions = new ArrayList<>();
             int id = startId;
-            for (PendingAction pending : this.pendingActions) {
+            for (int i = 0; i < this.committedActionCount; i++) {
+                PendingAction pending = this.pendingActions.get(i);
                 OperationAction.Builder actionBuilder = OperationAction.newBuilder()
                         .setId(id++);
                 if (pending.type == PendingAction.Type.SEND_SIGNAL) {

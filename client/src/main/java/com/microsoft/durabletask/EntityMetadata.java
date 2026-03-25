@@ -21,7 +21,7 @@ public class EntityMetadata {
     private final String serializedState;
     private final boolean includesState;
     private final DataConverter dataConverter;
-    private EntityInstanceId cachedEntityInstanceId;
+    private volatile EntityInstanceId cachedEntityInstanceId;
 
     /**
      * Creates a new {@code EntityMetadata} instance.

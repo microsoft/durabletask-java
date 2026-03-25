@@ -57,7 +57,7 @@ public class TaskEntityExecutorTest {
      */
     static class FailingEntity implements ITaskEntity {
         @Override
-        public Object runAsync(TaskEntityOperation operation) throws Exception {
+        public Object run(TaskEntityOperation operation) throws Exception {
             throw new RuntimeException("Intentional failure: " + operation.getName());
         }
     }
@@ -67,7 +67,7 @@ public class TaskEntityExecutorTest {
      */
     static class SignalingEntity implements ITaskEntity {
         @Override
-        public Object runAsync(TaskEntityOperation operation) throws Exception {
+        public Object run(TaskEntityOperation operation) throws Exception {
             if ("signalOther".equals(operation.getName())) {
                 EntityInstanceId targetId = new EntityInstanceId("Counter", "target1");
                 operation.getContext().signalEntity(targetId, "add", 10);
@@ -82,7 +82,7 @@ public class TaskEntityExecutorTest {
      */
     static class OrchestrationStartingEntity implements ITaskEntity {
         @Override
-        public Object runAsync(TaskEntityOperation operation) throws Exception {
+        public Object run(TaskEntityOperation operation) throws Exception {
             if ("startOrch".equals(operation.getName())) {
                 String orchId = operation.getContext().startNewOrchestration("MyOrchestration", "orchInput");
                 return orchId;
@@ -98,7 +98,7 @@ public class TaskEntityExecutorTest {
         private int callCount = 0;
 
         @Override
-        public Object runAsync(TaskEntityOperation operation) throws Exception {
+        public Object run(TaskEntityOperation operation) throws Exception {
             callCount++;
             if ("failOnSecond".equals(operation.getName()) && callCount == 2) {
                 throw new RuntimeException("Second call failed");

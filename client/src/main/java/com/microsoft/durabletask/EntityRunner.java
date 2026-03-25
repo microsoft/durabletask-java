@@ -80,8 +80,8 @@ public final class EntityRunner {
         try {
             entityName = EntityInstanceId.fromString(instanceId).getName();
         } catch (Exception e) {
-            // Fallback: use the raw instance ID as the entity name
-            entityName = instanceId;
+            throw new IllegalArgumentException(
+                    "Failed to parse entity instance ID '" + instanceId + "'", e);
         }
 
         HashMap<String, TaskEntityFactory> factories = new HashMap<>();

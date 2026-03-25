@@ -179,6 +179,12 @@ public final class EntityProxy {
                 return (Class<?>) type;
             } else if (type instanceof ParameterizedType) {
                 return getRawClass(((ParameterizedType) type).getRawType());
+            } else if (type instanceof java.lang.reflect.WildcardType) {
+                java.lang.reflect.WildcardType wt = (java.lang.reflect.WildcardType) type;
+                Type[] upperBounds = wt.getUpperBounds();
+                if (upperBounds.length > 0) {
+                    return getRawClass(upperBounds[0]);
+                }
             }
             return Object.class;
         }

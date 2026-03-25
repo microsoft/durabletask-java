@@ -26,7 +26,7 @@ public class TaskEntityState {
      * @param dataConverter   the data converter used for serialization/deserialization
      * @param serializedState the initial serialized state, or {@code null} if no state exists
      */
-    public TaskEntityState(DataConverter dataConverter, @Nullable String serializedState) {
+    TaskEntityState(DataConverter dataConverter, @Nullable String serializedState) {
         this.dataConverter = dataConverter;
         this.serializedState = serializedState;
         this.stateExists = serializedState != null;

@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -160,7 +161,9 @@ public abstract class TaskOrchestrationEntityFeature {
      * @param entityIds the entity IDs to lock
      * @return a task that completes with an {@link AutoCloseable} used to release locks
      */
-    public abstract Task<AutoCloseable> lockEntities(@Nonnull EntityInstanceId... entityIds);
+    public Task<AutoCloseable> lockEntities(@Nonnull EntityInstanceId... entityIds) {
+        return this.lockEntities(Arrays.asList(entityIds));
+    }
 
     /**
      * Gets whether this orchestration is currently inside a critical section.
@@ -230,11 +233,6 @@ final class ContextBackedTaskOrchestrationEntityFeature extends TaskOrchestratio
 
     @Override
     public Task<AutoCloseable> lockEntities(@Nonnull List<EntityInstanceId> entityIds) {
-        return this.context.lockEntities(entityIds);
-    }
-
-    @Override
-    public Task<AutoCloseable> lockEntities(@Nonnull EntityInstanceId... entityIds) {
         return this.context.lockEntities(entityIds);
     }
 

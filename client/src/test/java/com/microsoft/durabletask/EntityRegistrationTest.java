@@ -18,7 +18,7 @@ public class EntityRegistrationTest {
      */
     static class TestEntity implements ITaskEntity {
         @Override
-        public Object runAsync(TaskEntityOperation operation) {
+        public Object run(TaskEntityOperation operation) {
             return null;
         }
     }
@@ -34,7 +34,7 @@ public class EntityRegistrationTest {
         }
 
         @Override
-        public Object runAsync(TaskEntityOperation operation) {
+        public Object run(TaskEntityOperation operation) {
             return null;
         }
     }

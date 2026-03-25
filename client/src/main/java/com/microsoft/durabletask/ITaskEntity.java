@@ -25,5 +25,5 @@ public interface ITaskEntity {
      *         (for two-way calls). May be {@code null} for void operations.
      * @throws Exception if the operation fails
      */
-    Object runAsync(TaskEntityOperation operation) throws Exception;
+    Object run(TaskEntityOperation operation) throws Exception;
 }

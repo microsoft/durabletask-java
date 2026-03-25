@@ -16,7 +16,7 @@ import java.util.Map;
 public class ManualCounterEntity implements ITaskEntity {
 
     @Override
-    public Object runAsync(TaskEntityOperation operation) {
+    public Object run(TaskEntityOperation operation) {
         if (operation.getState().getState(Integer.class) == null) {
             operation.getState().setState(0);
         }
