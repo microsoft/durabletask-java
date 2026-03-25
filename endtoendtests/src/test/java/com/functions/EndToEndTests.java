@@ -571,6 +571,22 @@ public class EndToEndTests {
             fail("Expected integer entity state but got: " + body);
             throw e; // unreachable, but satisfies compiler
         }
+
+    @Test
+    public void callHttp() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        String startOrchestrationPath = "/api/StartCallHttp";
+        Response response = post(startOrchestrationPath);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean pass = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(pass);
+        // Verify the orchestrator returned an HTTP status code (200)
+        Response statusResponse = get(statusQueryGetUri);
+        Integer output = statusResponse.jsonPath().get("output");
+        assertEquals(200, output);
     }
 
     private boolean pollingCheck(String statusQueryGetUri,

@@ -3,11 +3,13 @@
 package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import javax.annotation.Nonnull;
 
@@ -791,4 +793,66 @@ public interface TaskOrchestrationContext {
      * Clears the orchestration's custom status.
      */
     void clearCustomStatus();
+
+    /**
+     * Makes a durable HTTP request using the specified {@link DurableHttpRequest} and returns a {@link Task}
+     * that completes when the HTTP call completes.
+     * <p>
+     * This is a convenience method that delegates to {@link DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest)}.
+     *
+     * @param request the {@link DurableHttpRequest} describing the HTTP request to make
+     * @return a new {@link Task} that completes when the HTTP call completes
+     * @see DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest)
+     */
+    default Task<DurableHttpResponse> callHttp(DurableHttpRequest request) {
+        return DurableHttp.callHttp(this, request);
+    }
+
+    /**
+     * Makes a durable HTTP request using the specified {@link DurableHttpRequest} with additional
+     * options (e.g., retry policies) and returns a {@link Task} that completes when the HTTP call completes.
+     * <p>
+     * This is a convenience method that delegates to
+     * {@link DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest, TaskOptions)}.
+     *
+     * @param request the {@link DurableHttpRequest} describing the HTTP request to make
+     * @param options additional options that control the execution and processing of the HTTP call, or {@code null}
+     * @return a new {@link Task} that completes when the HTTP call completes
+     * @see DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest, TaskOptions)
+     */
+    default Task<DurableHttpResponse> callHttp(DurableHttpRequest request, @Nullable TaskOptions options) {
+        return DurableHttp.callHttp(this, request, options);
+    }
+
+    /**
+     * Makes a simple durable HTTP request to the specified URI.
+     * <p>
+     * This is a convenience method that delegates to
+     * {@link DurableHttp#callHttp(TaskOrchestrationContext, String, java.net.URI)}.
+     *
+     * @param method the HTTP method (e.g., "GET", "POST", "PUT", "DELETE")
+     * @param uri the target URI for the HTTP request
+     * @return a new {@link Task} that completes when the HTTP call completes
+     */
+    default Task<DurableHttpResponse> callHttp(String method, URI uri) {
+        return DurableHttp.callHttp(this, method, uri);
+    }
+
+    /**
+     * Makes a durable HTTP request with headers and content to the specified URI.
+     * <p>
+     * This is a convenience method that delegates to
+     * {@link DurableHttp#callHttp(TaskOrchestrationContext, String, java.net.URI, Map, String)}.
+     *
+     * @param method the HTTP method (e.g., "GET", "POST", "PUT", "DELETE")
+     * @param uri the target URI for the HTTP request
+     * @param headers the HTTP headers to include in the request, or {@code null} for no headers
+     * @param content the body content of the HTTP request, or {@code null} for no body
+     * @return a new {@link Task} that completes when the HTTP call completes
+     */
+    default Task<DurableHttpResponse> callHttp(String method, URI uri,
+                                               @Nullable Map<String, String> headers,
+                                               @Nullable String content) {
+        return DurableHttp.callHttp(this, method, uri, headers, content);
+    }
 }
