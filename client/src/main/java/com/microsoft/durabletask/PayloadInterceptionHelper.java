@@ -185,7 +185,7 @@ final class PayloadInterceptionHelper {
     private static HistoryEvent resolveStringValueField(HistoryEvent event, StringValue field,
                                                          PayloadHelper payloadHelper,
                                                          HistoryEventUpdater updater) {
-        if (!field.isInitialized() || field.getValue().isEmpty()) {
+        if (field.getValue().isEmpty()) {
             return event;
         }
         String resolved = payloadHelper.maybeResolve(field.getValue());
@@ -314,7 +314,7 @@ final class PayloadInterceptionHelper {
     private static HistoryEvent externalizeStringValueField(HistoryEvent event, StringValue field,
                                                              PayloadHelper payloadHelper,
                                                              HistoryEventUpdater updater) {
-        if (!field.isInitialized() || field.getValue().isEmpty()) {
+        if (field.getValue().isEmpty()) {
             return event;
         }
         String externalized = payloadHelper.maybeExternalize(field.getValue());

@@ -13,12 +13,12 @@ import com.microsoft.durabletask.CompositeTaskFailedException;
 import com.microsoft.durabletask.DataConverter;
 import com.microsoft.durabletask.OrchestrationRunner;
 import com.microsoft.durabletask.PayloadStore;
+import com.microsoft.durabletask.PayloadStoreProvider;
 import com.microsoft.durabletask.TaskFailedException;
-import com.microsoft.durabletask.azureblobpayloads.BlobPayloadStore;
-import com.microsoft.durabletask.azureblobpayloads.BlobPayloadStoreOptions;
 import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
 import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 
+import java.util.ServiceLoader;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -32,16 +32,6 @@ public class OrchestrationMiddleware implements Middleware {
 
     private static final String ORCHESTRATION_TRIGGER = "DurableOrchestrationTrigger";
     private static final Logger logger = Logger.getLogger(OrchestrationMiddleware.class.getName());
-
-    /**
-     * Environment variable for the Azure Storage connection string used for large payload externalization.
-     */
-    private static final String ENV_STORAGE_CONNECTION_STRING = "DURABLETASK_STORAGE_CONNECTION_STRING";
-
-    /**
-     * Fallback environment variable (standard Azure Functions storage connection).
-     */
-    private static final String ENV_AZURE_WEB_JOBS_STORAGE = "AzureWebJobsStorage";
 
     private final PayloadStore payloadStore;
 
@@ -98,27 +88,19 @@ public class OrchestrationMiddleware implements Middleware {
     }
 
     private static PayloadStore initializePayloadStore() {
-        // Check for explicit large-payload storage connection string
-        String connectionString = System.getenv(ENV_STORAGE_CONNECTION_STRING);
-        if (connectionString == null || connectionString.isEmpty()) {
-            // Fall back to standard Azure Functions storage connection
-            connectionString = System.getenv(ENV_AZURE_WEB_JOBS_STORAGE);
+        ServiceLoader<PayloadStoreProvider> loader = ServiceLoader.load(PayloadStoreProvider.class);
+        for (PayloadStoreProvider provider : loader) {
+            try {
+                PayloadStore store = provider.create();
+                if (store != null) {
+                    return store;
+                }
+            } catch (Exception e) {
+                logger.log(Level.WARNING,
+                    "PayloadStoreProvider " + provider.getClass().getName() + " failed to create store", e);
+            }
         }
-
-        if (connectionString == null || connectionString.isEmpty()) {
-            logger.fine("No storage connection string configured for large payload externalization");
-            return null;
-        }
-
-        try {
-            BlobPayloadStoreOptions options = new BlobPayloadStoreOptions.Builder()
-                .setConnectionString(connectionString)
-                .build();
-            logger.info("Large payload externalization enabled using Azure Blob Storage");
-            return new BlobPayloadStore(options);
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Failed to initialize BlobPayloadStore; large payloads will not be externalized", e);
-            return null;
-        }
+        logger.fine("No PayloadStoreProvider found or configured; large payload externalization is disabled");
+        return null;
     }
 }

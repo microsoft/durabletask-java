@@ -311,7 +311,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     response = externalizeOrchestratorResponsePayloads(response);
                                 }
                                 sendOrchestratorResponse(response);
-                            } catch (IllegalArgumentException | IllegalStateException e) {
+                            } catch (PayloadTooLargeException e) {
                                 logger.log(Level.WARNING,
                                     "Failed to send orchestrator response for instance '" +
                                     orchestratorRequest.getInstanceId() + "': " + e.getMessage(), e);
@@ -320,6 +320,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     .setFailureDetails(TaskFailureDetails.newBuilder()
                                         .setErrorType(e.getClass().getName())
                                         .setErrorMessage(e.getMessage())
+                                        .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
                                         .build())
                                     .build();
                                 OrchestratorResponse failResponse = OrchestratorResponse.newBuilder()

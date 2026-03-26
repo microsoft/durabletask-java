@@ -13,6 +13,12 @@ package com.microsoft.durabletask;
  * The store implementation is solely responsible for generating blob names/keys and
  * defining the token format. The core framework treats tokens as opaque strings and
  * delegates token recognition to {@link #isKnownPayloadToken(String)}.
+ * <p>
+ * <b>Payload retention:</b> This interface does not define a deletion mechanism.
+ * Externalized payloads persist until removed by external means. When using Azure
+ * Blob Storage, configure
+ * <a href="https://learn.microsoft.com/azure/storage/blobs/lifecycle-management-overview">
+ * lifecycle management policies</a> to automatically expire old payloads.
  *
  * @see LargePayloadOptions
  */

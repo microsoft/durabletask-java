@@ -6,8 +6,10 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
+import com.azure.storage.blob.models.BlobDownloadContentResponse;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.azure.storage.blob.models.BlobStorageException;
+import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import com.microsoft.durabletask.PayloadStore;
 
 import java.io.ByteArrayInputStream;
@@ -43,6 +45,7 @@ public final class BlobPayloadStore implements PayloadStore {
     private final String blobPrefix;
     private final String containerName;
     private final boolean compressPayloads;
+    private volatile boolean containerEnsured;
 
     /**
      * Creates a new BlobPayloadStore with the given options.
@@ -72,8 +75,6 @@ public final class BlobPayloadStore implements PayloadStore {
         this.blobPrefix = options.getBlobPrefix();
         this.containerName = options.getContainerName();
         this.compressPayloads = options.isCompressPayloads();
-
-        ensureContainerExists();
     }
 
     @Override
@@ -81,6 +82,8 @@ public final class BlobPayloadStore implements PayloadStore {
         if (payload == null) {
             throw new IllegalArgumentException("payload must not be null");
         }
+
+        ensureContainerExists();
 
         String blobName = this.blobPrefix + UUID.randomUUID().toString().replace("-", "") + BLOB_EXTENSION;
         BlobClient blobClient = this.containerClient.getBlobClient(blobName);
@@ -90,8 +93,11 @@ public final class BlobPayloadStore implements PayloadStore {
 
         if (this.compressPayloads) {
             data = gzipCompress(rawData);
-            blobClient.upload(new ByteArrayInputStream(data), data.length, true);
-            blobClient.setHttpHeaders(new BlobHttpHeaders().setContentEncoding(GZIP_CONTENT_ENCODING));
+            BlobHttpHeaders headers = new BlobHttpHeaders().setContentEncoding(GZIP_CONTENT_ENCODING);
+            BlobParallelUploadOptions uploadOptions = new BlobParallelUploadOptions(
+                new ByteArrayInputStream(data), data.length)
+                .setHeaders(headers);
+            blobClient.uploadWithResponse(uploadOptions, null, null);
         } else {
             data = rawData;
             blobClient.upload(new ByteArrayInputStream(data), data.length, true);
@@ -112,13 +118,9 @@ public final class BlobPayloadStore implements PayloadStore {
         String blobName = extractBlobName(token);
         BlobClient blobClient = this.containerClient.getBlobClient(blobName);
 
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        blobClient.downloadStream(outputStream);
-
-        byte[] rawBytes = outputStream.toByteArray();
-
-        // Check if the blob was compressed by inspecting content encoding
-        String contentEncoding = blobClient.getProperties().getContentEncoding();
+        BlobDownloadContentResponse response = blobClient.downloadContentWithResponse(null, null, null, null);
+        byte[] rawBytes = response.getValue().toBytes();
+        String contentEncoding = response.getDeserializedHeaders().getContentEncoding();
         if (GZIP_CONTENT_ENCODING.equalsIgnoreCase(contentEncoding)) {
             rawBytes = gzipDecompress(rawBytes);
         }
@@ -137,21 +139,27 @@ public final class BlobPayloadStore implements PayloadStore {
     }
 
     private void ensureContainerExists() {
+        if (this.containerEnsured) {
+            return;
+        }
         try {
             if (!this.containerClient.exists()) {
                 this.containerClient.create();
                 logger.info(() -> String.format("Created blob container: %s", this.containerClient.getBlobContainerName()));
             }
+            this.containerEnsured = true;
         } catch (BlobStorageException e) {
             // Container might have been created concurrently (409 Conflict)
             if (e.getStatusCode() != 409) {
                 throw e;
             }
+            this.containerEnsured = true;
         }
     }
 
     /**
-     * Extracts the blob name from a {@code blob:v1:<container>:<blobName>} token.
+     * Extracts the blob name from a {@code blob:v1:<container>:<blobName>} token
+     * and validates that the container matches the configured container.
      */
     private String extractBlobName(String token) {
         if (!token.startsWith(TOKEN_PREFIX)) {
@@ -164,6 +172,12 @@ public final class BlobPayloadStore implements PayloadStore {
         if (colonIndex < 0) {
             throw new IllegalArgumentException(
                 "Token does not have the expected format (blob:v1:<container>:<blobName>): " + token);
+        }
+        String tokenContainer = remainder.substring(0, colonIndex);
+        if (!this.containerName.equals(tokenContainer)) {
+            throw new IllegalArgumentException(String.format(
+                "Token container '%s' does not match configured container '%s'",
+                tokenContainer, this.containerName));
         }
         return remainder.substring(colonIndex + 1);
     }

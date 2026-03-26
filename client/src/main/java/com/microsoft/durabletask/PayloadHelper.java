@@ -48,6 +48,12 @@ final class PayloadHelper {
             return value;
         }
 
+        // Fast path: if char count is below threshold, byte count is too
+        // (each Java char encodes to 1-3 UTF-8 bytes, so length() <= UTF-8 byte length)
+        if (value.length() <= this.options.getThresholdBytes()) {
+            return value;
+        }
+
         int byteSize = value.getBytes(StandardCharsets.UTF_8).length;
 
         // (2) below-threshold guard
@@ -57,7 +63,7 @@ final class PayloadHelper {
 
         // (3) above-max-cap rejection
         if (byteSize > this.options.getMaxExternalizedPayloadBytes()) {
-            throw new IllegalArgumentException(String.format(
+            throw new PayloadTooLargeException(String.format(
                 "Payload size %d KB exceeds maximum of %d KB. " +
                 "Reduce the payload size or increase maxExternalizedPayloadBytes.",
                 byteSize / 1024,
