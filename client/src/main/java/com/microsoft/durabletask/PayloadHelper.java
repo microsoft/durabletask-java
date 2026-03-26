@@ -2,8 +2,6 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
-import java.nio.charset.StandardCharsets;
-
 /**
  * Internal utility for externalizing and resolving payloads using a {@link PayloadStore}.
  * <p>
@@ -40,7 +38,7 @@ final class PayloadHelper {
      *
      * @param value the payload string to potentially externalize
      * @return the original value if below threshold, or an opaque token if externalized
-     * @throws IllegalArgumentException if the payload exceeds the maximum externalized payload size
+     * @throws PayloadTooLargeException if the payload exceeds the maximum externalized payload size
      */
     String maybeExternalize(String value) {
         // (1) null/empty guard
@@ -48,16 +46,16 @@ final class PayloadHelper {
             return value;
         }
 
-        // Fast path: if char count is below threshold, byte count is too
-        // (each Java char encodes to 1-3 UTF-8 bytes, so length() <= UTF-8 byte length)
-        if (value.length() <= this.options.getThresholdBytes()) {
+        // Fast path: each Java char contributes at least 1 UTF-8 byte,
+        // so length() is always <= UTF-8 byte length.
+        if (value.length() < this.options.getThresholdBytes()) {
             return value;
         }
 
-        int byteSize = value.getBytes(StandardCharsets.UTF_8).length;
+        int byteSize = utf8ByteLength(value);
 
-        // (2) below-threshold guard
-        if (byteSize <= this.options.getThresholdBytes()) {
+        // (2) below-threshold guard (strict less-than, matching .NET)
+        if (byteSize < this.options.getThresholdBytes()) {
             return value;
         }
 
@@ -95,5 +93,27 @@ final class PayloadHelper {
                 "PayloadStore.download() returned null for token: " + value);
         }
         return resolved;
+    }
+
+    /**
+     * Counts the number of UTF-8 bytes needed to encode the given string,
+     * without allocating a byte array (unlike {@code String.getBytes(UTF_8).length}).
+     */
+    private static int utf8ByteLength(String s) {
+        int count = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c <= 0x7F) {
+                count++;
+            } else if (c <= 0x7FF) {
+                count += 2;
+            } else if (Character.isHighSurrogate(c)) {
+                count += 4;
+                i++; // skip low surrogate
+            } else {
+                count += 3;
+            }
+        }
+        return count;
     }
 }

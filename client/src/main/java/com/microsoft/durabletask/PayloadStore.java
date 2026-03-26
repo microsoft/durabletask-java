@@ -19,6 +19,11 @@ package com.microsoft.durabletask;
  * Blob Storage, configure
  * <a href="https://learn.microsoft.com/azure/storage/blobs/lifecycle-management-overview">
  * lifecycle management policies</a> to automatically expire old payloads.
+ * <p>
+ * <b>Performance note:</b> All methods on this interface are synchronous. Implementations
+ * that perform network I/O (e.g., Azure Blob Storage) should ensure that latency is
+ * acceptable on the calling thread. The framework calls these methods on the worker's
+ * processing thread.
  *
  * @see LargePayloadOptions
  */

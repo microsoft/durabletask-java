@@ -106,7 +106,7 @@ public class PayloadHelperTest {
 
         // Create a payload larger than 50 bytes
         String hugePayload = "x".repeat(100);
-        assertThrows(IllegalArgumentException.class, () -> helper.maybeExternalize(hugePayload));
+        assertThrows(PayloadTooLargeException.class, () -> helper.maybeExternalize(hugePayload));
         assertEquals(0, store.getUploadCount());
     }
 

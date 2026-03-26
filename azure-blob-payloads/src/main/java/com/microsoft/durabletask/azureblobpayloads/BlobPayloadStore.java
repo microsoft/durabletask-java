@@ -138,6 +138,12 @@ public final class BlobPayloadStore implements PayloadStore {
         return value.startsWith(TOKEN_PREFIX);
     }
 
+    /**
+     * Ensures the blob container exists, creating it if necessary.
+     * The check-then-act on {@code containerEnsured} is intentionally non-atomic:
+     * concurrent callers may race through to {@code create()}, but the 409 Conflict
+     * handler makes this benign.
+     */
     private void ensureContainerExists() {
         if (this.containerEnsured) {
             return;
@@ -194,13 +200,25 @@ public final class BlobPayloadStore implements PayloadStore {
         }
     }
 
+    /**
+     * Maximum decompressed size (20 MiB) to guard against decompression bombs.
+     * This is 2x the default max externalized payload size of 10 MiB.
+     */
+    private static final int MAX_DECOMPRESSED_BYTES = 20 * 1024 * 1024;
+
     private static byte[] gzipDecompress(byte[] compressed) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             try (GZIPInputStream gzipIn = new GZIPInputStream(new ByteArrayInputStream(compressed))) {
                 byte[] buffer = new byte[8192];
                 int len;
+                int totalRead = 0;
                 while ((len = gzipIn.read(buffer)) != -1) {
+                    totalRead += len;
+                    if (totalRead > MAX_DECOMPRESSED_BYTES) {
+                        throw new IOException(
+                            "Decompressed payload exceeds safety limit of " + MAX_DECOMPRESSED_BYTES + " bytes");
+                    }
                     baos.write(buffer, 0, len);
                 }
             }

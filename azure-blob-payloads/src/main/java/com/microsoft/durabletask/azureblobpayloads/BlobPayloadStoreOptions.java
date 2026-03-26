@@ -138,6 +138,7 @@ public final class BlobPayloadStoreOptions {
         /**
          * Sets the Azure Storage connection string. Mutually exclusive with
          * {@link #setBlobServiceEndpoint(String)} and {@link #setBlobServiceClient(BlobServiceClient)}.
+         * Setting this clears any previously set endpoint or pre-configured client.
          *
          * @param connectionString the connection string
          * @return this builder
@@ -147,12 +148,16 @@ public final class BlobPayloadStoreOptions {
                 throw new IllegalArgumentException("connectionString must not be null or empty");
             }
             this.connectionString = connectionString;
+            this.blobServiceEndpoint = null;
+            this.credential = null;
+            this.blobServiceClient = null;
             return this;
         }
 
         /**
          * Sets the Azure Blob Storage service endpoint. Use with {@link #setCredential(TokenCredential)}.
          * Mutually exclusive with {@link #setConnectionString(String)} and {@link #setBlobServiceClient(BlobServiceClient)}.
+         * Setting this clears any previously set connection string or pre-configured client.
          *
          * @param blobServiceEndpoint the blob service endpoint URL
          * @return this builder
@@ -162,6 +167,8 @@ public final class BlobPayloadStoreOptions {
                 throw new IllegalArgumentException("blobServiceEndpoint must not be null or empty");
             }
             this.blobServiceEndpoint = blobServiceEndpoint;
+            this.connectionString = null;
+            this.blobServiceClient = null;
             return this;
         }
 
@@ -183,6 +190,7 @@ public final class BlobPayloadStoreOptions {
         /**
          * Sets a pre-configured BlobServiceClient. Mutually exclusive with
          * {@link #setConnectionString(String)} and {@link #setBlobServiceEndpoint(String)}.
+         * Setting this clears any previously set connection string or endpoint.
          *
          * @param blobServiceClient the pre-configured client
          * @return this builder
@@ -192,6 +200,9 @@ public final class BlobPayloadStoreOptions {
                 throw new IllegalArgumentException("blobServiceClient must not be null");
             }
             this.blobServiceClient = blobServiceClient;
+            this.connectionString = null;
+            this.blobServiceEndpoint = null;
+            this.credential = null;
             return this;
         }
 

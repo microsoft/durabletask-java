@@ -24,12 +24,12 @@ public final class LargePayloadOptions {
     /**
      * Default externalization threshold in bytes (900,000 bytes, matching .NET SDK).
      */
-    static final int DEFAULT_THRESHOLD_BYTES = 900_000;
+    public static final int DEFAULT_THRESHOLD_BYTES = 900_000;
 
     /**
      * Default maximum externalized payload size in bytes (10 MiB, matching .NET SDK).
      */
-    static final int DEFAULT_MAX_EXTERNALIZED_PAYLOAD_BYTES = 10 * 1024 * 1024;
+    public static final int DEFAULT_MAX_EXTERNALIZED_PAYLOAD_BYTES = 10 * 1024 * 1024;
 
     private final int thresholdBytes;
     private final int maxExternalizedPayloadBytes;
@@ -40,8 +40,8 @@ public final class LargePayloadOptions {
     }
 
     /**
-     * Gets the size threshold in bytes above which payloads will be externalized.
-     * Payloads at or below this size are sent inline. The comparison uses UTF-8 byte length.
+     * Gets the size threshold in bytes at or above which payloads will be externalized.
+     * Payloads below this size are sent inline. The comparison uses UTF-8 byte length.
      *
      * @return the externalization threshold in bytes
      */
