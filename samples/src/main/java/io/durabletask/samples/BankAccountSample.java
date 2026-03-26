@@ -127,7 +127,7 @@ final class BankAccountSample {
     /**
      * A bank account entity that stores a balance and supports deposit, withdraw, and get operations.
      */
-    public static class BankAccountEntity extends TaskEntity<Double> {
+    public static class BankAccountEntity extends AbstractTaskEntity<Double> {
 
         public double deposit(double amount) {
             if (amount <= 0) {

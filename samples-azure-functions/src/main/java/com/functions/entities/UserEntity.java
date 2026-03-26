@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 package com.functions.entities;
 
-import com.microsoft.durabletask.TaskEntity;
+import com.microsoft.durabletask.AbstractTaskEntity;
 import com.microsoft.durabletask.TaskEntityContext;
 import com.microsoft.durabletask.TaskEntityOperation;
 
@@ -14,10 +14,10 @@ import com.microsoft.durabletask.TaskEntityOperation;
  *   <li>Setting and updating complex state</li>
  *   <li>Using {@link TaskEntityContext} to schedule orchestrations from within an entity</li>
  *   <li>Custom {@link #initializeState} for types without a no-arg constructor pattern</li>
- *   <li>Implicit "delete" handling from the {@link TaskEntity} base class</li>
+ *   <li>Implicit "delete" handling from the {@link AbstractTaskEntity} base class</li>
  * </ul>
  */
-public class UserEntity extends TaskEntity<UserState> {
+public class UserEntity extends AbstractTaskEntity<UserState> {
 
     /**
      * Sets the user state to the given value.

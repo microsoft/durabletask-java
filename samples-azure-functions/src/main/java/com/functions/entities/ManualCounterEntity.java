@@ -2,18 +2,18 @@
 // Licensed under the MIT License.
 package com.functions.entities;
 
-import com.microsoft.durabletask.ITaskEntity;
+import com.microsoft.durabletask.TaskEntity;
 import com.microsoft.durabletask.TaskEntityOperation;
 
 import java.util.Map;
 
 /**
- * A low-level counter entity that uses {@link ITaskEntity} with manual operation dispatch.
+ * A low-level counter entity that uses {@link TaskEntity} with manual operation dispatch.
  * <p>
  * This mirrors the .NET {@code ManualCounter} from {@code Counter.cs} and demonstrates
- * how to process entity operations without the convenience of {@link com.microsoft.durabletask.TaskEntity}.
+ * how to process entity operations without the convenience of {@link com.microsoft.durabletask.AbstractTaskEntity}.
  */
-public class ManualCounterEntity implements ITaskEntity {
+public class ManualCounterEntity implements TaskEntity {
 
     @Override
     public Object run(TaskEntityOperation operation) {

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 package com.functions.entities;
 
-import com.microsoft.durabletask.TaskEntity;
+import com.microsoft.durabletask.AbstractTaskEntity;
 import com.microsoft.durabletask.TaskEntityOperation;
 
 /**
@@ -19,7 +19,7 @@ import com.microsoft.durabletask.TaskEntityOperation;
  *       {@code {"value": number}}</li>
  * </ul>
  */
-public class StateCounterEntity extends TaskEntity<StateCounterState> {
+public class StateCounterEntity extends AbstractTaskEntity<StateCounterState> {
 
     public StateCounterEntity() {
         // Enable state dispatch so operations are forwarded to methods on StateCounterState

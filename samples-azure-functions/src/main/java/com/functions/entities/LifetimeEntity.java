@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 package com.functions.entities;
 
-import com.microsoft.durabletask.TaskEntity;
+import com.microsoft.durabletask.AbstractTaskEntity;
 import com.microsoft.durabletask.TaskEntityOperation;
 
 import java.util.Random;
@@ -23,7 +23,7 @@ import java.util.UUID;
  *   <li>Implicit {@code delete} — handled by the base class when no matching method is found</li>
  * </ul>
  */
-public class LifetimeEntity extends TaskEntity<LifetimeState> {
+public class LifetimeEntity extends AbstractTaskEntity<LifetimeState> {
 
     private static final Random RANDOM = new Random();
 

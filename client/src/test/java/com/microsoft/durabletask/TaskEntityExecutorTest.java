@@ -28,7 +28,7 @@ public class TaskEntityExecutorTest {
     /**
      * Simple counter entity for testing.
      */
-    static class TestCounterEntity extends TaskEntity<Integer> {
+    static class TestCounterEntity extends AbstractTaskEntity<Integer> {
         public void add(int amount) {
             this.state += amount;
         }
@@ -55,7 +55,7 @@ public class TaskEntityExecutorTest {
     /**
      * Entity that always throws (for failure testing).
      */
-    static class FailingEntity implements ITaskEntity {
+    static class FailingEntity implements TaskEntity {
         @Override
         public Object run(TaskEntityOperation operation) throws Exception {
             throw new RuntimeException("Intentional failure: " + operation.getName());
@@ -65,7 +65,7 @@ public class TaskEntityExecutorTest {
     /**
      * Entity that signals another entity during execution (for action testing).
      */
-    static class SignalingEntity implements ITaskEntity {
+    static class SignalingEntity implements TaskEntity {
         @Override
         public Object run(TaskEntityOperation operation) throws Exception {
             if ("signalOther".equals(operation.getName())) {
@@ -80,7 +80,7 @@ public class TaskEntityExecutorTest {
     /**
      * Entity that starts an orchestration during execution.
      */
-    static class OrchestrationStartingEntity implements ITaskEntity {
+    static class OrchestrationStartingEntity implements TaskEntity {
         @Override
         public Object run(TaskEntityOperation operation) throws Exception {
             if ("startOrch".equals(operation.getName())) {
@@ -94,7 +94,7 @@ public class TaskEntityExecutorTest {
     /**
      * Entity that conditionally fails (first op succeeds, second fails).
      */
-    static class ConditionalFailEntity implements ITaskEntity {
+    static class ConditionalFailEntity implements TaskEntity {
         private int callCount = 0;
 
         @Override
@@ -383,7 +383,7 @@ public class TaskEntityExecutorTest {
     @Test
     void execute_failedOperationRollsBackActions() {
         // Create an entity that signals another entity then fails
-        TaskEntityFactory factory = () -> (ITaskEntity) operation -> {
+        TaskEntityFactory factory = () -> (TaskEntity) operation -> {
             operation.getContext().signalEntity(
                     new EntityInstanceId("Other", "o1"), "op", null);
             throw new RuntimeException("fail after signal");

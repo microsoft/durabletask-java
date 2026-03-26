@@ -51,7 +51,7 @@ final class TypedEntityProxySample {
     /**
      * Shopping cart entity that stores a list of items.
      */
-    public static class ShoppingCartEntity extends TaskEntity<java.util.List<String>> {
+    public static class ShoppingCartEntity extends AbstractTaskEntity<java.util.List<String>> {
 
         public void addItem(String item) {
             this.state.add(item);

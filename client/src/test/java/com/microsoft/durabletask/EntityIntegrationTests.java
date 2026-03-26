@@ -28,7 +28,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     /**
      * A simple counter entity for integration testing.
      */
-    static class CounterEntity extends TaskEntity<Integer> {
+    static class CounterEntity extends AbstractTaskEntity<Integer> {
         public void add(int amount) {
             this.state += amount;
         }
@@ -354,7 +354,7 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     /**
      * Entity that uses re-entrant dispatch to compose operations.
      */
-    static class BonusCounterEntity extends TaskEntity<Integer> {
+    static class BonusCounterEntity extends AbstractTaskEntity<Integer> {
         public void add(int amount) {
             this.state += amount;
         }

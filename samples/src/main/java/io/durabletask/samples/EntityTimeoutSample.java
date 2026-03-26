@@ -140,7 +140,7 @@ final class EntityTimeoutSample {
     /**
      * A counter entity used for timeout and scheduled signal demonstrations.
      */
-    public static class SlowCounterEntity extends TaskEntity<Integer> {
+    public static class SlowCounterEntity extends AbstractTaskEntity<Integer> {
 
         public void add(int amount) {
             this.state += amount;

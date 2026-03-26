@@ -1,12 +1,12 @@
 package com.functions;
 
-import com.microsoft.durabletask.TaskEntity;
+import com.microsoft.durabletask.AbstractTaskEntity;
 import com.microsoft.durabletask.TaskEntityOperation;
 
 /**
  * A simple counter entity for e2e testing.
  */
-public class CounterEntity extends TaskEntity<Integer> {
+public class CounterEntity extends AbstractTaskEntity<Integer> {
 
     public int add(int input) {
         this.state += input;

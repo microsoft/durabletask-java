@@ -137,6 +137,7 @@ final class TaskOrchestrationExecutor {
         // Entity integration state (Phase 4)
         private String executionId;
         private boolean isInCriticalSection;
+        private TaskOrchestrationEntityFeature cachedEntityFeature;
 
         private Set<String> lockedEntityIds;
         private final Map<String, Set<String>> pendingLockSets = new HashMap<>();
@@ -159,6 +160,14 @@ final class TaskOrchestrationExecutor {
         public String getName() {
             // TODO: Throw if name is null
             return this.orchestratorName;
+        }
+
+        @Override
+        public TaskOrchestrationEntityFeature getEntities() {
+            if (this.cachedEntityFeature == null) {
+                this.cachedEntityFeature = new ContextBackedTaskOrchestrationEntityFeature(this);
+            }
+            return this.cachedEntityFeature;
         }
 
         private void setName(String name) {

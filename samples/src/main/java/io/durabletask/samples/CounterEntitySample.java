@@ -84,7 +84,7 @@ final class CounterEntitySample {
     /**
      * A simple counter entity that stores an integer and supports add, reset, and get operations.
      */
-    public static class CounterEntity extends TaskEntity<Integer> {
+    public static class CounterEntity extends AbstractTaskEntity<Integer> {
 
         public void add(int amount) {
             this.state += amount;

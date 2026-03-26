@@ -106,7 +106,7 @@ public final class EntityRunner {
      * @throws IllegalArgumentException if either parameter is {@code null} or if {@code base64EncodedEntityRequest}
      *                                  is not valid base64-encoded protobuf
      */
-    public static String loadAndRun(String base64EncodedEntityRequest, ITaskEntity entity) {
+    public static String loadAndRun(String base64EncodedEntityRequest, TaskEntity entity) {
         if (entity == null) {
             throw new IllegalArgumentException("entity must not be null");
         }
@@ -123,7 +123,7 @@ public final class EntityRunner {
      * @throws IllegalArgumentException if either parameter is {@code null} or if {@code entityRequestBytes}
      *                                  is not valid protobuf
      */
-    public static byte[] loadAndRun(byte[] entityRequestBytes, ITaskEntity entity) {
+    public static byte[] loadAndRun(byte[] entityRequestBytes, TaskEntity entity) {
         if (entity == null) {
             throw new IllegalArgumentException("entity must not be null");
         }

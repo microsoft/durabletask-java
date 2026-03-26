@@ -16,7 +16,7 @@ public class EntityRegistrationTest {
     /**
      * A simple entity with a public no-arg constructor.
      */
-    static class TestEntity implements ITaskEntity {
+    static class TestEntity implements TaskEntity {
         @Override
         public Object run(TaskEntityOperation operation) {
             return null;
@@ -26,7 +26,7 @@ public class EntityRegistrationTest {
     /**
      * An entity that does NOT have a public no-arg constructor.
      */
-    static class NoDefaultConstructorEntity implements ITaskEntity {
+    static class NoDefaultConstructorEntity implements TaskEntity {
         private final String value;
 
         public NoDefaultConstructorEntity(String value) {
@@ -56,7 +56,7 @@ public class EntityRegistrationTest {
     void addEntity_class_nullClass_throws() {
         DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
         assertThrows(IllegalArgumentException.class, () -> {
-            builder.addEntity((Class<? extends ITaskEntity>) null);
+            builder.addEntity((Class<? extends TaskEntity>) null);
         });
     }
 
@@ -68,7 +68,7 @@ public class EntityRegistrationTest {
         TaskEntityFactory factory = builder.entityFactories.get("testentity");
         assertNotNull(factory);
 
-        ITaskEntity entity = factory.create();
+        TaskEntity entity = factory.create();
         assertNotNull(entity);
         assertInstanceOf(TestEntity.class, entity);
     }
@@ -79,8 +79,8 @@ public class EntityRegistrationTest {
         builder.addEntity(TestEntity.class);
 
         TaskEntityFactory factory = builder.entityFactories.get("testentity");
-        ITaskEntity entity1 = factory.create();
-        ITaskEntity entity2 = factory.create();
+        TaskEntity entity1 = factory.create();
+        TaskEntity entity2 = factory.create();
 
         assertNotSame(entity1, entity2, "Factory should create a new instance each time");
     }
@@ -101,7 +101,7 @@ public class EntityRegistrationTest {
     void addEntity_nameAndClass_nullClass_throws() {
         DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
         assertThrows(IllegalArgumentException.class, () -> {
-            builder.addEntity("name", (Class<? extends ITaskEntity>) null);
+            builder.addEntity("name", (Class<? extends TaskEntity>) null);
         });
     }
 
@@ -129,7 +129,7 @@ public class EntityRegistrationTest {
 
     // endregion
 
-    // region addEntity(ITaskEntity) — singleton
+    // region addEntity(TaskEntity) — singleton
 
     @Test
     void addEntity_singleton_derivesNameFromClass() {
@@ -147,8 +147,8 @@ public class EntityRegistrationTest {
         builder.addEntity(instance);
 
         TaskEntityFactory factory = builder.entityFactories.get("testentity");
-        ITaskEntity created1 = factory.create();
-        ITaskEntity created2 = factory.create();
+        TaskEntity created1 = factory.create();
+        TaskEntity created2 = factory.create();
 
         assertSame(instance, created1, "Singleton registration should return the same instance");
         assertSame(instance, created2, "Singleton registration should return the same instance");
@@ -158,13 +158,13 @@ public class EntityRegistrationTest {
     void addEntity_singleton_null_throws() {
         DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
         assertThrows(IllegalArgumentException.class, () -> {
-            builder.addEntity((ITaskEntity) null);
+            builder.addEntity((TaskEntity) null);
         });
     }
 
     // endregion
 
-    // region addEntity(String, ITaskEntity) — named singleton
+    // region addEntity(String, TaskEntity) — named singleton
 
     @Test
     void addEntity_namedSingleton_usesProvidedName() {
@@ -189,7 +189,7 @@ public class EntityRegistrationTest {
     void addEntity_namedSingleton_null_throws() {
         DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
         assertThrows(IllegalArgumentException.class, () -> {
-            builder.addEntity("name", (ITaskEntity) null);
+            builder.addEntity("name", (TaskEntity) null);
         });
     }
 

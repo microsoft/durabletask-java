@@ -86,7 +86,7 @@ final class TaskEntityExecutor {
         List<OperationResult> results = new ArrayList<>();
 
         // Create a single entity instance for the entire batch
-        ITaskEntity entity;
+        TaskEntity entity;
         try {
             entity = factory.create();
             if (entity == null) {

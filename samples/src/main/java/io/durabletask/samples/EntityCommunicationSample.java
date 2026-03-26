@@ -137,7 +137,7 @@ final class EntityCommunicationSample {
      * <p>
      * Demonstrates entity-to-entity signaling via {@link TaskEntityContext#signalEntity}.
      */
-    public static class SensorEntity extends TaskEntity<SensorState> {
+    public static class SensorEntity extends AbstractTaskEntity<SensorState> {
 
         /**
          * Records a temperature reading and forwards it to the aggregator entity.
@@ -168,7 +168,7 @@ final class EntityCommunicationSample {
      * <p>
      * Demonstrates entity starting an orchestration via {@link TaskEntityContext#startNewOrchestration}.
      */
-    public static class AggregatorEntity extends TaskEntity<AggregatorState> {
+    public static class AggregatorEntity extends AbstractTaskEntity<AggregatorState> {
         private static final double ALERT_THRESHOLD = 30.0;
 
         /**

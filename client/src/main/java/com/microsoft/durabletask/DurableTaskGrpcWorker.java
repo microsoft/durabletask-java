@@ -47,7 +47,6 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
     private final int maxConcurrentEntityWorkItems;
-    private final int maxConcurrentActivityWorkItems;
     private final ExecutorService workItemExecutor;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
@@ -57,7 +56,6 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.activityFactories.putAll(builder.activityFactories);
         this.entityFactories.putAll(builder.entityFactories);
         this.maxConcurrentEntityWorkItems = builder.maxConcurrentEntityWorkItems;
-        this.maxConcurrentActivityWorkItems = builder.maxConcurrentActivityWorkItems;
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
@@ -170,9 +168,6 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         while (true) {
             try {
                 GetWorkItemsRequest.Builder requestBuilder = GetWorkItemsRequest.newBuilder();
-                if (this.maxConcurrentActivityWorkItems > 0) {
-                    requestBuilder.setMaxConcurrentActivityWorkItems(this.maxConcurrentActivityWorkItems);
-                }
                 if (!this.entityFactories.isEmpty()) {
                     // Signal to the sidecar that this worker can handle entity work items
                     requestBuilder.setMaxConcurrentEntityWorkItems(this.maxConcurrentEntityWorkItems);
@@ -385,54 +380,40 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 spanAttributes);
                         Scope activityScope = activitySpan.makeCurrent();
 
-                        this.workItemExecutor.submit(() -> {
-                            String output = null;
-                            TaskFailureDetails failureDetails = null;
-                            Throwable activityError = null;
-                            try {
-                                output = taskActivityExecutor.execute(
-                                    activityRequest.getName(),
-                                    activityRequest.getInput().getValue(),
-                                    activityRequest.getTaskId());
-                            } catch (Throwable e) {
-                                activityError = e;
-                                failureDetails = TaskFailureDetails.newBuilder()
-                                    .setErrorType(e.getClass().getName())
-                                    .setErrorMessage(e.getMessage())
-                                    .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
-                                    .build();
-                            } finally {
-                                activityScope.close();
-                                TracingHelper.endSpan(activitySpan, activityError);
-                            }
+                        String output = null;
+                        TaskFailureDetails failureDetails = null;
+                        Throwable activityError = null;
+                        try {
+                            output = taskActivityExecutor.execute(
+                                activityRequest.getName(),
+                                activityRequest.getInput().getValue(),
+                                activityRequest.getTaskId());
+                        } catch (Throwable e) {
+                            activityError = e;
+                            failureDetails = TaskFailureDetails.newBuilder()
+                                .setErrorType(e.getClass().getName())
+                                .setErrorMessage(e.getMessage())
+                                .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
+                                .build();
+                        } finally {
+                            activityScope.close();
+                            TracingHelper.endSpan(activitySpan, activityError);
+                        }
 
-                            try {
-                                ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
-                                        .setInstanceId(activityInstanceId)
-                                        .setTaskId(activityRequest.getTaskId())
-                                        .setCompletionToken(workItem.getCompletionToken());
+                        ActivityResponse.Builder responseBuilder = ActivityResponse.newBuilder()
+                                .setInstanceId(activityInstanceId)
+                                .setTaskId(activityRequest.getTaskId())
+                                .setCompletionToken(workItem.getCompletionToken());
 
-                                if (output != null) {
-                                    responseBuilder.setResult(StringValue.of(output));
-                                }
+                        if (output != null) {
+                            responseBuilder.setResult(StringValue.of(output));
+                        }
 
-                                if (failureDetails != null) {
-                                    responseBuilder.setFailureDetails(failureDetails);
-                                }
+                        if (failureDetails != null) {
+                            responseBuilder.setFailureDetails(failureDetails);
+                        }
 
-                                this.sidecarClient.completeActivityTask(responseBuilder.build());
-                            } catch (Exception e) {
-                                logger.log(Level.WARNING,
-                                        String.format("Failed to complete activity '%s' for instance '%s'. Abandoning work item.",
-                                                activityRequest.getName(),
-                                                activityInstanceId),
-                                        e);
-                                this.sidecarClient.abandonTaskActivityWorkItem(
-                                        AbandonActivityTaskRequest.newBuilder()
-                                                .setCompletionToken(workItem.getCompletionToken())
-                                                .build());
-                            }
-                        });
+                        this.sidecarClient.completeActivityTask(responseBuilder.build());
                     } else if (requestType == RequestCase.ENTITYREQUEST) {
                         EntityBatchRequest entityRequest = workItem.getEntityRequest();
                         this.workItemExecutor.submit(() -> {

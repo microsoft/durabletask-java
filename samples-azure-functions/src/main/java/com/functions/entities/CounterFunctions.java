@@ -20,7 +20,7 @@ import java.util.Optional;
  *   <li>{@code mode=entity} (default) — dispatches to {@link CounterEntity} ({@code TaskEntity<Integer>})</li>
  *   <li>{@code mode=state} — dispatches to {@link StateCounterEntity} (POJO state dispatch)</li>
  *   <li>{@code mode=static} — dispatches to {@link CounterEntity} under a different function name ({@code Counter_Alt})</li>
- *   <li>{@code mode=manual} — dispatches to {@link ManualCounterEntity} ({@code ITaskEntity})</li>
+ *   <li>{@code mode=manual} — dispatches to {@link ManualCounterEntity} ({@code TaskEntity})</li>
  * </ul>
  * <p>
  * {@code Counter} and {@code Counter_Alt} use the same entity implementation but are registered under

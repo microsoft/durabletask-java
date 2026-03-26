@@ -11,13 +11,13 @@ import java.util.concurrent.TimeoutException;
 /**
  * Sample demonstrating advanced entity programming models:
  * <ul>
- *   <li><b>{@link ITaskEntity} low-level interface</b>: Implementing the raw entity interface with
- *       manual switch-based operation dispatch instead of reflection-based {@link TaskEntity}.</li>
- *   <li><b>State dispatch</b>: Using {@link TaskEntity} with {@code allowStateDispatch=true}
+ *   <li><b>{@link TaskEntity} low-level interface</b>: Implementing the raw entity interface with
+ *       manual switch-based operation dispatch instead of reflection-based {@link AbstractTaskEntity}.</li>
+ *   <li><b>State dispatch</b>: Using {@link AbstractTaskEntity} with {@code allowStateDispatch=true}
  *       (default) so operations can be dispatched to methods on the state POJO itself.</li>
  *   <li><b>POJO entity state</b>: Using a rich class as the entity state instead of a primitive.</li>
  *   <li><b>Implicit delete</b>: Sending a "delete" operation to an entity that has no explicit
- *       delete method — {@link TaskEntity} handles this automatically by clearing the state.</li>
+ *       delete method — {@link AbstractTaskEntity} handles this automatically by clearing the state.</li>
  * </ul>
  * <p>
  * Usage: Run this sample with a Durable Task sidecar listening on localhost:4001.
@@ -30,7 +30,7 @@ final class LowLevelEntitySample {
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
-                // Demo 1: ITaskEntity — manual dispatch
+                // Demo 1: TaskEntity — manual dispatch
                 .addEntity("KeyValue", KeyValueEntity::new)
                 // Demo 2: TaskEntity with POJO state and state dispatch
                 .addEntity("ShoppingCart", CartEntity::new)
@@ -43,7 +43,7 @@ final class LowLevelEntitySample {
                         return ctx -> {
                             EntityInstanceId kvId = new EntityInstanceId("KeyValue", "config");
 
-                            // Use the low-level ITaskEntity entity
+                            // Use the low-level TaskEntity entity
                             ctx.callEntity(kvId, "set", new KeyValuePair("color", "blue"), Void.class).await();
                             ctx.callEntity(kvId, "set", new KeyValuePair("size", "large"), Void.class).await();
                             String color = ctx.callEntity(kvId, "get", "color", String.class).await();
@@ -101,8 +101,8 @@ final class LowLevelEntitySample {
 
         DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
 
-        // --- Demo 1: Low-level ITaskEntity ---
-        System.out.println("\n--- Demo 1: ITaskEntity with manual dispatch ---");
+        // --- Demo 1: Low-level TaskEntity ---
+        System.out.println("\n--- Demo 1: TaskEntity with manual dispatch ---");
         String id1 = client.scheduleNewOrchestrationInstance("LowLevelDemo");
         OrchestrationMetadata result1 = client.waitForInstanceCompletion(
                 id1, Duration.ofSeconds(30), true);
@@ -152,15 +152,15 @@ final class LowLevelEntitySample {
         }
     }
 
-    // ---- Low-level ITaskEntity implementation ----
+    // ---- Low-level TaskEntity implementation ----
 
     /**
-     * A key-value store entity implemented directly with {@link ITaskEntity}.
+     * A key-value store entity implemented directly with {@link TaskEntity}.
      * <p>
      * This demonstrates manual switch-based operation dispatch without the reflection-based
-     * {@link TaskEntity} base class. This gives full control over how operations are routed.
+     * {@link AbstractTaskEntity} base class. This gives full control over how operations are routed.
      */
-    public static class KeyValueEntity implements ITaskEntity {
+    public static class KeyValueEntity implements TaskEntity {
         @Override
         public Object run(TaskEntityOperation operation) throws Exception {
             // Load current state (a Map stored as JSON)
@@ -238,7 +238,7 @@ final class LowLevelEntitySample {
      * are dispatched to the state object. This is enabled by default via
      * {@code allowStateDispatch = true}.
      */
-    public static class CartEntity extends TaskEntity<CartState> {
+    public static class CartEntity extends AbstractTaskEntity<CartState> {
         // No operation methods here — they are on CartState
 
         @Override

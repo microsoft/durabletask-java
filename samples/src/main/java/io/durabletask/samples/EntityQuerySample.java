@@ -120,7 +120,7 @@ final class EntityQuerySample {
     /**
      * A simple counter entity (reused for this sample).
      */
-    public static class CounterEntity extends TaskEntity<Integer> {
+    public static class CounterEntity extends AbstractTaskEntity<Integer> {
         public void add(int amount) { this.state += amount; }
         public int get() { return this.state; }
 

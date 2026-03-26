@@ -9,7 +9,7 @@ import javax.annotation.Nullable;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link TaskEntity} reflection-based dispatch.
+ * Unit tests for {@link AbstractTaskEntity} reflection-based dispatch.
  */
 public class TaskEntityTest {
 
@@ -18,7 +18,7 @@ public class TaskEntityTest {
     /**
      * A simple counter entity for testing basic operations.
      */
-    static class CounterEntity extends TaskEntity<Integer> {
+    static class CounterEntity extends AbstractTaskEntity<Integer> {
         public void add(int amount) {
             this.state += amount;
         }
@@ -45,7 +45,7 @@ public class TaskEntityTest {
     /**
      * Entity that accepts a TaskEntityContext as a method parameter.
      */
-    static class EntityWithContextParam extends TaskEntity<String> {
+    static class EntityWithContextParam extends AbstractTaskEntity<String> {
         public String info(TaskEntityContext context) {
             return "Entity ID: " + context.getId().toString();
         }
@@ -64,7 +64,7 @@ public class TaskEntityTest {
     /**
      * Entity that accepts both input and context parameters.
      */
-    static class EntityWithTwoParams extends TaskEntity<String> {
+    static class EntityWithTwoParams extends AbstractTaskEntity<String> {
         public String greet(String name, TaskEntityContext context) {
             return "Hello, " + name + " from " + context.getId().getKey();
         }
@@ -107,7 +107,7 @@ public class TaskEntityTest {
      * Entity that has no matching method but whose state type has the method (state dispatch).
      * Explicitly enables state dispatch since the default is now {@code false}.
      */
-    static class StateDispatchEntity extends TaskEntity<MyState> {
+    static class StateDispatchEntity extends AbstractTaskEntity<MyState> {
         // No "increment" method on the entity itself — should dispatch to MyState.increment()
 
         public StateDispatchEntity() {
@@ -123,7 +123,7 @@ public class TaskEntityTest {
     /**
      * Entity that throws during an operation.
      */
-    static class ThrowingEntity extends TaskEntity<String> {
+    static class ThrowingEntity extends AbstractTaskEntity<String> {
         public void fail() {
             throw new RuntimeException("Intentional failure");
         }
@@ -142,7 +142,7 @@ public class TaskEntityTest {
     /**
      * Entity that disables state dispatch.
      */
-    static class NoStateDispatchEntity extends TaskEntity<MyState> {
+    static class NoStateDispatchEntity extends AbstractTaskEntity<MyState> {
         public NoStateDispatchEntity() {
             setAllowStateDispatch(false);
         }
@@ -156,7 +156,7 @@ public class TaskEntityTest {
     /**
      * Entity with overloaded methods (ambiguous match).
      */
-    static class AmbiguousEntity extends TaskEntity<Integer> {
+    static class AmbiguousEntity extends AbstractTaskEntity<Integer> {
         public void add(int amount) {
             this.state += amount;
         }
@@ -424,7 +424,7 @@ public class TaskEntityTest {
     /**
      * Entity that uses dispatch() to compose operations re-entrantly.
      */
-    static class BonusDepositEntity extends TaskEntity<Integer> {
+    static class BonusDepositEntity extends AbstractTaskEntity<Integer> {
 
         public void deposit(int amount) {
             this.state += amount;
@@ -454,7 +454,7 @@ public class TaskEntityTest {
     /**
      * Entity that uses dispatch() with a typed return value.
      */
-    static class ComputeEntity extends TaskEntity<Integer> {
+    static class ComputeEntity extends AbstractTaskEntity<Integer> {
 
         public int double_value(int input) {
             return input * 2;
@@ -480,7 +480,7 @@ public class TaskEntityTest {
     /**
      * Entity that uses dispatch() to call an implicit "delete" operation.
      */
-    static class SelfDeletingEntity extends TaskEntity<String> {
+    static class SelfDeletingEntity extends AbstractTaskEntity<String> {
 
         public String resetAndDelete() {
             this.state = "resetting";
@@ -502,7 +502,7 @@ public class TaskEntityTest {
     /**
      * Entity that tests dispatch() to state-dispatched methods.
      */
-    static class StateDispatchWithReentrancy extends TaskEntity<MyState> {
+    static class StateDispatchWithReentrancy extends AbstractTaskEntity<MyState> {
 
         public StateDispatchWithReentrancy() {
             setAllowStateDispatch(true);
@@ -582,7 +582,7 @@ public class TaskEntityTest {
     void dispatch_unknownOperation_throwsException() throws Exception {
         // First trigger run() to set the context on the entity, then test dispatch failure
         // We use a custom entity that dispatches an unknown operation
-        TaskEntity<Void> failEntity = new TaskEntity<Void>() {
+        AbstractTaskEntity<Void> failEntity = new AbstractTaskEntity<Void>() {
             public void bad() {
                 dispatch("nonExistent");
             }
@@ -610,7 +610,7 @@ public class TaskEntityTest {
     @Test
     void dispatch_noInputOverload() throws Exception {
         // Use a wrapper entity that dispatches "reset" with no input
-        TaskEntity<Integer> resetDispatcher = new TaskEntity<Integer>() {
+        AbstractTaskEntity<Integer> resetDispatcher = new AbstractTaskEntity<Integer>() {
             public void doReset() {
                 this.state = 42;
                 dispatch("reset"); // reset sets state to 0

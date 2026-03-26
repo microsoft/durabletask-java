@@ -34,7 +34,7 @@ final class EntityReentrantSample {
      * {@code dispatch("deposit", ...)} to compose the main deposit and a bonus
      * deposit into a single atomic operation.
      */
-    public static class RewardsAccountEntity extends TaskEntity<Double> {
+    public static class RewardsAccountEntity extends AbstractTaskEntity<Double> {
 
         /**
          * Simple deposit — adds the amount to the balance.

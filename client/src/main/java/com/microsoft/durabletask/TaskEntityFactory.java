@@ -3,7 +3,7 @@
 package com.microsoft.durabletask;
 
 /**
- * Functional interface for creating {@link ITaskEntity} instances.
+ * Functional interface for creating {@link TaskEntity} instances.
  * <p>
  * Entity factories are registered with the {@link DurableTaskGrpcWorkerBuilder} and are used to create
  * new entity instances when entity work items are received from the sidecar.
@@ -11,9 +11,9 @@ package com.microsoft.durabletask;
 @FunctionalInterface
 public interface TaskEntityFactory {
     /**
-     * Creates a new instance of {@link ITaskEntity}.
+     * Creates a new instance of {@link TaskEntity}.
      *
      * @return a new entity instance
      */
-    ITaskEntity create();
+    TaskEntity create();
 }

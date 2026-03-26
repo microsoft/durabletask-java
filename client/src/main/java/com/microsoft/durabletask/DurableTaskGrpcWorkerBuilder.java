@@ -22,7 +22,6 @@ public final class DurableTaskGrpcWorkerBuilder {
     Duration maximumTimerInterval;
     DurableTaskGrpcWorkerVersioningOptions versioningOptions;
     int maxConcurrentEntityWorkItems = 1;
-    int maxConcurrentActivityWorkItems;
     int maxWorkItemThreads;
 
     /**
@@ -96,16 +95,16 @@ public final class DurableTaskGrpcWorkerBuilder {
     /**
      * Registers an entity type for the constructed {@link DurableTaskGrpcWorker}.
      * <p>
-     * The entity class must implement {@link ITaskEntity} and have a public no-argument constructor.
+     * The entity class must implement {@link TaskEntity} and have a public no-argument constructor.
      * A new instance of the entity is created for each operation batch using reflection.
      * <p>
      * The entity name is derived from the simple class name of the provided type.
      *
-     * @param entityClass the entity class to register; must implement {@link ITaskEntity}
+     * @param entityClass the entity class to register; must implement {@link TaskEntity}
      * @return this builder object
-     * @throws IllegalArgumentException if the class does not implement {@link ITaskEntity}
+     * @throws IllegalArgumentException if the class does not implement {@link TaskEntity}
      */
-    public DurableTaskGrpcWorkerBuilder addEntity(Class<? extends ITaskEntity> entityClass) {
+    public DurableTaskGrpcWorkerBuilder addEntity(Class<? extends TaskEntity> entityClass) {
         if (entityClass == null) {
             throw new IllegalArgumentException("entityClass must not be null.");
         }
@@ -116,21 +115,21 @@ public final class DurableTaskGrpcWorkerBuilder {
     /**
      * Registers an entity type with a specific name for the constructed {@link DurableTaskGrpcWorker}.
      * <p>
-     * The entity class must implement {@link ITaskEntity} and have a public no-argument constructor.
+     * The entity class must implement {@link TaskEntity} and have a public no-argument constructor.
      * A new instance of the entity is created for each operation batch using reflection.
      *
      * @param name        the name of the entity type
-     * @param entityClass the entity class to register; must implement {@link ITaskEntity}
+     * @param entityClass the entity class to register; must implement {@link TaskEntity}
      * @return this builder object
-     * @throws IllegalArgumentException if the class does not implement {@link ITaskEntity}
+     * @throws IllegalArgumentException if the class does not implement {@link TaskEntity}
      */
-    public DurableTaskGrpcWorkerBuilder addEntity(String name, Class<? extends ITaskEntity> entityClass) {
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, Class<? extends TaskEntity> entityClass) {
         if (entityClass == null) {
             throw new IllegalArgumentException("entityClass must not be null.");
         }
-        if (!ITaskEntity.class.isAssignableFrom(entityClass)) {
+        if (!TaskEntity.class.isAssignableFrom(entityClass)) {
             throw new IllegalArgumentException(
-                    String.format("Type %s does not implement ITaskEntity.", entityClass.getName()));
+                    String.format("Type %s does not implement TaskEntity.", entityClass.getName()));
         }
         return this.addEntity(name, () -> {
             try {
@@ -152,14 +151,14 @@ public final class DurableTaskGrpcWorkerBuilder {
      * <p>
      * <b>Thread safety warning:</b> Because the same instance handles all operation batches,
      * the entity implementation must be thread-safe if concurrent entity work items are enabled.
-     * Implementations that extend {@link TaskEntity} store mutable state in instance fields and
+     * Implementations that extend {@link AbstractTaskEntity} store mutable state in instance fields and
      * are <b>not</b> safe for singleton registration. Use {@link #addEntity(Class)} or
      * {@link #addEntity(String, Class)} instead to create a new instance per batch.
      *
      * @param entity the entity instance to register
      * @return this builder object
      */
-    public DurableTaskGrpcWorkerBuilder addEntity(ITaskEntity entity) {
+    public DurableTaskGrpcWorkerBuilder addEntity(TaskEntity entity) {
         if (entity == null) {
             throw new IllegalArgumentException("entity must not be null.");
         }
@@ -174,7 +173,7 @@ public final class DurableTaskGrpcWorkerBuilder {
      * <p>
      * <b>Thread safety warning:</b> Because the same instance handles all operation batches,
      * the entity implementation must be thread-safe if concurrent entity work items are enabled.
-     * Implementations that extend {@link TaskEntity} store mutable state in instance fields and
+     * Implementations that extend {@link AbstractTaskEntity} store mutable state in instance fields and
      * are <b>not</b> safe for singleton registration. Use {@link #addEntity(String, Class)} instead
      * to create a new instance per batch.
      *
@@ -182,7 +181,7 @@ public final class DurableTaskGrpcWorkerBuilder {
      * @param entity the entity instance to register
      * @return this builder object
      */
-    public DurableTaskGrpcWorkerBuilder addEntity(String name, ITaskEntity entity) {
+    public DurableTaskGrpcWorkerBuilder addEntity(String name, TaskEntity entity) {
         if (entity == null) {
             throw new IllegalArgumentException("entity must not be null.");
         }
@@ -260,25 +259,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     }
 
     /**
-     * Sets the maximum number of activity work items that can be processed concurrently by this worker.
-     * <p>
-     * The sidecar enforces this limit by controlling how many activity work items are dispatched
-     * to this worker at a time. The default value is 10.
-     *
-     * @param maxConcurrentActivityWorkItems the maximum number of concurrent activity work items (must be at least 1)
-     * @return this builder object
-     * @throws IllegalArgumentException if the value is less than 1
-     */
-    public DurableTaskGrpcWorkerBuilder maxConcurrentActivityWorkItems(int maxConcurrentActivityWorkItems) {
-        if (maxConcurrentActivityWorkItems < 1) {
-            throw new IllegalArgumentException("maxConcurrentActivityWorkItems must be at least 1.");
-        }
-        this.maxConcurrentActivityWorkItems = maxConcurrentActivityWorkItems;
-        return this;
-    }
-
-    /**
-     * Sets the maximum number of threads used for processing activity and entity work items.
+     * Sets the maximum number of threads used for processing entity work items.
      * <p>
      * The default value is {@value DurableTaskGrpcWorker#DEFAULT_MAX_WORK_ITEM_THREADS}.
      * Threads are created on demand and idle threads are reclaimed after 60 seconds.
