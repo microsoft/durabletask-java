@@ -571,6 +571,7 @@ public class EndToEndTests {
             fail("Expected integer entity state but got: " + body);
             throw e; // unreachable, but satisfies compiler
         }
+    }
 
     @Test
     public void callHttp() throws InterruptedException {
