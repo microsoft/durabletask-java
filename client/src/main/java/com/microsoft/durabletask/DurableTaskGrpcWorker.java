@@ -39,10 +39,11 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final WorkItemFilter workItemFilter;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
-    DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder) {
+    DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
 
@@ -70,6 +71,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
+        this.workItemFilter = workItemFilter;
     }
 
     /**
@@ -132,7 +134,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         // TODO: How do we interrupt manually?
         while (true) {
             try {
-                GetWorkItemsRequest getWorkItemsRequest = GetWorkItemsRequest.newBuilder().build();
+                GetWorkItemsRequest getWorkItemsRequest = buildGetWorkItemsRequest();
                 Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(getWorkItemsRequest);
                 while (workItemStream.hasNext()) {
                     WorkItem workItem = workItemStream.next();
@@ -407,5 +409,39 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      */
     public void stop() {
         this.close();
+    }
+
+    /**
+     * Returns the work item filter configured for this worker, or {@code null} if none.
+     */
+    WorkItemFilter getWorkItemFilter() {
+        return this.workItemFilter;
+    }
+
+    private GetWorkItemsRequest buildGetWorkItemsRequest() {
+        GetWorkItemsRequest.Builder builder = GetWorkItemsRequest.newBuilder();
+        if (this.workItemFilter != null) {
+            builder.setWorkItemFilters(toProtoWorkItemFilters(this.workItemFilter));
+        }
+        return builder.build();
+    }
+
+    static WorkItemFilters toProtoWorkItemFilters(WorkItemFilter filter) {
+        WorkItemFilters.Builder builder = WorkItemFilters.newBuilder();
+        for (WorkItemFilter.OrchestrationFilter orch : filter.getOrchestrations()) {
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationFilter.Builder orchBuilder =
+                    com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationFilter.newBuilder()
+                            .setName(orch.getName());
+            orchBuilder.addAllVersions(orch.getVersions());
+            builder.addOrchestrations(orchBuilder.build());
+        }
+        for (WorkItemFilter.ActivityFilter activity : filter.getActivities()) {
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ActivityFilter.Builder actBuilder =
+                    com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ActivityFilter.newBuilder()
+                            .setName(activity.getName());
+            actBuilder.addAllVersions(activity.getVersions());
+            builder.addActivities(actBuilder.build());
+        }
+        return builder.build();
     }
 }
