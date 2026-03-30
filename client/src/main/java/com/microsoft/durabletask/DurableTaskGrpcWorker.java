@@ -40,6 +40,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
     private final WorkItemFilter workItemFilter;
+    private final GetWorkItemsRequest getWorkItemsRequest;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
@@ -72,6 +73,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
         this.workItemFilter = workItemFilter;
+        this.getWorkItemsRequest = buildGetWorkItemsRequest();
     }
 
     /**
@@ -134,8 +136,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         // TODO: How do we interrupt manually?
         while (true) {
             try {
-                GetWorkItemsRequest getWorkItemsRequest = buildGetWorkItemsRequest();
-                Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(getWorkItemsRequest);
+                Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(this.getWorkItemsRequest);
                 while (workItemStream.hasNext()) {
                     WorkItem workItem = workItemStream.next();
                     RequestCase requestType = workItem.getRequestCase();

@@ -92,9 +92,17 @@ public final class WorkItemFilter {
             if (name == null || name.isEmpty()) {
                 throw new IllegalArgumentException("Orchestration filter name must not be null or empty.");
             }
-            List<String> versionsCopy = versions != null
-                    ? Collections.unmodifiableList(new ArrayList<String>(versions))
-                    : Collections.<String>emptyList();
+            List<String> versionsCopy;
+            if (versions == null) {
+                versionsCopy = Collections.<String>emptyList();
+            } else {
+                for (String version : versions) {
+                    if (version == null || version.isEmpty()) {
+                        throw new IllegalArgumentException("Orchestration filter versions must not contain null or empty entries.");
+                    }
+                }
+                versionsCopy = Collections.unmodifiableList(new ArrayList<String>(versions));
+            }
             this.orchestrations.add(new OrchestrationFilter(name, versionsCopy));
             return this;
         }
@@ -124,9 +132,17 @@ public final class WorkItemFilter {
             if (name == null || name.isEmpty()) {
                 throw new IllegalArgumentException("Activity filter name must not be null or empty.");
             }
-            List<String> versionsCopy = versions != null
-                    ? Collections.unmodifiableList(new ArrayList<String>(versions))
-                    : Collections.<String>emptyList();
+            List<String> versionsCopy;
+            if (versions == null) {
+                versionsCopy = Collections.<String>emptyList();
+            } else {
+                for (String version : versions) {
+                    if (version == null || version.isEmpty()) {
+                        throw new IllegalArgumentException("Activity filter versions must not contain null or empty entries.");
+                    }
+                }
+                versionsCopy = Collections.unmodifiableList(new ArrayList<String>(versions));
+            }
             this.activities.add(new ActivityFilter(name, versionsCopy));
             return this;
         }
@@ -150,7 +166,7 @@ public final class WorkItemFilter {
 
         OrchestrationFilter(String name, List<String> versions) {
             this.name = name;
-            this.versions = versions;
+            this.versions = Collections.unmodifiableList(new ArrayList<String>(versions));
         }
 
         /**
@@ -181,7 +197,7 @@ public final class WorkItemFilter {
 
         ActivityFilter(String name, List<String> versions) {
             this.name = name;
-            this.versions = versions;
+            this.versions = Collections.unmodifiableList(new ArrayList<String>(versions));
         }
 
         /**

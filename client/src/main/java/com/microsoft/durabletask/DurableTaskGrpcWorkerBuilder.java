@@ -5,6 +5,7 @@ package com.microsoft.durabletask;
 import io.grpc.Channel;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -188,10 +189,14 @@ public final class DurableTaskGrpcWorkerBuilder {
         }
 
         WorkItemFilter.Builder builder = WorkItemFilter.newBuilder();
-        for (String name : this.orchestrationFactories.keySet()) {
+        List<String> orchestrationNames = new ArrayList<>(this.orchestrationFactories.keySet());
+        Collections.sort(orchestrationNames);
+        for (String name : orchestrationNames) {
             builder.addOrchestration(name, versions);
         }
-        for (String name : this.activityFactories.keySet()) {
+        List<String> activityNames = new ArrayList<>(this.activityFactories.keySet());
+        Collections.sort(activityNames);
+        for (String name : activityNames) {
             builder.addActivity(name, versions);
         }
         return builder.build();

@@ -1,5 +1,5 @@
 ## Unreleased
-* Add work item filtering support for `DurableTaskGrpcWorker` to enable worker-side filtering of orchestration and activity work items
+* Add work item filtering support for `DurableTaskGrpcWorker` to enable worker-side filtering of orchestration and activity work items ([#275](https://github.com/microsoft/durabletask-java/pull/275)) 
 * Add support for calls to HTTP endpoints ([#271](https://github.com/microsoft/durabletask-java/pull/271))
 * Add getSuspendPostUri and getResumePostUri getters to HttpManagementPayload ([#264](https://github.com/microsoft/durabletask-java/pull/264))
 
