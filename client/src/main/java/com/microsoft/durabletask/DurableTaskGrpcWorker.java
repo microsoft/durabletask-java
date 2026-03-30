@@ -476,7 +476,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             // No actions to chunk and the serialized response already exceeds the configured
             // chunk size. Sending this response as-is would likely exceed the gRPC message
             // size limit and fail at runtime, so fail fast with a clear error message.
-            throw new IllegalStateException(
+            throw new PayloadTooLargeException(
                 "OrchestratorResponse without actions exceeds the configured chunk size (" +
                 this.chunkSizeBytes + " bytes). Enable large-payload externalization to Azure " +
                 "Blob Storage or reduce the size of non-action fields.");
@@ -493,7 +493,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         int maxActionsSize = this.chunkSizeBytes - envelopeSize;
 
         if (maxActionsSize <= 0) {
-            throw new IllegalStateException(
+            throw new PayloadTooLargeException(
                 "OrchestratorResponse envelope exceeds gRPC message size limit. Cannot chunk.");
         }
 
@@ -509,7 +509,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             int framingOverhead = 1 + com.google.protobuf.CodedOutputStream.computeUInt32SizeNoTag(actionSize);
             int actionWireSize = actionSize + framingOverhead;
             if (actionWireSize > maxActionsSize) {
-                throw new IllegalStateException(
+                throw new PayloadTooLargeException(
                     "A single orchestrator action exceeds the gRPC message size limit (" +
                     actionWireSize + " bytes). Enable large-payload externalization to Azure Blob Storage " +
                     "to handle payloads of this size.");
