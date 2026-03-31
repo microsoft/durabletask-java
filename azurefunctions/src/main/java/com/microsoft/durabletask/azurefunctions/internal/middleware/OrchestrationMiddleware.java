@@ -12,9 +12,15 @@ import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareContext;
 import com.microsoft.durabletask.CompositeTaskFailedException;
 import com.microsoft.durabletask.DataConverter;
 import com.microsoft.durabletask.OrchestrationRunner;
+import com.microsoft.durabletask.PayloadStore;
+import com.microsoft.durabletask.PayloadStoreProvider;
 import com.microsoft.durabletask.TaskFailedException;
 import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
 import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
+
+import java.util.ServiceLoader;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Durable Function Orchestration Middleware
@@ -25,6 +31,13 @@ import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 public class OrchestrationMiddleware implements Middleware {
 
     private static final String ORCHESTRATION_TRIGGER = "DurableOrchestrationTrigger";
+    private static final Logger logger = Logger.getLogger(OrchestrationMiddleware.class.getName());
+
+    private final PayloadStore payloadStore;
+
+    public OrchestrationMiddleware() {
+        this.payloadStore = initializePayloadStore();
+    }
 
     @Override
     public void invoke(MiddlewareContext context, MiddlewareChain chain) throws Exception {
@@ -70,7 +83,24 @@ public class OrchestrationMiddleware implements Middleware {
                 // requires update on OrchestratorFunction API.
                 throw new RuntimeException("Unexpected failure in the task execution", e);
             }
-        });
+        }, this.payloadStore);
         context.updateReturnValue(orchestratorOutputEncodedProtoBytes);
+    }
+
+    private static PayloadStore initializePayloadStore() {
+        ServiceLoader<PayloadStoreProvider> loader = ServiceLoader.load(PayloadStoreProvider.class);
+        for (PayloadStoreProvider provider : loader) {
+            try {
+                PayloadStore store = provider.create();
+                if (store != null) {
+                    return store;
+                }
+            } catch (Exception e) {
+                logger.log(Level.WARNING,
+                    "PayloadStoreProvider " + provider.getClass().getName() + " failed to create store", e);
+            }
+        }
+        logger.fine("No PayloadStoreProvider found or configured; large payload externalization is disabled");
+        return null;
     }
 }

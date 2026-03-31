@@ -13,6 +13,8 @@ public final class DurableTaskGrpcClientBuilder {
     int port;
     Channel channel;
     String defaultVersion;
+    PayloadStore payloadStore;
+    LargePayloadOptions largePayloadOptions;
 
     /**
      * Sets the {@link DataConverter} to use for converting serializable data payloads.
@@ -62,6 +64,41 @@ public final class DurableTaskGrpcClientBuilder {
      */
     public DurableTaskGrpcClientBuilder defaultVersion(String defaultVersion) {
         this.defaultVersion = defaultVersion;
+        return this;
+    }
+
+    /**
+     * Enables large payload externalization with default options.
+     * <p>
+     * When enabled, payloads exceeding the default threshold will be uploaded to the
+     * provided {@link PayloadStore} and replaced with opaque token references.
+     *
+     * @param payloadStore the store to use for externalizing large payloads
+     * @return this builder object
+     */
+    public DurableTaskGrpcClientBuilder useExternalizedPayloads(PayloadStore payloadStore) {
+        return this.useExternalizedPayloads(payloadStore, new LargePayloadOptions.Builder().build());
+    }
+
+    /**
+     * Enables large payload externalization with custom options.
+     * <p>
+     * When enabled, payloads exceeding the configured threshold will be uploaded to the
+     * provided {@link PayloadStore} and replaced with opaque token references.
+     *
+     * @param payloadStore the store to use for externalizing large payloads
+     * @param options the large payload configuration options
+     * @return this builder object
+     */
+    public DurableTaskGrpcClientBuilder useExternalizedPayloads(PayloadStore payloadStore, LargePayloadOptions options) {
+        if (payloadStore == null) {
+            throw new IllegalArgumentException("payloadStore must not be null");
+        }
+        if (options == null) {
+            throw new IllegalArgumentException("options must not be null");
+        }
+        this.payloadStore = payloadStore;
+        this.largePayloadOptions = options;
         return this;
     }
 

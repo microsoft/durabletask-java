@@ -1,0 +1,11 @@
+<FindBugsFilter>
+    <!-- BlobServiceClient is an Azure SDK client that is intentionally shared, not defensively copied -->
+    <Match>
+        <Class name="com.microsoft.durabletask.azureblobpayloads.BlobPayloadStoreOptions" />
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2" />
+    </Match>
+    <Match>
+        <Class name="com.microsoft.durabletask.azureblobpayloads.BlobPayloadStoreOptions$Builder" />
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2" />
+    </Match>
+</FindBugsFilter>
