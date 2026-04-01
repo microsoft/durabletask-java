@@ -13,6 +13,25 @@ import java.util.Locale;
  * Builder object for constructing customized {@link DurableTaskGrpcWorker} instances.
  */
 public final class DurableTaskGrpcWorkerBuilder {
+
+    /**
+     * Minimum allowed chunk size for orchestrator response messages (1 MiB).
+     */
+    static final int MIN_CHUNK_SIZE_BYTES = 1_048_576;
+
+    /**
+     * Maximum allowed chunk size for orchestrator response messages (~3.9 MiB).
+     * This is the largest payload that can fit within a 4 MiB gRPC message after accounting
+     * for protobuf overhead.
+     */
+    static final int MAX_CHUNK_SIZE_BYTES = 4_089_446;
+
+    /**
+     * Default chunk size for orchestrator response messages.
+     * Matches {@link #MAX_CHUNK_SIZE_BYTES}.
+     */
+    static final int DEFAULT_CHUNK_SIZE_BYTES = MAX_CHUNK_SIZE_BYTES;
+
     final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
     final HashMap<String, TaskEntityFactory> entityFactories = new HashMap<>();
@@ -23,6 +42,9 @@ public final class DurableTaskGrpcWorkerBuilder {
     DurableTaskGrpcWorkerVersioningOptions versioningOptions;
     int maxConcurrentEntityWorkItems = 1;
     int maxWorkItemThreads;
+    PayloadStore payloadStore;
+    LargePayloadOptions largePayloadOptions;
+    int chunkSizeBytes = DEFAULT_CHUNK_SIZE_BYTES;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -285,6 +307,73 @@ public final class DurableTaskGrpcWorkerBuilder {
     public DurableTaskGrpcWorkerBuilder useVersioning(DurableTaskGrpcWorkerVersioningOptions options) {
         this.versioningOptions = options;
         return this;
+    }
+
+    /**
+     * Enables large payload externalization with default options.
+     * <p>
+     * When enabled, payloads exceeding the default threshold will be uploaded to the
+     * provided {@link PayloadStore} and replaced with opaque token references. The worker
+     * will also announce {@code WORKER_CAPABILITY_LARGE_PAYLOADS} to the sidecar.
+     *
+     * @param payloadStore the store to use for externalizing large payloads
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder useExternalizedPayloads(PayloadStore payloadStore) {
+        return this.useExternalizedPayloads(payloadStore, new LargePayloadOptions.Builder().build());
+    }
+
+    /**
+     * Enables large payload externalization with custom options.
+     * <p>
+     * When enabled, payloads exceeding the configured threshold will be uploaded to the
+     * provided {@link PayloadStore} and replaced with opaque token references. The worker
+     * will also announce {@code WORKER_CAPABILITY_LARGE_PAYLOADS} to the sidecar.
+     *
+     * @param payloadStore the store to use for externalizing large payloads
+     * @param options the large payload configuration options
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder useExternalizedPayloads(PayloadStore payloadStore, LargePayloadOptions options) {
+        if (payloadStore == null) {
+            throw new IllegalArgumentException("payloadStore must not be null");
+        }
+        if (options == null) {
+            throw new IllegalArgumentException("options must not be null");
+        }
+        this.payloadStore = payloadStore;
+        this.largePayloadOptions = options;
+        return this;
+    }
+
+    /**
+     * Sets the maximum size in bytes for a single orchestrator response chunk sent over gRPC.
+     * Responses larger than this will be automatically split into multiple chunks.
+     * <p>
+     * The value must be between {@value #MIN_CHUNK_SIZE_BYTES} and {@value #MAX_CHUNK_SIZE_BYTES} bytes.
+     * Defaults to {@value #DEFAULT_CHUNK_SIZE_BYTES} bytes.
+     *
+     * @param chunkSizeBytes the maximum chunk size in bytes
+     * @return this builder object
+     * @throws IllegalArgumentException if the value is outside the allowed range
+     */
+    public DurableTaskGrpcWorkerBuilder setCompleteOrchestratorResponseChunkSizeBytes(int chunkSizeBytes) {
+        if (chunkSizeBytes < MIN_CHUNK_SIZE_BYTES || chunkSizeBytes > MAX_CHUNK_SIZE_BYTES) {
+            throw new IllegalArgumentException(String.format(
+                "chunkSizeBytes must be between %d and %d, but was %d",
+                MIN_CHUNK_SIZE_BYTES, MAX_CHUNK_SIZE_BYTES, chunkSizeBytes));
+        }
+        this.chunkSizeBytes = chunkSizeBytes;
+        return this;
+    }
+
+    /**
+     * Gets the current chunk size setting.
+     *
+     * @return the chunk size in bytes
+     */
+    int getChunkSizeBytes() {
+        return this.chunkSizeBytes;
     }
 
     /**
