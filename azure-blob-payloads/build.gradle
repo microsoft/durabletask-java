@@ -1,0 +1,88 @@
+/*
+ * Build file for the azure-blob-payloads module.
+ * Provides a BlobPayloadStore implementation for externalizing large payloads to Azure Blob Storage.
+ */
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'com.github.spotbugs' version '6.4.8'
+}
+
+group 'com.microsoft'
+version = '1.7.0'
+archivesBaseName = 'durabletask-azure-blob-payloads'
+
+def azureStorageBlobVersion = '12.30.0'
+def azureCoreVersion = '1.57.1'
+def azureIdentityVersion = '1.18.1'
+
+dependencies {
+    api project(':client')
+    implementation "com.azure:azure-storage-blob:${azureStorageBlobVersion}"
+    implementation "com.azure:azure-core:${azureCoreVersion}"
+    implementation "com.azure:azure-identity:${azureIdentityVersion}"
+
+    testImplementation(platform('org.junit:junit-bom:5.14.2'))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+    testImplementation 'org.mockito:mockito-core:5.21.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    repositories {
+        maven {
+            url "file://$project.rootDir/repo"
+        }
+    }
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = archivesBaseName
+            pom {
+                name = 'Durable Task Azure Blob Payloads for Java'
+                description = 'This package provides an Azure Blob Storage implementation of PayloadStore for externalizing large payloads in the Durable Task Java SDK.'
+                url = "https://github.com/microsoft/durabletask-java/tree/main/azure-blob-payloads"
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url = "https://opensource.org/licenses/MIT"
+                        distribution = "repo"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "Microsoft"
+                        name = "Microsoft Corporation"
+                    }
+                }
+                scm {
+                    connection = "scm:git:https://github.com/microsoft/durabletask-java"
+                    developerConnection = "scm:git:git@github.com:microsoft/durabletask-java"
+                    url = "https://github.com/microsoft/durabletask-java/tree/main/azure-blob-payloads"
+                }
+            }
+        }
+    }
+}
+
+signing {
+    required { !project.hasProperty("skipSigning") && gradle.taskGraph.hasTask("publish") }
+    sign publishing.publications.mavenJava
+}
+
+spotbugs {
+    ignoreFailures = false
+    effort = 'max'
+    reportLevel = 'medium'
+    excludeFilter = file('spotbugs-exclude.xml')
+}

@@ -39,8 +39,12 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+
     private final WorkItemFilter workItemFilter;
     private final GetWorkItemsRequest getWorkItemsRequest;
+
+    private final PayloadHelper payloadHelper;
+    private final int chunkSizeBytes;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
@@ -74,6 +78,10 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.versioningOptions = builder.versioningOptions;
         this.workItemFilter = workItemFilter;
         this.getWorkItemsRequest = buildGetWorkItemsRequest();
+        this.payloadHelper = builder.payloadStore != null
+            ? new PayloadHelper(builder.payloadStore, builder.largePayloadOptions)
+            : null;
+        this.chunkSizeBytes = builder.chunkSizeBytes;
     }
 
     /**
@@ -137,11 +145,17 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         while (true) {
             try {
                 Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(this.getWorkItemsRequest);
+
                 while (workItemStream.hasNext()) {
                     WorkItem workItem = workItemStream.next();
                     RequestCase requestType = workItem.getRequestCase();
                     if (requestType == RequestCase.ORCHESTRATORREQUEST) {
                         OrchestratorRequest orchestratorRequest = workItem.getOrchestratorRequest();
+
+                        // Resolve externalized payload URI tokens in history events
+                        if (this.payloadHelper != null) {
+                            orchestratorRequest = resolveOrchestratorRequestPayloads(orchestratorRequest);
+                        }
 
                         // If versioning is set, process it first to see if the orchestration should be executed.
                         boolean versioningFailed = false;
@@ -292,7 +306,34 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     .setCompletionToken(workItem.getCompletionToken())
                                     .build();
 
-                            this.sidecarClient.completeOrchestratorTask(response);
+                            // Externalize large payloads and send (with optional chunking).
+                            // If externalization or chunking fails, report as orchestration failure.
+                            try {
+                                if (this.payloadHelper != null) {
+                                    response = externalizeOrchestratorResponsePayloads(response);
+                                }
+                                sendOrchestratorResponse(response);
+                            } catch (PayloadTooLargeException e) {
+                                logger.log(Level.WARNING,
+                                    "Failed to send orchestrator response for instance '" +
+                                    orchestratorRequest.getInstanceId() + "': " + e.getMessage(), e);
+                                CompleteOrchestrationAction failAction = CompleteOrchestrationAction.newBuilder()
+                                    .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                                    .setFailureDetails(TaskFailureDetails.newBuilder()
+                                        .setErrorType(e.getClass().getName())
+                                        .setErrorMessage(e.getMessage())
+                                        .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
+                                        .build())
+                                    .build();
+                                OrchestratorResponse failResponse = OrchestratorResponse.newBuilder()
+                                    .setInstanceId(orchestratorRequest.getInstanceId())
+                                    .setCompletionToken(workItem.getCompletionToken())
+                                    .addActions(OrchestratorAction.newBuilder()
+                                        .setCompleteOrchestration(failAction)
+                                        .build())
+                                    .build();
+                                this.sidecarClient.completeOrchestratorTask(failResponse);
+                            }
                         } else {
                             switch(versioningOptions.getFailureStrategy()) {
                                 case FAIL:
@@ -314,7 +355,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                         .addActions(action)
                                         .build();
 
-                                    this.sidecarClient.completeOrchestratorTask(response);
+                                    sendOrchestratorResponse(response);
                                     break;
                                 // Reject and default share the same behavior as it does not change the orchestration to a terminal state.
                                 case REJECT:
@@ -326,6 +367,12 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         }                        
                     } else if (requestType == RequestCase.ACTIVITYREQUEST) {
                         ActivityRequest activityRequest = workItem.getActivityRequest();
+
+                        // Resolve externalized payload URI token in activity input
+                        if (this.payloadHelper != null) {
+                            activityRequest = resolveActivityRequestPayloads(activityRequest);
+                        }
+
                         String activityInstanceId = activityRequest.getOrchestrationInstance().getInstanceId();
 
                         // Start a tracing span for this activity execution
@@ -370,6 +417,10 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 .setCompletionToken(workItem.getCompletionToken());
 
                         if (output != null) {
+                            // Externalize activity output if it exceeds threshold
+                            if (this.payloadHelper != null) {
+                                output = this.payloadHelper.maybeExternalize(output);
+                            }
                             responseBuilder.setResult(StringValue.of(output));
                         }
 
@@ -424,6 +475,9 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         if (this.workItemFilter != null) {
             builder.setWorkItemFilters(toProtoWorkItemFilters(this.workItemFilter));
         }
+        if (this.payloadHelper != null) {
+            builder.addCapabilities(WorkerCapability.WORKER_CAPABILITY_LARGE_PAYLOADS);
+        }
         return builder.build();
     }
 
@@ -444,5 +498,102 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             builder.addActivities(actBuilder.build());
         }
         return builder.build();
+    }
+    
+    /**
+     * Sends an orchestrator response, chunking it if it exceeds the configured chunk size.
+     */
+    private void sendOrchestratorResponse(OrchestratorResponse response) {
+        int serializedSize = response.getSerializedSize();
+        if (serializedSize <= this.chunkSizeBytes) {
+            this.sidecarClient.completeOrchestratorTask(response);
+            return;
+        }
+
+        List<OrchestratorAction> allActions = response.getActionsList();
+        if (allActions.isEmpty()) {
+            // No actions to chunk and the serialized response already exceeds the configured
+            // chunk size. Sending this response as-is would likely exceed the gRPC message
+            // size limit and fail at runtime, so fail fast with a clear error message.
+            throw new PayloadTooLargeException(
+                "OrchestratorResponse without actions exceeds the configured chunk size (" +
+                this.chunkSizeBytes + " bytes). Enable large-payload externalization to Azure " +
+                "Blob Storage or reduce the size of non-action fields.");
+        }
+
+        // Compute envelope overhead (response without actions, but with chunk metadata fields).
+        // Include isPartial and chunkIndex since those are added to every chunk.
+        OrchestratorResponse envelope = response.toBuilder()
+            .clearActions()
+            .setIsPartial(true)
+            .setChunkIndex(com.google.protobuf.Int32Value.of(0))
+            .build();
+        int envelopeSize = envelope.getSerializedSize();
+        int maxActionsSize = this.chunkSizeBytes - envelopeSize;
+
+        if (maxActionsSize <= 0) {
+            throw new PayloadTooLargeException(
+                "OrchestratorResponse envelope exceeds gRPC message size limit. Cannot chunk.");
+        }
+
+        // Build chunks
+        List<List<OrchestratorAction>> chunks = new ArrayList<>();
+        List<OrchestratorAction> currentChunk = new ArrayList<>();
+        int currentChunkSize = 0;
+
+        for (OrchestratorAction action : allActions) {
+            int actionSize = action.getSerializedSize();
+            // Account for protobuf framing overhead per repeated field entry:
+            // field tag (1 byte) + length varint
+            int framingOverhead = 1 + com.google.protobuf.CodedOutputStream.computeUInt32SizeNoTag(actionSize);
+            int actionWireSize = actionSize + framingOverhead;
+            if (actionWireSize > maxActionsSize) {
+                throw new PayloadTooLargeException(
+                    "A single orchestrator action exceeds the gRPC message size limit (" +
+                    actionWireSize + " bytes). Enable large-payload externalization to Azure Blob Storage " +
+                    "to handle payloads of this size.");
+            }
+
+            if (currentChunkSize + actionWireSize > maxActionsSize && !currentChunk.isEmpty()) {
+                chunks.add(currentChunk);
+                currentChunk = new ArrayList<>();
+                currentChunkSize = 0;
+            }
+            currentChunk.add(action);
+            currentChunkSize += actionWireSize;
+        }
+        if (!currentChunk.isEmpty()) {
+            chunks.add(currentChunk);
+        }
+
+        // Send chunks
+        for (int i = 0; i < chunks.size(); i++) {
+            boolean isLast = (i == chunks.size() - 1);
+            OrchestratorResponse.Builder chunkBuilder = response.toBuilder()
+                .clearActions()
+                .addAllActions(chunks.get(i))
+                .setIsPartial(!isLast)
+                .setChunkIndex(com.google.protobuf.Int32Value.of(i));
+
+            if (i > 0) {
+                // Only the first chunk carries numEventsProcessed; subsequent chunks
+                // leave it unset (matching .NET behavior)
+                chunkBuilder.clearNumEventsProcessed();
+            }
+
+            this.sidecarClient.completeOrchestratorTask(chunkBuilder.build());
+        }
+    }
+
+    private OrchestratorRequest resolveOrchestratorRequestPayloads(OrchestratorRequest request) {
+        return PayloadInterceptionHelper.resolveOrchestratorRequestPayloads(request, this.payloadHelper);
+    }
+
+    private ActivityRequest resolveActivityRequestPayloads(ActivityRequest request) {
+        return PayloadInterceptionHelper.resolveActivityRequestPayloads(request, this.payloadHelper);
+    }
+
+    private OrchestratorResponse externalizeOrchestratorResponsePayloads(OrchestratorResponse response) {
+        return PayloadInterceptionHelper.externalizeOrchestratorResponsePayloads(response, this.payloadHelper);
     }
 }
