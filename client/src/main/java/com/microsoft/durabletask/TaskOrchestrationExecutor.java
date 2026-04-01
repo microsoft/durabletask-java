@@ -392,6 +392,11 @@ final class TaskOrchestrationExecutor {
         @Override
         public void continueAsNew(Object input, boolean preserveUnprocessedEvents) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
+            if (this.isInCriticalSection) {
+                throw new IllegalStateException(
+                    "Cannot continue-as-new while inside a critical section. "
+                    + "Exit the critical section first by closing the lock.");
+            }
 
             this.continuedAsNew = true;
             this.continuedAsNewInput = input;

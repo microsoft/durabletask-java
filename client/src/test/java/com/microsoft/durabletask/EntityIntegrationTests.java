@@ -411,4 +411,39 @@ public class EntityIntegrationTests extends IntegrationTestBase {
     }
 
     // endregion
+
+    // region ContinueAsNew guard in critical section tests
+
+    @Test
+    void continueAsNew_insideCriticalSection_throwsIllegalStateException() throws TimeoutException, InterruptedException {
+        final String entityName = "Counter";
+        final String orchestratorName = "ContinueAsNewInCriticalSectionOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId(entityName, "counter-cas-" + UUID.randomUUID());
+
+        this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    AutoCloseable lock = ctx.lockEntities(Arrays.asList(entityId)).await();
+                    assertTrue(ctx.isInCriticalSection());
+                    // This should throw IllegalStateException
+                    ctx.continueAsNew(null);
+                })
+                .addEntity(entityName, CounterEntity::new)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+
+        String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName);
+        OrchestrationMetadata instance = client.waitForInstanceCompletion(
+            instanceId, ENTITY_ORCHESTRATION_TIMEOUT, true);
+
+        assertNotNull(instance);
+        assertEquals(OrchestrationRuntimeStatus.FAILED, instance.getRuntimeStatus());
+
+        FailureDetails details = instance.getFailureDetails();
+        assertNotNull(details);
+        assertEquals("java.lang.IllegalStateException", details.getErrorType());
+        assertTrue(details.getErrorMessage().contains("Cannot continue-as-new while inside a critical section"));
+    }
+
+    // endregion
 }
