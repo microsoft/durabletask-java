@@ -32,6 +32,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     private final ManagedChannel managedSidecarChannel;
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
     private final String defaultVersion;
+    private final GrpcDurableEntityClient entityClient;
     private final PayloadHelper payloadHelper;
 
     DurableTaskGrpcClient(DurableTaskGrpcClientBuilder builder) {
@@ -62,6 +63,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         }
 
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
+        this.entityClient = new GrpcDurableEntityClient("GrpcDurableEntityClient", this.sidecarClient, this.dataConverter);
     }
 
     DurableTaskGrpcClient(int port, String defaultVersion) {
@@ -75,6 +77,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 .usePlaintext()
                 .build();
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(this.managedSidecarChannel);
+        this.entityClient = new GrpcDurableEntityClient("GrpcDurableEntityClient", this.sidecarClient, this.dataConverter);
     }
 
     /**
@@ -435,6 +438,15 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
         return new PurgeResult(response.getDeletedInstanceCount());
     }
+
+    // region Entity APIs
+
+    @Override
+    public DurableEntityClient getEntities() {
+        return this.entityClient;
+    }
+
+    // endregion
 
     /**
      * Resolves externalized payload URI tokens in a GetInstanceResponse.

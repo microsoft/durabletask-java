@@ -356,4 +356,142 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param reason the reason for resuming the orchestration instance
      */
     public abstract void resumeInstance(String instanceId, @Nullable String reason);
+
+    // region Entity APIs
+
+    /**
+     * Gets the entity client for interacting with durable entities.
+     * <p>
+     * This mirrors the .NET SDK's {@code DurableTaskClient.Entities} property, providing a
+     * dedicated client for entity operations such as signaling, querying, and storage management.
+     *
+     * @return the {@link DurableEntityClient} for this client
+     * @throws UnsupportedOperationException if the current client implementation does not support entities
+     */
+    public DurableEntityClient getEntities() {
+        throw new UnsupportedOperationException("Entity operations are not supported by this client implementation.");
+    }
+
+    /**
+     * Sends a signal to a durable entity instance without waiting for a response.
+     * <p>
+     * If the target entity does not exist, it will be created automatically when it receives the signal.
+     *
+     * @param entityId      the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     * @deprecated Use {@code getEntities().signalEntity(entityId, operationName)} instead.
+     */
+    @Deprecated
+    public void signalEntity(EntityInstanceId entityId, String operationName) {
+        this.getEntities().signalEntity(entityId, operationName);
+    }
+
+    /**
+     * Sends a signal with input to a durable entity instance without waiting for a response.
+     * <p>
+     * If the target entity does not exist, it will be created automatically when it receives the signal.
+     *
+     * @param entityId      the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input         the serializable input for the operation, or {@code null}
+     * @deprecated Use {@code getEntities().signalEntity(entityId, operationName, input)} instead.
+     */
+    @Deprecated
+    public void signalEntity(EntityInstanceId entityId, String operationName, @Nullable Object input) {
+        this.getEntities().signalEntity(entityId, operationName, input);
+    }
+
+    /**
+     * Sends a signal with input and options to a durable entity instance without waiting for a response.
+     *
+     * @param entityId      the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input         the serializable input for the operation, or {@code null}
+     * @param options       additional options for the signal, or {@code null}
+     * @deprecated Use {@code getEntities().signalEntity(entityId, operationName, input, options)} instead.
+     */
+    @Deprecated
+    public void signalEntity(
+            EntityInstanceId entityId,
+            String operationName,
+            @Nullable Object input,
+            @Nullable SignalEntityOptions options) {
+        this.getEntities().signalEntity(entityId, operationName, input, options);
+    }
+
+    /**
+     * Fetches the metadata for a durable entity instance, including its state.
+     *
+     * @param entityId the entity instance ID to query
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     * @deprecated Use {@code getEntities().getEntityMetadata(entityId)} instead.
+     */
+    @Deprecated
+    @Nullable
+    public EntityMetadata getEntityMetadata(EntityInstanceId entityId) {
+        return this.getEntities().getEntityMetadata(entityId);
+    }
+
+    /**
+     * Fetches the metadata for a durable entity instance, optionally including its state.
+     *
+     * @param entityId     the entity instance ID to query
+     * @param includeState {@code true} to include the entity's serialized state in the result
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     * @deprecated Use {@code getEntities().getEntityMetadata(entityId, includeState)} instead.
+     */
+    @Deprecated
+    @Nullable
+    public EntityMetadata getEntityMetadata(EntityInstanceId entityId, boolean includeState) {
+        return this.getEntities().getEntityMetadata(entityId, includeState);
+    }
+
+    /**
+     * Queries the durable store for entity instances matching the specified filter criteria.
+     *
+     * @param query the query filter criteria
+     * @return the query result containing matching entities and an optional continuation token
+     * @deprecated Use {@code getEntities().queryEntities(query)} instead.
+     */
+    @Deprecated
+    public EntityQueryResult queryEntities(EntityQuery query) {
+        return this.getEntities().queryEntities(query);
+    }
+
+    /**
+     * Returns an auto-paginating iterable over entity instances matching the specified filter criteria.
+     *
+     * @param query the query filter criteria
+     * @return a pageable iterable over all matching entities
+     * @deprecated Use {@code getEntities().getAllEntities(query)} instead.
+     */
+    @Deprecated
+    public EntityQueryPageable getAllEntities(EntityQuery query) {
+        return this.getEntities().getAllEntities(query);
+    }
+
+    /**
+     * Returns an auto-paginating iterable over all entity instances.
+     *
+     * @return a pageable iterable over all entities
+     * @deprecated Use {@code getEntities().getAllEntities()} instead.
+     */
+    @Deprecated
+    public EntityQueryPageable getAllEntities() {
+        return this.getEntities().getAllEntities();
+    }
+
+    /**
+     * Cleans up entity storage by removing empty entities and/or releasing orphaned locks.
+     *
+     * @param request the clean storage request specifying what to clean
+     * @return the result of the clean operation, including counts of removed entities and released locks
+     * @deprecated Use {@code getEntities().cleanEntityStorage(request)} instead.
+     */
+    @Deprecated
+    public CleanEntityStorageResult cleanEntityStorage(CleanEntityStorageRequest request) {
+        return this.getEntities().cleanEntityStorage(request);
+    }
+
+    // endregion
 }

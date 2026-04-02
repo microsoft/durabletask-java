@@ -411,6 +411,168 @@ public class EndToEndTests {
         }
     }
 
+    // ─── Entity tests ───
+
+    /**
+     * Tests callEntity: orchestrator calls counter entity "add" and returns the result.
+     * Uses value=7 (not 0) so the expected output (7) differs from the initial state (0),
+     * proving the entity actually processed the add operation.
+     * Also verifies entity state directly via GetEntityState endpoint.
+     */
+    @Test
+    public void callEntityTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        String entityKey = "call-test-" + System.currentTimeMillis();
+        Response response = post("/api/StartCallEntityOrchestration?key=" + entityKey + "&value=7");
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(completed, "CallEntityOrchestration should complete");
+
+        // Verify orchestration output
+        Response statusResponse = get(statusQueryGetUri);
+        int output = statusResponse.jsonPath().get("output");
+        assertEquals(7, output, "Counter entity should return the added value (0 + 7 = 7)");
+
+        // Verify the actual entity state directly
+        int entityState = getEntityStateValue("counter", entityKey);
+        assertEquals(7, entityState, "Entity state should be 7 after add(7)");
+    }
+
+    /**
+     * Tests callEntity called twice: orchestrator calls add(3) then add(5) on the same entity.
+     * The final output is 8 (3+5), which differs from either input, proving the entity
+     * accumulates state across calls and doesn't just echo the input.
+     * Also verifies entity state directly.
+     */
+    @Test
+    public void callEntityTwiceTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        String entityKey = "twice-test-" + System.currentTimeMillis();
+        // value=3 -> orchestration calls add(3) then add(3+2=5), expecting 3+5=8
+        Response response = post("/api/StartCallEntityTwiceOrchestration?key=" + entityKey + "&value=3");
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(completed, "CallEntityTwiceOrchestration should complete");
+
+        // Verify orchestration output: add(3) -> 3, add(5) -> 8, returns 8
+        Response statusResponse = get(statusQueryGetUri);
+        int output = statusResponse.jsonPath().get("output");
+        assertEquals(8, output, "Counter entity should return cumulative value (3 + 5 = 8)");
+        assertNotEquals(3, output, "Output should differ from first input");
+        assertNotEquals(5, output, "Output should differ from second input");
+
+        // Verify the actual entity state directly
+        int entityState = getEntityStateValue("counter", entityKey);
+        assertEquals(8, entityState, "Entity state should be 8 after add(3) + add(5)");
+    }
+
+    /**
+     * Comprehensive entity test: exercises signal, call, and reset in a single orchestration.
+     * Steps: signal add(5) -> call get (5) -> signal add(10) -> call get (15) -> signal reset -> call get (0).
+     * Verifies the orchestration output string and entity state.
+     */
+    @Test
+    public void comprehensiveEntityTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        String entityKey = "comprehensive-test-" + System.currentTimeMillis();
+        Response response = post("/api/StartComprehensiveEntityOrchestration?key=" + entityKey);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(60));
+        assertTrue(completed, "ComprehensiveEntityOrchestration should complete");
+
+        // Verify orchestration output contains the pass summary
+        Response statusResponse = get(statusQueryGetUri);
+        String output = statusResponse.jsonPath().get("output");
+        assertTrue(output.contains("All tests passed: true"),
+                "Comprehensive entity test should pass all steps. Output:\n" + output);
+        assertTrue(output.contains("Step 2: callEntity get() returned 5"), "Step 2 should return 5");
+        assertTrue(output.contains("Step 4: callEntity get() returned 15"), "Step 4 should return 15");
+        assertTrue(output.contains("Step 6: callEntity get() returned 0"), "Step 6 should return 0 after reset");
+
+        // Verify the actual entity state directly (should be 0 after reset)
+        int entityState = getEntityStateValue("counter", entityKey);
+        assertEquals(0, entityState, "Entity state should be 0 after reset");
+    }
+
+    /**
+     * Tests signalEntity + callEntity: orchestrator signals counter entity to "add",
+     * then calls "get" to verify the updated state.
+     * Also verifies entity state directly via GetEntityState endpoint.
+     */
+    @Test
+    public void signalThenCallEntityTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        String entityKey = "signal-test-" + System.currentTimeMillis();
+        Response response = post("/api/StartSignalThenCallEntityOrchestration?key=" + entityKey + "&value=10");
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(completed, "SignalThenCallEntityOrchestration should complete");
+
+        // Verify orchestration output
+        Response statusResponse = get(statusQueryGetUri);
+        int output = statusResponse.jsonPath().get("output");
+        assertEquals(10, output, "Counter entity should return the signaled value after get");
+
+        // Verify the actual entity state directly
+        int entityState = getEntityStateValue("counter", entityKey);
+        assertEquals(10, entityState, "Entity state should be 10 after signal add(10)");
+    }
+
+    /**
+     * Tests callEntity on a fresh entity: orchestrator calls "get" on a new counter entity,
+     * which should return zero (the initial state).
+     * Also verifies entity state directly via GetEntityState endpoint.
+     */
+    @Test
+    public void callEntityGetInitialStateTest() throws InterruptedException {
+        Set<String> continueStates = new HashSet<>();
+        continueStates.add("Pending");
+        continueStates.add("Running");
+        String entityKey = "get-test-" + System.currentTimeMillis();
+        Response response = post("/api/StartCallEntityGetOrchestration?key=" + entityKey);
+        JsonPath jsonPath = response.jsonPath();
+        String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
+        boolean completed = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(30));
+        assertTrue(completed, "CallEntityGetOrchestration should complete");
+
+        // Verify orchestration output
+        Response statusResponse = get(statusQueryGetUri);
+        int output = statusResponse.jsonPath().get("output");
+        assertEquals(0, output, "Fresh counter entity should return initial state of 0");
+
+        // Verify the actual entity state directly
+        int entityState = getEntityStateValue("counter", entityKey);
+        assertEquals(0, entityState, "Entity state should be 0 for fresh entity");
+    }
+
+    /**
+     * Queries the entity state directly via the GetEntityState HTTP endpoint.
+     */
+    private int getEntityStateValue(String entityName, String entityKey) {
+        Response response = get("/api/GetEntityState?name=" + entityName + "&key=" + entityKey);
+        assertEquals(200, response.getStatusCode(),
+                "GetEntityState should return 200, got: " + response.getStatusCode() + " body: " + response.getBody().asString());
+        String body = response.getBody().asString().trim();
+        try {
+            return Integer.parseInt(body);
+        } catch (NumberFormatException e) {
+            fail("Expected integer entity state but got: " + body);
+            throw e; // unreachable, but satisfies compiler
+        }
+    }
+
     @Test
     public void callHttp() throws InterruptedException {
         Set<String> continueStates = new HashSet<>();

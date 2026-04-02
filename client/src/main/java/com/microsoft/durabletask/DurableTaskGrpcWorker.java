@@ -19,7 +19,11 @@ import io.opentelemetry.context.Scope;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
@@ -29,20 +33,24 @@ import java.util.stream.Stream;
  */
 public final class DurableTaskGrpcWorker implements AutoCloseable {
     private static final int DEFAULT_PORT = 4001;
+    static final int DEFAULT_MAX_WORK_ITEM_THREADS = 100;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcWorker.class.getPackage().getName());
+    private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(0);
     private static final Duration DEFAULT_MAXIMUM_TIMER_INTERVAL = Duration.ofDays(3);
 
     private final HashMap<String, TaskOrchestrationFactory> orchestrationFactories = new HashMap<>();
     private final HashMap<String, TaskActivityFactory> activityFactories = new HashMap<>();
+    private final HashMap<String, TaskEntityFactory> entityFactories = new HashMap<>();
 
     private final ManagedChannel managedSidecarChannel;
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final int maxConcurrentEntityWorkItems;
+    private final ExecutorService workItemExecutor;
 
     private final WorkItemFilter workItemFilter;
     private final GetWorkItemsRequest getWorkItemsRequest;
-
     private final PayloadHelper payloadHelper;
     private final int chunkSizeBytes;
 
@@ -51,6 +59,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
+        this.entityFactories.putAll(builder.entityFactories);
+        this.maxConcurrentEntityWorkItems = builder.maxConcurrentEntityWorkItems;
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
@@ -76,6 +86,17 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
+        int maxThreads = builder.maxWorkItemThreads > 0 ? builder.maxWorkItemThreads : DEFAULT_MAX_WORK_ITEM_THREADS;
+        this.workItemExecutor = new ThreadPoolExecutor(
+                0, maxThreads,
+                60L, TimeUnit.SECONDS,
+                new SynchronousQueue<>(),
+                r -> {
+                    Thread t = new Thread(r, "durabletask-worker-" + THREAD_COUNTER.incrementAndGet());
+                    t.setDaemon(true);
+                    return t;
+                },
+                new ThreadPoolExecutor.CallerRunsPolicy());
         this.workItemFilter = workItemFilter;
         this.getWorkItemsRequest = buildGetWorkItemsRequest();
         this.payloadHelper = builder.payloadStore != null
@@ -102,13 +123,21 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      * configured.
      */
     public void close() {
+        this.workItemExecutor.shutdown();
+        try {
+            if (!this.workItemExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                this.workItemExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            this.workItemExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
         if (this.managedSidecarChannel != null) {
             try {
                 this.managedSidecarChannel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                // Best effort. Also note that AutoClose documentation recommends NOT having
-                // close() methods throw InterruptedException:
-                // https://docs.oracle.com/javase/7/docs/api/java/lang/AutoCloseable.html
+                Thread.currentThread().interrupt();
             }
         }
     }
@@ -135,9 +164,14 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 this.dataConverter,
                 this.maximumTimerInterval,
                 logger,
-                this.versioningOptions);
+                this.versioningOptions,
+                true);
         TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,
+                this.dataConverter,
+                logger);
+        TaskEntityExecutor taskEntityExecutor = new TaskEntityExecutor(
+                this.entityFactories,
                 this.dataConverter,
                 logger);
 
@@ -145,7 +179,6 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         while (true) {
             try {
                 Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(this.getWorkItemsRequest);
-
                 while (workItemStream.hasNext()) {
                     WorkItem workItem = workItemStream.next();
                     RequestCase requestType = workItem.getRequestCase();
@@ -390,7 +423,6 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 spanAttributes);
                         Scope activityScope = activitySpan.makeCurrent();
 
-                        // TODO: Run this on a worker pool thread: https://www.baeldung.com/thread-pool-java-and-guava
                         String output = null;
                         TaskFailureDetails failureDetails = null;
                         Throwable activityError = null;
@@ -429,7 +461,113 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         }
 
                         this.sidecarClient.completeActivityTask(responseBuilder.build());
-                    } 
+                    } else if (requestType == RequestCase.ENTITYREQUEST) {
+                        EntityBatchRequest entityRequest = workItem.getEntityRequest();
+                        this.workItemExecutor.submit(() -> {
+                            try {
+                                EntityBatchResult result = taskEntityExecutor.execute(entityRequest);
+                                EntityBatchResult responseWithToken = result.toBuilder()
+                                        .setCompletionToken(workItem.getCompletionToken())
+                                        .build();
+                                this.sidecarClient.completeEntityTask(responseWithToken);
+                            } catch (Exception e) {
+                                logger.log(Level.WARNING,
+                                        String.format("Failed to execute entity batch for '%s'. Abandoning work item.",
+                                                entityRequest.getInstanceId()),
+                                        e);
+                                this.sidecarClient.abandonTaskEntityWorkItem(
+                                        AbandonEntityTaskRequest.newBuilder()
+                                                .setCompletionToken(workItem.getCompletionToken())
+                                                .build());
+                            }
+                        });
+                    } else if (requestType == RequestCase.ENTITYREQUESTV2) {
+                        EntityRequest entityRequestV2 = workItem.getEntityRequestV2();
+                        this.workItemExecutor.submit(() -> {
+                            try {
+                                // Convert V2 (history-based) format to V1 (flat) format
+                                EntityBatchRequest.Builder batchBuilder = EntityBatchRequest.newBuilder()
+                                        .setInstanceId(entityRequestV2.getInstanceId());
+                                if (entityRequestV2.hasEntityState()) {
+                                    batchBuilder.setEntityState(entityRequestV2.getEntityState());
+                                }
+
+                                List<OperationInfo> operationInfos = new ArrayList<>();
+                                for (HistoryEvent event : entityRequestV2.getOperationRequestsList()) {
+                                    if (event.hasEntityOperationSignaled()) {
+                                        EntityOperationSignaledEvent signaled = event.getEntityOperationSignaled();
+                                        OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
+                                                .setRequestId(signaled.getRequestId())
+                                                .setOperation(signaled.getOperation());
+                                        if (signaled.hasInput()) {
+                                            opBuilder.setInput(signaled.getInput());
+                                        }
+                                        batchBuilder.addOperations(opBuilder.build());
+                                        // Fire-and-forget: no response destination
+                                        operationInfos.add(OperationInfo.newBuilder()
+                                                .setRequestId(signaled.getRequestId())
+                                                .build());
+                                    } else if (event.hasEntityOperationCalled()) {
+                                        EntityOperationCalledEvent called = event.getEntityOperationCalled();
+                                        OperationRequest.Builder opBuilder = OperationRequest.newBuilder()
+                                                .setRequestId(called.getRequestId())
+                                                .setOperation(called.getOperation());
+                                        if (called.hasInput()) {
+                                            opBuilder.setInput(called.getInput());
+                                        }
+                                        batchBuilder.addOperations(opBuilder.build());
+                                        // Two-way call: include response destination
+                                        OperationInfo.Builder infoBuilder = OperationInfo.newBuilder()
+                                                .setRequestId(called.getRequestId());
+                                        if (called.hasParentInstanceId()) {
+                                            OrchestrationInstance.Builder destBuilder = OrchestrationInstance.newBuilder()
+                                                    .setInstanceId(called.getParentInstanceId().getValue());
+                                            if (called.hasParentExecutionId()) {
+                                                destBuilder.setExecutionId(StringValue.of(called.getParentExecutionId().getValue()));
+                                            }
+                                            infoBuilder.setResponseDestination(destBuilder.build());
+                                        }
+                                        operationInfos.add(infoBuilder.build());
+                                    } else {
+                                        logger.log(Level.WARNING,
+                                                "Skipping unsupported history event type in ENTITYREQUESTV2: {0}",
+                                                event.getEventTypeCase());
+                                    }
+                                }
+
+                                EntityBatchRequest batchRequest = batchBuilder.build();
+                                EntityBatchResult result = taskEntityExecutor.execute(batchRequest);
+
+                                // Attach completion token and operation infos for response routing
+                                EntityBatchResult.Builder responseBuilder = result.toBuilder()
+                                        .setCompletionToken(workItem.getCompletionToken());
+                                // Trim operationInfos to match actual result count
+                                int resultCount = result.getResultsCount();
+                                if (operationInfos.size() != resultCount) {
+                                    logger.log(Level.WARNING,
+                                            String.format("Entity '%s': operationInfos size (%d) does not match result count (%d). Trimming.",
+                                                    entityRequestV2.getInstanceId(),
+                                                    operationInfos.size(),
+                                                    resultCount));
+                                }
+                                if (operationInfos.size() > resultCount) {
+                                    responseBuilder.addAllOperationInfos(operationInfos.subList(0, resultCount));
+                                } else {
+                                    responseBuilder.addAllOperationInfos(operationInfos);
+                                }
+                                this.sidecarClient.completeEntityTask(responseBuilder.build());
+                            } catch (Exception e) {
+                                logger.log(Level.WARNING,
+                                        String.format("Failed to execute V2 entity batch for '%s'. Abandoning work item.",
+                                                entityRequestV2.getInstanceId()),
+                                        e);
+                                this.sidecarClient.abandonTaskEntityWorkItem(
+                                        AbandonEntityTaskRequest.newBuilder()
+                                                .setCompletionToken(workItem.getCompletionToken())
+                                                .build());
+                            }
+                        });
+                    }
                     else if (requestType == RequestCase.HEALTHPING)
                     {
                         // No-op
@@ -472,6 +610,10 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
     private GetWorkItemsRequest buildGetWorkItemsRequest() {
         GetWorkItemsRequest.Builder builder = GetWorkItemsRequest.newBuilder();
+        if (!this.entityFactories.isEmpty()) {
+            // Signal to the sidecar that this worker can handle entity work items
+            builder.setMaxConcurrentEntityWorkItems(this.maxConcurrentEntityWorkItems);
+        }
         if (this.workItemFilter != null) {
             builder.setWorkItemFilters(toProtoWorkItemFilters(this.workItemFilter));
         }

@@ -9,6 +9,13 @@ import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientFactory;
+import com.microsoft.durabletask.DurableEntityClient;
+import com.microsoft.durabletask.EntityInstanceId;
+import com.microsoft.durabletask.EntityMetadata;
+import com.microsoft.durabletask.EntityQuery;
+import com.microsoft.durabletask.EntityQueryResult;
+import com.microsoft.durabletask.CleanEntityStorageRequest;
+import com.microsoft.durabletask.CleanEntityStorageResult;
 import com.microsoft.durabletask.OrchestrationMetadata;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 
@@ -131,6 +138,79 @@ public class DurableClientContext {
      */
     public HttpManagementPayload createHttpManagementPayload(HttpRequestMessage<?> request, String instanceId) {
         return this.getClientResponseLinks(request, instanceId);
+    }
+
+    /**
+     * Gets the entity client for interacting with durable entities.
+     * <p>
+     * This mirrors the .NET SDK's {@code DurableTaskClient.Entities} property.
+     *
+     * @return the {@link DurableEntityClient} for this client
+     */
+    public DurableEntityClient getEntities() {
+        return getClient().getEntities();
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity.
+     *
+     * @param entityId the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the input to pass to the operation (may be {@code null})
+     */
+    public void signalEntity(EntityInstanceId entityId, String operationName, Object input) {
+        getClient().getEntities().signalEntity(entityId, operationName, input);
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity with no input.
+     *
+     * @param entityId the target entity's instance ID
+     * @param operationName the name of the operation to invoke on the entity
+     */
+    public void signalEntity(EntityInstanceId entityId, String operationName) {
+        getClient().getEntities().signalEntity(entityId, operationName);
+    }
+
+    /**
+     * Gets the metadata for a durable entity, including optionally its serialized state.
+     *
+     * @param entityId the entity's instance ID
+     * @param includeState whether to include the entity's serialized state in the result
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     */
+    public EntityMetadata getEntityMetadata(EntityInstanceId entityId, boolean includeState) {
+        return getClient().getEntities().getEntityMetadata(entityId, includeState);
+    }
+
+    /**
+     * Gets the metadata for a durable entity without including its serialized state.
+     *
+     * @param entityId the entity's instance ID
+     * @return the entity metadata, or {@code null} if the entity does not exist
+     */
+    public EntityMetadata getEntityMetadata(EntityInstanceId entityId) {
+        return getClient().getEntities().getEntityMetadata(entityId);
+    }
+
+    /**
+     * Queries the durable store for entity instances matching the specified filter criteria.
+     *
+     * @param query the query filter criteria
+     * @return the query result containing matching entities and an optional continuation token
+     */
+    public EntityQueryResult queryEntities(EntityQuery query) {
+        return getClient().getEntities().queryEntities(query);
+    }
+
+    /**
+     * Cleans up entity storage by removing empty entities and/or releasing orphaned locks.
+     *
+     * @param request the clean storage request specifying what to clean
+     * @return the result of the clean operation, including counts of removed entities and released locks
+     */
+    public CleanEntityStorageResult cleanEntityStorage(CleanEntityStorageRequest request) {
+        return getClient().getEntities().cleanEntityStorage(request);
     }
 
     private HttpManagementPayload getClientResponseLinks(HttpRequestMessage<?> request, String instanceId) {
