@@ -5,7 +5,10 @@ package com.microsoft.durabletask;
 import io.grpc.Channel;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Builder object for constructing customized {@link DurableTaskGrpcWorker} instances.
@@ -37,6 +40,8 @@ public final class DurableTaskGrpcWorkerBuilder {
     DataConverter dataConverter;
     Duration maximumTimerInterval;
     DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private WorkItemFilter workItemFilter;
+    private boolean autoGenerateWorkItemFilters;
     PayloadStore payloadStore;
     LargePayloadOptions largePayloadOptions;
     int chunkSizeBytes = DEFAULT_CHUNK_SIZE_BYTES;
@@ -148,6 +153,24 @@ public final class DurableTaskGrpcWorkerBuilder {
     }
 
     /**
+     * Sets explicit work item filters for this worker. When set, only work items matching the filters
+     * will be dispatched to this worker by the backend.
+     * <p>
+     * Work item filtering can improve efficiency in multi-worker deployments by ensuring each worker
+     * only receives work items it can handle. However, if an orchestration calls a task type
+     * (e.g., an activity or sub-orchestrator) that is not registered with any connected worker,
+     * the call may hang indefinitely instead of failing with an error.
+     *
+     * @param workItemFilter the work item filter to use, or {@code null} to disable filtering
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder useWorkItemFilters(WorkItemFilter workItemFilter) {
+        this.workItemFilter = workItemFilter;
+        this.autoGenerateWorkItemFilters = false;
+        return this;
+    }
+
+    /**
      * Enables large payload externalization with default options.
      * <p>
      * When enabled, payloads exceeding the default threshold will be uploaded to the
@@ -181,6 +204,27 @@ public final class DurableTaskGrpcWorkerBuilder {
         }
         this.payloadStore = payloadStore;
         this.largePayloadOptions = options;
+        return this;
+    }
+
+    /**
+     * Enables automatic work item filtering by generating filters from the registered
+     * orchestrations and activities. When enabled, the backend will only dispatch work items
+     * for registered orchestrations and activities to this worker.
+     * <p>
+     * Work item filtering can improve efficiency in multi-worker deployments by ensuring each worker
+     * only receives work items it can handle. However, if an orchestration calls a task type
+     * (e.g., an activity or sub-orchestrator) that is not registered with any connected worker,
+     * the call may hang indefinitely instead of failing with an error.
+     * <p>
+     * Only use this method when all task types referenced by orchestrations are guaranteed to be
+     * registered with at least one connected worker.
+     *
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder useWorkItemFilters() {
+        this.autoGenerateWorkItemFilters = true;
+        this.workItemFilter = null;
         return this;
     }
 
@@ -219,6 +263,31 @@ public final class DurableTaskGrpcWorkerBuilder {
      * @return a new {@link DurableTaskGrpcWorker} object
      */
     public DurableTaskGrpcWorker build() {
-        return new DurableTaskGrpcWorker(this);
+        WorkItemFilter resolvedFilter = this.autoGenerateWorkItemFilters
+                ? buildAutoWorkItemFilter()
+                : this.workItemFilter;
+        return new DurableTaskGrpcWorker(this, resolvedFilter);
+    }
+
+    private WorkItemFilter buildAutoWorkItemFilter() {
+        List<String> versions = Collections.emptyList();
+        if (this.versioningOptions != null
+                && this.versioningOptions.getMatchStrategy() == DurableTaskGrpcWorkerVersioningOptions.VersionMatchStrategy.STRICT
+                && this.versioningOptions.getVersion() != null) {
+            versions = Collections.singletonList(this.versioningOptions.getVersion());
+        }
+
+        WorkItemFilter.Builder builder = WorkItemFilter.newBuilder();
+        List<String> orchestrationNames = new ArrayList<>(this.orchestrationFactories.keySet());
+        Collections.sort(orchestrationNames);
+        for (String name : orchestrationNames) {
+            builder.addOrchestration(name, versions);
+        }
+        List<String> activityNames = new ArrayList<>(this.activityFactories.keySet());
+        Collections.sort(activityNames);
+        for (String name : activityNames) {
+            builder.addActivity(name, versions);
+        }
+        return builder.build();
     }
 }

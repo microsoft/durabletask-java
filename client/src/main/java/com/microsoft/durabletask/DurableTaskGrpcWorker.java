@@ -39,12 +39,16 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+
+    private final WorkItemFilter workItemFilter;
+    private final GetWorkItemsRequest getWorkItemsRequest;
+
     private final PayloadHelper payloadHelper;
     private final int chunkSizeBytes;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
 
-    DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder) {
+    DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
 
@@ -72,6 +76,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
+        this.workItemFilter = workItemFilter;
+        this.getWorkItemsRequest = buildGetWorkItemsRequest();
         this.payloadHelper = builder.payloadStore != null
             ? new PayloadHelper(builder.payloadStore, builder.largePayloadOptions)
             : null;
@@ -138,12 +144,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         // TODO: How do we interrupt manually?
         while (true) {
             try {
-                GetWorkItemsRequest.Builder getWorkItemsRequestBuilder = GetWorkItemsRequest.newBuilder();
-                if (this.payloadHelper != null) {
-                    getWorkItemsRequestBuilder.addCapabilities(WorkerCapability.WORKER_CAPABILITY_LARGE_PAYLOADS);
-                }
-                GetWorkItemsRequest getWorkItemsRequest = getWorkItemsRequestBuilder.build();
-                Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(getWorkItemsRequest);
+                Iterator<WorkItem> workItemStream = this.sidecarClient.getWorkItems(this.getWorkItemsRequest);
+
                 while (workItemStream.hasNext()) {
                     WorkItem workItem = workItemStream.next();
                     RequestCase requestType = workItem.getRequestCase();
@@ -461,6 +463,43 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.close();
     }
 
+    /**
+     * Returns the work item filter configured for this worker, or {@code null} if none.
+     */
+    WorkItemFilter getWorkItemFilter() {
+        return this.workItemFilter;
+    }
+
+    private GetWorkItemsRequest buildGetWorkItemsRequest() {
+        GetWorkItemsRequest.Builder builder = GetWorkItemsRequest.newBuilder();
+        if (this.workItemFilter != null) {
+            builder.setWorkItemFilters(toProtoWorkItemFilters(this.workItemFilter));
+        }
+        if (this.payloadHelper != null) {
+            builder.addCapabilities(WorkerCapability.WORKER_CAPABILITY_LARGE_PAYLOADS);
+        }
+        return builder.build();
+    }
+
+    static WorkItemFilters toProtoWorkItemFilters(WorkItemFilter filter) {
+        WorkItemFilters.Builder builder = WorkItemFilters.newBuilder();
+        for (WorkItemFilter.OrchestrationFilter orch : filter.getOrchestrations()) {
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationFilter.Builder orchBuilder =
+                    com.microsoft.durabletask.implementation.protobuf.OrchestratorService.OrchestrationFilter.newBuilder()
+                            .setName(orch.getName());
+            orchBuilder.addAllVersions(orch.getVersions());
+            builder.addOrchestrations(orchBuilder.build());
+        }
+        for (WorkItemFilter.ActivityFilter activity : filter.getActivities()) {
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ActivityFilter.Builder actBuilder =
+                    com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ActivityFilter.newBuilder()
+                            .setName(activity.getName());
+            actBuilder.addAllVersions(activity.getVersions());
+            builder.addActivities(actBuilder.build());
+        }
+        return builder.build();
+    }
+    
     /**
      * Sends an orchestrator response, chunking it if it exceeds the configured chunk size.
      */

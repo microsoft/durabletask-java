@@ -22,6 +22,11 @@ task runTracingPattern(type: JavaExec) {
     mainClass = 'io.durabletask.samples.TracingPattern'
 }
 
+task runWorkItemFilterSample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.WorkItemFilterSample'
+}
+
 task printClasspath {
     doLast {
         println sourceSets.main.runtimeClasspath.asPath
