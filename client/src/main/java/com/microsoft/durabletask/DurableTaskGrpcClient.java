@@ -227,7 +227,9 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 throw new TimeoutException("Start orchestration timeout reached.");
             }
             Exception translated = StatusRuntimeExceptionHelper.toException(e, "waitForInstanceStart");
-            if (translated instanceof RuntimeException) {
+            if (translated instanceof TimeoutException) {
+                throw (TimeoutException) translated;
+            } else if (translated instanceof RuntimeException) {
                 throw (RuntimeException) translated;
             }
             throw new RuntimeException(translated);
@@ -258,7 +260,9 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 throw new TimeoutException("Orchestration instance completion timeout reached.");
             }
             Exception translated = StatusRuntimeExceptionHelper.toException(e, "waitForInstanceCompletion");
-            if (translated instanceof RuntimeException) {
+            if (translated instanceof TimeoutException) {
+                throw (TimeoutException) translated;
+            } else if (translated instanceof RuntimeException) {
                 throw (RuntimeException) translated;
             }
             throw new RuntimeException(translated);
@@ -370,7 +374,9 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 throw new TimeoutException(timeOutException);
             }
             Exception translated = StatusRuntimeExceptionHelper.toException(e, "purgeInstances");
-            if (translated instanceof RuntimeException) {
+            if (translated instanceof TimeoutException) {
+                throw (TimeoutException) translated;
+            } else if (translated instanceof RuntimeException) {
                 throw (RuntimeException) translated;
             }
             throw new RuntimeException(translated);
