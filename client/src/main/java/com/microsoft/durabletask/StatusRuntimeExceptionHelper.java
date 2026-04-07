@@ -5,7 +5,6 @@ package com.microsoft.durabletask;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
-import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 
@@ -19,7 +18,7 @@ import java.util.concurrent.TimeoutException;
  *   <li>{@code DEADLINE_EXCEEDED} → {@link TimeoutException} (via {@link #toException})</li>
  *   <li>{@code INVALID_ARGUMENT} → {@link IllegalArgumentException}</li>
  *   <li>{@code FAILED_PRECONDITION} → {@link IllegalStateException}</li>
- *   <li>{@code NOT_FOUND} → {@link NoSuchElementException}</li>
+ *   <li>{@code NOT_FOUND} → {@link IllegalArgumentException}</li>
  *   <li>{@code UNIMPLEMENTED} → {@link UnsupportedOperationException}</li>
  *   <li>All other codes → {@link RuntimeException}</li>
  * </ul>
@@ -44,7 +43,7 @@ final class StatusRuntimeExceptionHelper {
             case FAILED_PRECONDITION:
                 return new IllegalStateException(message, e);
             case NOT_FOUND:
-                return createNoSuchElementException(e, message);
+                return new IllegalArgumentException(message, e);
             case UNIMPLEMENTED:
                 return new UnsupportedOperationException(message, e);
             default:
@@ -77,7 +76,7 @@ final class StatusRuntimeExceptionHelper {
             case FAILED_PRECONDITION:
                 return new IllegalStateException(message, e);
             case NOT_FOUND:
-                return createNoSuchElementException(e, message);
+                return new IllegalArgumentException(message, e);
             case UNIMPLEMENTED:
                 return new UnsupportedOperationException(message, e);
             default:
@@ -91,13 +90,6 @@ final class StatusRuntimeExceptionHelper {
                 "The " + operationName + " operation was canceled.");
         ce.initCause(e);
         return ce;
-    }
-
-    private static NoSuchElementException createNoSuchElementException(
-            StatusRuntimeException e, String message) {
-        NoSuchElementException ne = new NoSuchElementException(message);
-        ne.initCause(e);
-        return ne;
     }
 
     private static String formatMessage(String operationName, Status.Code code, String description) {

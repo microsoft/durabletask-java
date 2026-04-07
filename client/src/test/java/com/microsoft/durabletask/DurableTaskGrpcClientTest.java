@@ -38,7 +38,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 
@@ -123,7 +122,7 @@ public class DurableTaskGrpcClientTest {
     }
 
     @Test
-    void raiseEvent_notFound_throwsNoSuchElementException() throws IOException {
+    void raiseEvent_notFound_throwsIllegalArgumentException() throws IOException {
         DurableTaskClient client = createClientWithFakeService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
             @Override
             public void raiseEvent(RaiseEventRequest request, StreamObserver<RaiseEventResponse> responseObserver) {
@@ -132,7 +131,7 @@ public class DurableTaskGrpcClientTest {
             }
         });
 
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () ->
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                 client.raiseEvent("test-instance", "testEvent"));
 
         assertGrpcCause(ex, Status.Code.NOT_FOUND);
@@ -140,7 +139,7 @@ public class DurableTaskGrpcClientTest {
     }
 
     @Test
-    void getInstanceMetadata_notFound_throwsNoSuchElementException() throws IOException {
+    void getInstanceMetadata_notFound_throwsIllegalArgumentException() throws IOException {
         DurableTaskClient client = createClientWithFakeService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
             @Override
             public void getInstance(GetInstanceRequest request, StreamObserver<GetInstanceResponse> responseObserver) {
@@ -149,7 +148,7 @@ public class DurableTaskGrpcClientTest {
             }
         });
 
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () ->
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                 client.getInstanceMetadata("test-instance", false));
 
         assertGrpcCause(ex, Status.Code.NOT_FOUND);
@@ -224,7 +223,7 @@ public class DurableTaskGrpcClientTest {
     }
 
     @Test
-    void purgeInstance_notFound_throwsNoSuchElementException() throws IOException {
+    void purgeInstance_notFound_throwsIllegalArgumentException() throws IOException {
         DurableTaskClient client = createClientWithFakeService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
             @Override
             public void purgeInstances(PurgeInstancesRequest request, StreamObserver<PurgeInstancesResponse> responseObserver) {
@@ -233,7 +232,7 @@ public class DurableTaskGrpcClientTest {
             }
         });
 
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () ->
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                 client.purgeInstance("test-instance"));
 
         assertGrpcCause(ex, Status.Code.NOT_FOUND);
@@ -364,7 +363,7 @@ public class DurableTaskGrpcClientTest {
     }
 
     @Test
-    void purgeInstances_notFound_throwsNoSuchElementException() throws IOException {
+    void purgeInstances_notFound_throwsIllegalArgumentException() throws IOException {
         DurableTaskClient client = createClientWithFakeService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
             @Override
             public void purgeInstances(PurgeInstancesRequest request, StreamObserver<PurgeInstancesResponse> responseObserver) {
@@ -376,7 +375,7 @@ public class DurableTaskGrpcClientTest {
         PurgeInstanceCriteria criteria = new PurgeInstanceCriteria()
                 .setCreatedTimeFrom(Instant.parse("2026-01-01T00:00:00Z"));
 
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () ->
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                 client.purgeInstances(criteria));
 
         assertGrpcCause(ex, Status.Code.NOT_FOUND);
@@ -425,7 +424,7 @@ public class DurableTaskGrpcClientTest {
     }
 
     @Test
-    void rewindInstance_notFound_throwsIllegalArgumentExceptionWithCustomMessage() throws IOException {
+    void rewindInstance_notFound_throwsIllegalArgumentExceptionThroughHelper() throws IOException {
         DurableTaskClient client = createClientWithFakeService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
             @Override
             public void rewindInstance(RewindInstanceRequest request, StreamObserver<RewindInstanceResponse> responseObserver) {
@@ -438,8 +437,8 @@ public class DurableTaskGrpcClientTest {
                 client.rewindInstance("test-instance", null));
 
         assertGrpcCause(ex, Status.Code.NOT_FOUND);
-        // rewindInstance has its own custom message for NOT_FOUND
-        assertTrue(ex.getMessage().contains("test-instance"));
+        // Now goes through the helper, so message contains the operation name
+        assertTrue(ex.getMessage().contains("rewindInstance"));
     }
 
     // -----------------------------------------------------------------------
@@ -526,7 +525,7 @@ public class DurableTaskGrpcClientTest {
     }
 
     @Test
-    void terminate_notFound_throwsNoSuchElementException() throws IOException {
+    void terminate_notFound_throwsIllegalArgumentException() throws IOException {
         DurableTaskClient client = createClientWithFakeService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
             @Override
             public void terminateInstance(TerminateRequest request, StreamObserver<TerminateResponse> responseObserver) {
@@ -535,7 +534,7 @@ public class DurableTaskGrpcClientTest {
             }
         });
 
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () ->
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                 client.terminate("test-instance", null));
 
         assertGrpcCause(ex, Status.Code.NOT_FOUND);

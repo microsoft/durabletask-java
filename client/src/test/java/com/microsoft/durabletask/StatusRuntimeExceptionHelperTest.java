@@ -7,7 +7,6 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.Test;
 
-import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 
@@ -76,14 +75,14 @@ public class StatusRuntimeExceptionHelperTest {
     }
 
     @Test
-    void toRuntimeException_notFoundStatus_returnsNoSuchElementException() {
+    void toRuntimeException_notFoundStatus_returnsIllegalArgumentException() {
         StatusRuntimeException grpcException = new StatusRuntimeException(
                 Status.NOT_FOUND.withDescription("instance not found"));
 
         RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
                 grpcException, "getInstanceMetadata");
 
-        assertInstanceOf(NoSuchElementException.class, result);
+        assertInstanceOf(IllegalArgumentException.class, result);
         assertTrue(result.getMessage().contains("getInstanceMetadata"));
         assertTrue(result.getMessage().contains("NOT_FOUND"));
         assertTrue(result.getMessage().contains("instance not found"));
@@ -243,14 +242,14 @@ public class StatusRuntimeExceptionHelperTest {
     }
 
     @Test
-    void toException_notFoundStatus_returnsNoSuchElementException() {
+    void toException_notFoundStatus_returnsIllegalArgumentException() {
         StatusRuntimeException grpcException = new StatusRuntimeException(
                 Status.NOT_FOUND.withDescription("not found"));
 
         Exception result = StatusRuntimeExceptionHelper.toException(
                 grpcException, "purgeInstances");
 
-        assertInstanceOf(NoSuchElementException.class, result);
+        assertInstanceOf(IllegalArgumentException.class, result);
         assertTrue(result.getMessage().contains("purgeInstances"));
         assertTrue(result.getMessage().contains("NOT_FOUND"));
         assertSame(grpcException, result.getCause());
