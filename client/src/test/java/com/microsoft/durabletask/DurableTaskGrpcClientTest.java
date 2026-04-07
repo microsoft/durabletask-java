@@ -424,7 +424,7 @@ public class DurableTaskGrpcClientTest {
     }
 
     @Test
-    void rewindInstance_notFound_throwsIllegalArgumentExceptionThroughHelper() throws IOException {
+    void rewindInstance_notFound_throwsIllegalArgumentExceptionWithCustomMessage() throws IOException {
         DurableTaskClient client = createClientWithFakeService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
             @Override
             public void rewindInstance(RewindInstanceRequest request, StreamObserver<RewindInstanceResponse> responseObserver) {
@@ -437,8 +437,9 @@ public class DurableTaskGrpcClientTest {
                 client.rewindInstance("test-instance", null));
 
         assertGrpcCause(ex, Status.Code.NOT_FOUND);
-        // Now goes through the helper, so message contains the operation name
-        assertTrue(ex.getMessage().contains("rewindInstance"));
+        // rewindInstance has its own custom message for NOT_FOUND
+        assertTrue(ex.getMessage().contains("No orchestration instance with ID"));
+        assertTrue(ex.getMessage().contains("was found"));
     }
 
     // -----------------------------------------------------------------------
