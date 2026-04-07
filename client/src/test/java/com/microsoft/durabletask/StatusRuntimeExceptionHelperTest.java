@@ -56,6 +56,7 @@ public class StatusRuntimeExceptionHelperTest {
         assertNotEquals(CancellationException.class, result.getClass());
         assertTrue(result.getMessage().contains("terminate"));
         assertTrue(result.getMessage().contains("UNAVAILABLE"));
+        assertTrue(result.getMessage().contains("Connection refused"));
         assertSame(grpcException, result.getCause());
     }
 
@@ -96,6 +97,19 @@ public class StatusRuntimeExceptionHelperTest {
         assertTrue(result.getMessage().contains("customOperationName"));
     }
 
+    @Test
+    void toRuntimeException_nullDescription_usesDefaultFallback() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(Status.INTERNAL);
+
+        RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
+                grpcException, "testOp");
+
+        assertTrue(result.getMessage().contains("(no description)"),
+                "Expected '(no description)' fallback but got: " + result.getMessage());
+        assertFalse(result.getMessage().contains("null"),
+                "Message should not contain literal 'null': " + result.getMessage());
+    }
+
     // Tests for toException (checked exception variant)
 
     @Test
@@ -108,7 +122,20 @@ public class StatusRuntimeExceptionHelperTest {
 
         assertInstanceOf(TimeoutException.class, result);
         assertTrue(result.getMessage().contains("waitForInstanceStart"));
-        assertTrue(result.getMessage().contains("timed out"));
+        assertTrue(result.getMessage().contains("DEADLINE_EXCEEDED"));
+    }
+
+    @Test
+    void toException_deadlineExceededStatus_usesConsistentMessageFormat() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.DEADLINE_EXCEEDED.withDescription("timeout after 5s"));
+
+        Exception result = StatusRuntimeExceptionHelper.toException(
+                grpcException, "purgeInstances");
+
+        assertInstanceOf(TimeoutException.class, result);
+        assertTrue(result.getMessage().contains("failed with a DEADLINE_EXCEEDED gRPC status"),
+                "Expected consistent message format but got: " + result.getMessage());
     }
 
     @Test
@@ -147,5 +174,19 @@ public class StatusRuntimeExceptionHelperTest {
 
         assertInstanceOf(RuntimeException.class, result);
         assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toException_nullDescription_usesDefaultFallback() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(Status.DEADLINE_EXCEEDED);
+
+        Exception result = StatusRuntimeExceptionHelper.toException(
+                grpcException, "testOp");
+
+        assertInstanceOf(TimeoutException.class, result);
+        assertTrue(result.getMessage().contains("(no description)"),
+                "Expected '(no description)' fallback but got: " + result.getMessage());
+        assertFalse(result.getMessage().contains("null"),
+                "Message should not contain literal 'null': " + result.getMessage());
     }
 }
