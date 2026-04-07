@@ -32,14 +32,10 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     private final ManagedChannel managedSidecarChannel;
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
     private final String defaultVersion;
-    private final PayloadHelper payloadHelper;
 
     DurableTaskGrpcClient(DurableTaskGrpcClientBuilder builder) {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.defaultVersion = builder.defaultVersion;
-        this.payloadHelper = builder.payloadStore != null
-            ? new PayloadHelper(builder.payloadStore, builder.largePayloadOptions)
-            : null;
 
         Channel sidecarGrpcChannel;
         if (builder.channel != null) {
@@ -67,7 +63,6 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     DurableTaskGrpcClient(int port, String defaultVersion) {
         this.dataConverter = new JacksonDataConverter();
         this.defaultVersion = defaultVersion;
-        this.payloadHelper = null;
 
         // Need to keep track of this channel so we can dispose it on close()
         this.managedSidecarChannel = ManagedChannelBuilder
@@ -130,9 +125,6 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         Object input = options.getInput();
         if (input != null) {
             String serializedInput = this.dataConverter.serialize(input);
-            if (this.payloadHelper != null) {
-                serializedInput = this.payloadHelper.maybeExternalize(serializedInput);
-            }
             builder.setInput(StringValue.of(serializedInput));
         }
 
@@ -185,9 +177,6 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 .setName(eventName);
         if (eventPayload != null) {
             String serializedPayload = this.dataConverter.serialize(eventPayload);
-            if (this.payloadHelper != null) {
-                serializedPayload = this.payloadHelper.maybeExternalize(serializedPayload);
-            }
             builder.setInput(StringValue.of(serializedPayload));
         }
 
@@ -202,9 +191,6 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 .setGetInputsAndOutputs(getInputsAndOutputs)
                 .build();
         GetInstanceResponse response = this.sidecarClient.getInstance(request);
-        if (this.payloadHelper != null) {
-            response = resolveGetInstanceResponsePayloads(response);
-        }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
@@ -231,9 +217,6 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 throw new TimeoutException("Start orchestration timeout reached.");
             }
             throw e;
-        }
-        if (this.payloadHelper != null) {
-            response = resolveGetInstanceResponsePayloads(response);
         }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
@@ -262,9 +245,6 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             }
             throw e;
         }
-        if (this.payloadHelper != null) {
-            response = resolveGetInstanceResponsePayloads(response);
-        }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
 
@@ -278,11 +258,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 serializeOutput != null ? serializeOutput : "(null)"));
         TerminateRequest.Builder builder = TerminateRequest.newBuilder().setInstanceId(instanceId);
         if (serializeOutput != null){
-            String outputToSend = serializeOutput;
-            if (this.payloadHelper != null) {
-                outputToSend = this.payloadHelper.maybeExternalize(outputToSend);
-            }
-            builder.setOutput(StringValue.of(outputToSend));
+            builder.setOutput(StringValue.of(serializeOutput));
         }
         this.sidecarClient.terminateInstance(builder.build());
     }
@@ -305,11 +281,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     private OrchestrationStatusQueryResult toQueryResult(QueryInstancesResponse queryInstancesResponse, boolean fetchInputsAndOutputs){
         List<OrchestrationMetadata> metadataList = new ArrayList<>();
         queryInstancesResponse.getOrchestrationStateList().forEach(state -> {
-            OrchestrationState resolvedState = state;
-            if (this.payloadHelper != null) {
-                resolvedState = resolveOrchestrationStatePayloads(state);
-            }
-            metadataList.add(new OrchestrationMetadata(resolvedState, this.dataConverter, fetchInputsAndOutputs));
+            metadataList.add(new OrchestrationMetadata(state, this.dataConverter, fetchInputsAndOutputs));
         });
         return new OrchestrationStatusQueryResult(metadataList, queryInstancesResponse.getContinuationToken().getValue());
     }
@@ -368,11 +340,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         SuspendRequest.Builder suspendRequestBuilder = SuspendRequest.newBuilder();
         suspendRequestBuilder.setInstanceId(instanceId);
         if (reason != null) {
-            String reasonToSend = reason;
-            if (this.payloadHelper != null) {
-                reasonToSend = this.payloadHelper.maybeExternalize(reasonToSend);
-            }
-            suspendRequestBuilder.setReason(StringValue.of(reasonToSend));
+            suspendRequestBuilder.setReason(StringValue.of(reason));
         }
         this.sidecarClient.suspendInstance(suspendRequestBuilder.build());
     }
@@ -382,11 +350,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         ResumeRequest.Builder resumeRequestBuilder = ResumeRequest.newBuilder();
         resumeRequestBuilder.setInstanceId(instanceId);
         if (reason != null) {
-            String reasonToSend = reason;
-            if (this.payloadHelper != null) {
-                reasonToSend = this.payloadHelper.maybeExternalize(reasonToSend);
-            }
-            resumeRequestBuilder.setReason(StringValue.of(reasonToSend));
+            resumeRequestBuilder.setReason(StringValue.of(reason));
         }
         this.sidecarClient.resumeInstance(resumeRequestBuilder.build());
     }
@@ -434,54 +398,5 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
 
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){
         return new PurgeResult(response.getDeletedInstanceCount());
-    }
-
-    /**
-     * Resolves externalized payload URI tokens in a GetInstanceResponse.
-     */
-    private GetInstanceResponse resolveGetInstanceResponsePayloads(GetInstanceResponse response) {
-        if (!response.getExists()) {
-            return response;
-        }
-        OrchestrationState state = response.getOrchestrationState();
-        OrchestrationState resolvedState = resolveOrchestrationStatePayloads(state);
-        if (resolvedState == state) {
-            return response;
-        }
-        return response.toBuilder().setOrchestrationState(resolvedState).build();
-    }
-
-    /**
-     * Resolves externalized payload URI tokens in an OrchestrationState.
-     */
-    private OrchestrationState resolveOrchestrationStatePayloads(OrchestrationState state) {
-        boolean changed = false;
-        OrchestrationState.Builder builder = state.toBuilder();
-
-        if (state.hasInput() && !state.getInput().getValue().isEmpty()) {
-            String resolved = this.payloadHelper.maybeResolve(state.getInput().getValue());
-            if (!resolved.equals(state.getInput().getValue())) {
-                builder.setInput(StringValue.of(resolved));
-                changed = true;
-            }
-        }
-
-        if (state.hasOutput() && !state.getOutput().getValue().isEmpty()) {
-            String resolved = this.payloadHelper.maybeResolve(state.getOutput().getValue());
-            if (!resolved.equals(state.getOutput().getValue())) {
-                builder.setOutput(StringValue.of(resolved));
-                changed = true;
-            }
-        }
-
-        if (state.hasCustomStatus() && !state.getCustomStatus().getValue().isEmpty()) {
-            String resolved = this.payloadHelper.maybeResolve(state.getCustomStatus().getValue());
-            if (!resolved.equals(state.getCustomStatus().getValue())) {
-                builder.setCustomStatus(StringValue.of(resolved));
-                changed = true;
-            }
-        }
-
-        return changed ? builder.build() : state;
     }
 }
