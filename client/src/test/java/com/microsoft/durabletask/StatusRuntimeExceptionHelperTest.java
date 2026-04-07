@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class StatusRuntimeExceptionHelperTest {
 
-    // ── toRuntimeException tests ──
+    // -- toRuntimeException tests --
 
     @Test
     void toRuntimeException_cancelledStatus_returnsCancellationException() {
@@ -173,7 +173,7 @@ public class StatusRuntimeExceptionHelperTest {
                 "Message should not contain literal ': null': " + result.getMessage());
     }
 
-    // ── toException tests ──
+    // -- toException tests --
 
     @Test
     void toException_deadlineExceededStatus_returnsTimeoutException() {
