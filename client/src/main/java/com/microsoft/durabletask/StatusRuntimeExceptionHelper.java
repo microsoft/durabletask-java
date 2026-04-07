@@ -5,17 +5,29 @@ package com.microsoft.durabletask;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
+import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 
 /**
  * Utility class to translate gRPC {@link StatusRuntimeException} into SDK-level exceptions.
  * This ensures callers do not need to depend on gRPC types directly.
+ *
+ * <p>Status code mappings:
+ * <ul>
+ *   <li>{@code CANCELLED} → {@link CancellationException}</li>
+ *   <li>{@code DEADLINE_EXCEEDED} → {@link TimeoutException} (via {@link #toException})</li>
+ *   <li>{@code INVALID_ARGUMENT} → {@link IllegalArgumentException}</li>
+ *   <li>{@code FAILED_PRECONDITION} → {@link IllegalStateException}</li>
+ *   <li>{@code NOT_FOUND} → {@link NoSuchElementException}</li>
+ *   <li>{@code UNIMPLEMENTED} → {@link UnsupportedOperationException}</li>
+ *   <li>All other codes → {@link RuntimeException}</li>
+ * </ul>
  */
 final class StatusRuntimeExceptionHelper {
 
     /**
-     * Translates a {@link StatusRuntimeException} into an appropriate SDK-level exception.
+     * Translates a {@link StatusRuntimeException} into an appropriate SDK-level unchecked exception.
      *
      * @param e the gRPC exception to translate
      * @param operationName the name of the operation that failed, used in exception messages
@@ -23,11 +35,20 @@ final class StatusRuntimeExceptionHelper {
      */
     static RuntimeException toRuntimeException(StatusRuntimeException e, String operationName) {
         Status.Code code = e.getStatus().getCode();
+        String message = formatMessage(operationName, code, getDescriptionOrDefault(e));
         switch (code) {
             case CANCELLED:
                 return createCancellationException(e, operationName);
+            case INVALID_ARGUMENT:
+                return new IllegalArgumentException(message, e);
+            case FAILED_PRECONDITION:
+                return new IllegalStateException(message, e);
+            case NOT_FOUND:
+                return createNoSuchElementException(e, message);
+            case UNIMPLEMENTED:
+                return new UnsupportedOperationException(message, e);
             default:
-                return createRuntimeException(e, operationName, code);
+                return new RuntimeException(message, e);
         }
     }
 
@@ -45,14 +66,22 @@ final class StatusRuntimeExceptionHelper {
      */
     static Exception toException(StatusRuntimeException e, String operationName) {
         Status.Code code = e.getStatus().getCode();
+        String message = formatMessage(operationName, code, getDescriptionOrDefault(e));
         switch (code) {
             case DEADLINE_EXCEEDED:
-                return new TimeoutException(
-                        formatMessage(operationName, code, getDescriptionOrDefault(e)));
+                return new TimeoutException(message);
             case CANCELLED:
                 return createCancellationException(e, operationName);
+            case INVALID_ARGUMENT:
+                return new IllegalArgumentException(message, e);
+            case FAILED_PRECONDITION:
+                return new IllegalStateException(message, e);
+            case NOT_FOUND:
+                return createNoSuchElementException(e, message);
+            case UNIMPLEMENTED:
+                return new UnsupportedOperationException(message, e);
             default:
-                return createRuntimeException(e, operationName, code);
+                return new RuntimeException(message, e);
         }
     }
 
@@ -64,10 +93,11 @@ final class StatusRuntimeExceptionHelper {
         return ce;
     }
 
-    private static RuntimeException createRuntimeException(
-            StatusRuntimeException e, String operationName, Status.Code code) {
-        return new RuntimeException(
-                formatMessage(operationName, code, getDescriptionOrDefault(e)), e);
+    private static NoSuchElementException createNoSuchElementException(
+            StatusRuntimeException e, String message) {
+        NoSuchElementException ne = new NoSuchElementException(message);
+        ne.initCause(e);
+        return ne;
     }
 
     private static String formatMessage(String operationName, Status.Code code, String description) {

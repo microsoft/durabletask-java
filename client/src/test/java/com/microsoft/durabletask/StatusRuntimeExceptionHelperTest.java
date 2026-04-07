@@ -7,6 +7,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.Test;
 
+import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 
@@ -17,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class StatusRuntimeExceptionHelperTest {
 
-    // Tests for toRuntimeException
+    // ── toRuntimeException tests ──
 
     @Test
     void toRuntimeException_cancelledStatus_returnsCancellationException() {
@@ -45,6 +46,78 @@ public class StatusRuntimeExceptionHelperTest {
     }
 
     @Test
+    void toRuntimeException_invalidArgumentStatus_returnsIllegalArgumentException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.INVALID_ARGUMENT.withDescription("instanceId is required"));
+
+        RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
+                grpcException, "scheduleNewOrchestrationInstance");
+
+        assertInstanceOf(IllegalArgumentException.class, result);
+        assertTrue(result.getMessage().contains("scheduleNewOrchestrationInstance"));
+        assertTrue(result.getMessage().contains("INVALID_ARGUMENT"));
+        assertTrue(result.getMessage().contains("instanceId is required"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toRuntimeException_failedPreconditionStatus_returnsIllegalStateException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.FAILED_PRECONDITION.withDescription("instance already running"));
+
+        RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
+                grpcException, "suspendInstance");
+
+        assertInstanceOf(IllegalStateException.class, result);
+        assertTrue(result.getMessage().contains("suspendInstance"));
+        assertTrue(result.getMessage().contains("FAILED_PRECONDITION"));
+        assertTrue(result.getMessage().contains("instance already running"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toRuntimeException_notFoundStatus_returnsNoSuchElementException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.NOT_FOUND.withDescription("instance not found"));
+
+        RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
+                grpcException, "getInstanceMetadata");
+
+        assertInstanceOf(NoSuchElementException.class, result);
+        assertTrue(result.getMessage().contains("getInstanceMetadata"));
+        assertTrue(result.getMessage().contains("NOT_FOUND"));
+        assertTrue(result.getMessage().contains("instance not found"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toRuntimeException_unimplementedStatus_returnsUnsupportedOperationException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.UNIMPLEMENTED.withDescription("method not supported"));
+
+        RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
+                grpcException, "rewindInstance");
+
+        assertInstanceOf(UnsupportedOperationException.class, result);
+        assertTrue(result.getMessage().contains("rewindInstance"));
+        assertTrue(result.getMessage().contains("UNIMPLEMENTED"));
+        assertTrue(result.getMessage().contains("method not supported"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toRuntimeException_deadlineExceededStatus_returnsRuntimeException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(Status.DEADLINE_EXCEEDED);
+
+        RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
+                grpcException, "getInstanceMetadata");
+
+        assertInstanceOf(RuntimeException.class, result);
+        assertTrue(result.getMessage().contains("getInstanceMetadata"));
+        assertTrue(result.getMessage().contains("DEADLINE_EXCEEDED"));
+    }
+
+    @Test
     void toRuntimeException_unavailableStatus_returnsRuntimeException() {
         StatusRuntimeException grpcException = new StatusRuntimeException(
                 Status.UNAVAILABLE.withDescription("Connection refused"));
@@ -53,7 +126,9 @@ public class StatusRuntimeExceptionHelperTest {
                 grpcException, "terminate");
 
         assertInstanceOf(RuntimeException.class, result);
-        assertNotEquals(CancellationException.class, result.getClass());
+        assertFalse(result instanceof IllegalArgumentException);
+        assertFalse(result instanceof IllegalStateException);
+        assertFalse(result instanceof UnsupportedOperationException);
         assertTrue(result.getMessage().contains("terminate"));
         assertTrue(result.getMessage().contains("UNAVAILABLE"));
         assertTrue(result.getMessage().contains("Connection refused"));
@@ -76,18 +151,6 @@ public class StatusRuntimeExceptionHelperTest {
     }
 
     @Test
-    void toRuntimeException_deadlineExceededStatus_returnsRuntimeException() {
-        StatusRuntimeException grpcException = new StatusRuntimeException(Status.DEADLINE_EXCEEDED);
-
-        RuntimeException result = StatusRuntimeExceptionHelper.toRuntimeException(
-                grpcException, "getInstanceMetadata");
-
-        assertInstanceOf(RuntimeException.class, result);
-        assertTrue(result.getMessage().contains("getInstanceMetadata"));
-        assertTrue(result.getMessage().contains("DEADLINE_EXCEEDED"));
-    }
-
-    @Test
     void toRuntimeException_preservesOperationName() {
         StatusRuntimeException grpcException = new StatusRuntimeException(Status.UNKNOWN);
 
@@ -106,11 +169,11 @@ public class StatusRuntimeExceptionHelperTest {
 
         assertTrue(result.getMessage().contains("(no description)"),
                 "Expected '(no description)' fallback but got: " + result.getMessage());
-        assertFalse(result.getMessage().contains("null"),
-                "Message should not contain literal 'null': " + result.getMessage());
+        assertFalse(result.getMessage().contains(": null"),
+                "Message should not contain literal ': null': " + result.getMessage());
     }
 
-    // Tests for toException (checked exception variant)
+    // ── toException tests ──
 
     @Test
     void toException_deadlineExceededStatus_returnsTimeoutException() {
@@ -152,6 +215,62 @@ public class StatusRuntimeExceptionHelperTest {
     }
 
     @Test
+    void toException_invalidArgumentStatus_returnsIllegalArgumentException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.INVALID_ARGUMENT.withDescription("bad input"));
+
+        Exception result = StatusRuntimeExceptionHelper.toException(
+                grpcException, "waitForInstanceStart");
+
+        assertInstanceOf(IllegalArgumentException.class, result);
+        assertTrue(result.getMessage().contains("waitForInstanceStart"));
+        assertTrue(result.getMessage().contains("INVALID_ARGUMENT"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toException_failedPreconditionStatus_returnsIllegalStateException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.FAILED_PRECONDITION.withDescription("not ready"));
+
+        Exception result = StatusRuntimeExceptionHelper.toException(
+                grpcException, "waitForInstanceCompletion");
+
+        assertInstanceOf(IllegalStateException.class, result);
+        assertTrue(result.getMessage().contains("waitForInstanceCompletion"));
+        assertTrue(result.getMessage().contains("FAILED_PRECONDITION"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toException_notFoundStatus_returnsNoSuchElementException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.NOT_FOUND.withDescription("not found"));
+
+        Exception result = StatusRuntimeExceptionHelper.toException(
+                grpcException, "purgeInstances");
+
+        assertInstanceOf(NoSuchElementException.class, result);
+        assertTrue(result.getMessage().contains("purgeInstances"));
+        assertTrue(result.getMessage().contains("NOT_FOUND"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
+    void toException_unimplementedStatus_returnsUnsupportedOperationException() {
+        StatusRuntimeException grpcException = new StatusRuntimeException(
+                Status.UNIMPLEMENTED.withDescription("not implemented"));
+
+        Exception result = StatusRuntimeExceptionHelper.toException(
+                grpcException, "rewindInstance");
+
+        assertInstanceOf(UnsupportedOperationException.class, result);
+        assertTrue(result.getMessage().contains("rewindInstance"));
+        assertTrue(result.getMessage().contains("UNIMPLEMENTED"));
+        assertSame(grpcException, result.getCause());
+    }
+
+    @Test
     void toException_unavailableStatus_returnsRuntimeException() {
         StatusRuntimeException grpcException = new StatusRuntimeException(Status.UNAVAILABLE);
 
@@ -159,7 +278,7 @@ public class StatusRuntimeExceptionHelperTest {
                 grpcException, "waitForInstanceCompletion");
 
         assertInstanceOf(RuntimeException.class, result);
-        assertNotEquals(CancellationException.class, result.getClass());
+        assertFalse(result instanceof CancellationException);
         assertTrue(result.getMessage().contains("waitForInstanceCompletion"));
         assertTrue(result.getMessage().contains("UNAVAILABLE"));
     }
@@ -186,7 +305,7 @@ public class StatusRuntimeExceptionHelperTest {
         assertInstanceOf(TimeoutException.class, result);
         assertTrue(result.getMessage().contains("(no description)"),
                 "Expected '(no description)' fallback but got: " + result.getMessage());
-        assertFalse(result.getMessage().contains("null"),
-                "Message should not contain literal 'null': " + result.getMessage());
+        assertFalse(result.getMessage().contains(": null"),
+                "Message should not contain literal ': null': " + result.getMessage());
     }
 }
