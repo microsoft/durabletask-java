@@ -204,6 +204,9 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
     }
 
     // region Re-entrant self-dispatch
+    // NOTE: Cross-SDK alignment — dispatch() is a Java-specific addition enabling re-entrant
+    // self-calls for operation composition. Not present in the .NET SDK. Consider proposing
+    // for cross-SDK alignment.
 
     /**
      * Dispatches an operation to this entity instance synchronously (re-entrant self-call).

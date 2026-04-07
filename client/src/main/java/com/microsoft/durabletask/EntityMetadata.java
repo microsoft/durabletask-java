@@ -115,8 +115,8 @@ public class EntityMetadata {
      * Gets whether this metadata response includes the entity state.
      * <p>
      * Queries can exclude the state of the entity from the metadata that is retrieved.
-     * When this returns {@code false}, {@link #getSerializedState()} and {@link #readStateAs(Class)}
-     * will return {@code null}.
+     * When this returns {@code false}, calling {@link #readStateAs(Class)} will throw
+     * {@link IllegalStateException}. Use this method to check before accessing state.
      *
      * @return {@code true} if state was requested and included in this metadata
      */
@@ -140,10 +140,17 @@ public class EntityMetadata {
      *
      * @param stateType the class to deserialize the state into
      * @param <T>       the target type
-     * @return the deserialized state, or {@code null} if no state is available
+     * @return the deserialized state, or {@code null} if the entity has no state
+     * @throws IllegalStateException if state was not included in this metadata
+     *         (i.e., {@link #isIncludesState()} returns {@code false})
      */
     @Nullable
     public <T> T readStateAs(Class<T> stateType) {
+        if (!this.includesState) {
+            throw new IllegalStateException(
+                    "Entity state was not included in this metadata response. " +
+                    "Check isIncludesState() before accessing state, or request state inclusion when querying.");
+        }
         if (this.serializedState == null) {
             return null;
         }

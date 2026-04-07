@@ -33,7 +33,7 @@ public final class TypedEntityMetadata<T> extends EntityMetadata {
     /**
      * Creates a new {@code TypedEntityMetadata} from an existing {@link EntityMetadata} and a state type.
      * <p>
-     * The state is eagerly deserialized from the metadata's serialized state.
+     * The state is eagerly deserialized from the metadata's serialized state when state is included.
      *
      * @param source    the source metadata to wrap
      * @param stateType the class to deserialize the state into
@@ -48,18 +48,25 @@ public final class TypedEntityMetadata<T> extends EntityMetadata {
                 source.isIncludesState(),
                 source.getDataConverter());
         this.stateType = stateType;
-        this.state = source.readStateAs(stateType);
+        this.state = source.isIncludesState() ? source.readStateAs(stateType) : null;
     }
 
     /**
      * Gets the deserialized entity state.
      * <p>
-     * Returns {@code null} if the entity has no state or if state was not included in the query.
+     * Returns {@code null} if the entity has no state.
      *
      * @return the deserialized state, or {@code null}
+     * @throws IllegalStateException if state was not included in this metadata
+     *         (i.e., {@link #isIncludesState()} returns {@code false})
      */
     @Nullable
     public T getState() {
+        if (!this.isIncludesState()) {
+            throw new IllegalStateException(
+                    "Entity state was not included in this metadata response. " +
+                    "Check isIncludesState() before accessing state, or request state inclusion when querying.");
+        }
         return this.state;
     }
 

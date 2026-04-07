@@ -8,6 +8,8 @@ import java.time.Duration;
 /**
  * Options for calling a durable entity and waiting for a response.
  */
+// NOTE: Cross-SDK alignment — setTimeout(Duration) is a Java-specific addition using a timer-based
+// implementation. Not present in the .NET SDK. Consider proposing for cross-SDK alignment.
 public final class CallEntityOptions {
     private Duration timeout;
 

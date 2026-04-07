@@ -51,6 +51,20 @@ public class TaskEntityState {
     }
 
     /**
+     * Gets the current entity state, deserialized to the specified type,
+     * returning the provided default value if no state exists.
+     *
+     * @param stateType    the class to deserialize the state into
+     * @param defaultValue the value to return if no state exists
+     * @param <T>          the type of the state
+     * @return the deserialized state, or {@code defaultValue} if no state exists
+     */
+    public <T> T getState(Class<T> stateType, T defaultValue) {
+        T state = getState(stateType);
+        return state != null ? state : defaultValue;
+    }
+
+    /**
      * Sets the entity state. The state will be serialized using the configured {@link DataConverter}.
      *
      * @param state the state value to set

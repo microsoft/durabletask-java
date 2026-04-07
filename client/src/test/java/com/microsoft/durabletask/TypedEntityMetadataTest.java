@@ -37,10 +37,19 @@ public class TypedEntityMetadataTest {
     @Test
     void getState_nullWhenNoState() {
         EntityMetadata base = new EntityMetadata(
-                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
+                "@counter@c1", Instant.EPOCH, 0, null, null, true, dataConverter);
 
         TypedEntityMetadata<Integer> typed = new TypedEntityMetadata<>(base, Integer.class);
         assertNull(typed.getState());
+    }
+
+    @Test
+    void getState_throwsWhenStateNotIncluded() {
+        EntityMetadata base = new EntityMetadata(
+                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
+
+        TypedEntityMetadata<Integer> typed = new TypedEntityMetadata<>(base, Integer.class);
+        assertThrows(IllegalStateException.class, typed::getState);
     }
 
     @Test

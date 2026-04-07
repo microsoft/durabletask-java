@@ -56,6 +56,12 @@ final class GrpcDurableEntityClient extends DurableEntityClient {
             builder.setScheduledTime(ts);
         }
 
+        // Capture and propagate distributed trace context (matching .NET SDK pattern)
+        TraceContext traceContext = TracingHelper.getCurrentTraceContext();
+        if (traceContext != null) {
+            builder.setParentTraceContext(traceContext);
+        }
+
         this.sidecarClient.signalEntity(builder.build());
     }
 

@@ -60,10 +60,18 @@ public class EntityMetadataTest {
     @Test
     void readStateAs_nullState_returnsNull() {
         EntityMetadata metadata = new EntityMetadata(
-                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
+                "@counter@c1", Instant.EPOCH, 0, null, null, true, dataConverter);
 
         Integer state = metadata.readStateAs(Integer.class);
         assertNull(state);
+    }
+
+    @Test
+    void readStateAs_throwsWhenStateNotIncluded() {
+        EntityMetadata metadata = new EntityMetadata(
+                "@counter@c1", Instant.EPOCH, 0, null, null, false, dataConverter);
+
+        assertThrows(IllegalStateException.class, () -> metadata.readStateAs(Integer.class));
     }
 
     @Test
