@@ -131,7 +131,6 @@ public final class DurableTaskGrpcWorkerBuilder {
     }
 
     /**
-    /**
      * Sets explicit work item filters for this worker. When set, only work items matching the filters
      * will be dispatched to this worker by the backend.
      * <p>
