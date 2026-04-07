@@ -3,7 +3,28 @@
 
 package com.microsoft.durabletask;
 
-import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CreateInstanceRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CreateInstanceResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CreateTaskHubRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.CreateTaskHubResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.DeleteTaskHubRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.DeleteTaskHubResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.GetInstanceRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.GetInstanceResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.PurgeInstancesRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.PurgeInstancesResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.QueryInstancesRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.QueryInstancesResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.RaiseEventRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.RaiseEventResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ResumeRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ResumeResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.RewindInstanceRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.RewindInstanceResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.SuspendRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.SuspendResponse;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.TerminateRequest;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.TerminateResponse;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 
 import io.grpc.*;
@@ -296,7 +317,7 @@ public class DurableTaskGrpcClientTest {
         });
 
         PurgeInstanceCriteria criteria = new PurgeInstanceCriteria()
-                .setCreatedTimeFrom(Instant.now().minus(Duration.ofDays(1)));
+                .setCreatedTimeFrom(Instant.parse("2026-01-01T00:00:00Z"));
 
         TimeoutException ex = assertThrows(TimeoutException.class, () ->
                 client.purgeInstances(criteria));
@@ -353,7 +374,7 @@ public class DurableTaskGrpcClientTest {
         });
 
         PurgeInstanceCriteria criteria = new PurgeInstanceCriteria()
-                .setCreatedTimeFrom(Instant.now().minus(Duration.ofDays(1)));
+                .setCreatedTimeFrom(Instant.parse("2026-01-01T00:00:00Z"));
 
         NoSuchElementException ex = assertThrows(NoSuchElementException.class, () ->
                 client.purgeInstances(criteria));
