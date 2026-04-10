@@ -8,6 +8,7 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 
 import io.grpc.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -767,23 +768,12 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
     }
 
     /**
-     * Computes the UTF-8 encoded byte length of a string without allocating a byte array.
+     * Computes the UTF-8 encoded byte length of a string.
+     * <p>
+     * Uses Java's canonical UTF-8 encoding behavior so malformed surrogate
+     * sequences are measured exactly the same way as payload serialization.
      */
     private static int utf8ByteLength(String s) {
-        int count = 0;
-        for (int i = 0; i < s.length(); i++) {
-            char ch = s.charAt(i);
-            if (ch <= 0x7F) {
-                count++;
-            } else if (ch <= 0x7FF) {
-                count += 2;
-            } else if (Character.isHighSurrogate(ch)) {
-                count += 4;
-                i++; // skip low surrogate
-            } else {
-                count += 3;
-            }
-        }
-        return count;
+        return s.getBytes(StandardCharsets.UTF_8).length;
     }
 }

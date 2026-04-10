@@ -649,6 +649,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         int chunkIndex = 0;
         boolean isPartial = true;
         boolean isChunkedMode = false;
+        boolean hasTraceContext = response.hasOrchestrationTraceContext();
 
         while (isPartial) {
             OrchestratorResponse.Builder chunk = OrchestratorResponse.newBuilder()
@@ -657,15 +658,23 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 .setCompletionToken(response.getCompletionToken())
                 .setRequiresHistory(response.getRequiresHistory());
 
-            int chunkPayloadSize = 0;
             while (actionsCompleted < allActions.size()) {
-                int actionSize = allActions.get(actionsCompleted).getSerializedSize();
+                OrchestratorAction nextAction = allActions.get(actionsCompleted);
+
+                chunk.addActions(nextAction);
+
+                int estimatedSize = estimateChunkSerializedSize(
+                    chunk,
+                    chunkIndex,
+                    hasTraceContext,
+                    response.getOrchestrationTraceContext());
+
                 // Always accept the first action in an empty chunk to avoid infinite loops
-                if (chunkPayloadSize + actionSize > maxChunkBytes && chunkPayloadSize > 0) {
+                if (estimatedSize > maxChunkBytes && chunk.getActionsCount() > 1) {
+                    chunk.removeActions(chunk.getActionsCount() - 1);
                     break;
                 }
-                chunk.addActions(allActions.get(actionsCompleted));
-                chunkPayloadSize += actionSize;
+
                 actionsCompleted++;
             }
 
@@ -694,6 +703,32 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             chunkIndex++;
             this.sidecarClient.completeOrchestratorTask(chunk.build());
         }
+    }
+
+    /**
+     * Estimates the serialized size of a candidate chunk including envelope overhead fields
+     * that may be added later in the chunking flow.
+     */
+    private static int estimateChunkSerializedSize(
+            OrchestratorResponse.Builder chunk,
+            int chunkIndex,
+            boolean hasTraceContext,
+            OrchestrationTraceContext traceContext) {
+        OrchestratorResponse.Builder estimate = chunk.clone();
+
+        // Include potential overhead fields to avoid under-estimating chunk size.
+        estimate.setIsPartial(true);
+        estimate.setChunkIndex(Int32Value.of(chunkIndex));
+
+        if (chunkIndex == 0) {
+            if (hasTraceContext) {
+                estimate.setOrchestrationTraceContext(traceContext);
+            }
+        } else {
+            estimate.setNumEventsProcessed(Int32Value.of(0));
+        }
+
+        return estimate.build().getSerializedSize();
     }
 
     static WorkItemFilters toProtoWorkItemFilters(WorkItemFilter filter) {
