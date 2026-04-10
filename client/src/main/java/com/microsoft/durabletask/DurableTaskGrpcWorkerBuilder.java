@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import io.grpc.Channel;
+import io.grpc.ClientInterceptor;
 
 import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
@@ -28,6 +29,9 @@ public final class DurableTaskGrpcWorkerBuilder {
     int maxWorkItemThreads;
     private WorkItemFilter workItemFilter;
     private boolean autoGenerateWorkItemFilters;
+    final List<ClientInterceptor> interceptors = new ArrayList<>();
+    boolean supportsLargePayloads;
+    int maxChunkSizeBytes = 4_089_446; // 3.9 MB default, same as .NET
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -328,6 +332,58 @@ public final class DurableTaskGrpcWorkerBuilder {
     public DurableTaskGrpcWorkerBuilder useWorkItemFilters() {
         this.autoGenerateWorkItemFilters = true;
         this.workItemFilter = null;
+        return this;
+    }
+
+    /**
+     * Adds a gRPC {@link ClientInterceptor} that will be applied to the channel used by the constructed worker.
+     * <p>
+     * Interceptors are applied in the order they are added. This is the extension point used by features
+     * such as large payload externalization to transparently transform gRPC messages.
+     *
+     * @param interceptor the interceptor to add
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addInterceptor(ClientInterceptor interceptor) {
+        if (interceptor == null) {
+            throw new IllegalArgumentException("interceptor must not be null.");
+        }
+        this.interceptors.add(interceptor);
+        return this;
+    }
+
+    /**
+     * Indicates that this worker supports large payload externalization.
+     * <p>
+     * When enabled, the worker announces the {@code WORKER_CAPABILITY_LARGE_PAYLOADS} capability
+     * to the sidecar and skips the pre-send action size validation (since the gRPC interceptor
+     * will externalize oversized payloads before they hit the wire).
+     *
+     * @param enabled whether large payload support is enabled
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder setSupportsLargePayloads(boolean enabled) {
+        this.supportsLargePayloads = enabled;
+        return this;
+    }
+
+    /**
+     * Sets the maximum size in bytes for each chunk when sending orchestrator responses.
+     * <p>
+     * If an orchestrator response exceeds this size, it will be automatically split into
+     * multiple chunks. The default is 3.9 MB ({@code 4_089_446} bytes), matching the .NET SDK.
+     * Must be between 1 MB and 3.9 MB inclusive.
+     *
+     * @param maxChunkSizeBytes the maximum chunk size in bytes
+     * @return this builder object
+     * @throws IllegalArgumentException if the value is outside the allowed range
+     */
+    public DurableTaskGrpcWorkerBuilder setMaxChunkSizeBytes(int maxChunkSizeBytes) {
+        if (maxChunkSizeBytes < 1_048_576 || maxChunkSizeBytes > 4_089_446) {
+            throw new IllegalArgumentException(
+                "maxChunkSizeBytes must be between 1 MB (1048576) and 3.9 MB (4089446), inclusive.");
+        }
+        this.maxChunkSizeBytes = maxChunkSizeBytes;
         return this;
     }
 

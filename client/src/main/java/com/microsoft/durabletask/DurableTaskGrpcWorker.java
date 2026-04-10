@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.google.protobuf.Int32Value;
 import com.google.protobuf.StringValue;
 
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
@@ -11,6 +12,7 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 import com.microsoft.durabletask.util.VersionUtils;
 
 import io.grpc.*;
+import io.grpc.ClientInterceptors;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
@@ -53,6 +55,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final GetWorkItemsRequest getWorkItemsRequest;
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
+    private final boolean supportsLargePayloads;
+    private final int maxChunkSizeBytes;
 
     DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
@@ -80,7 +84,14 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             sidecarGrpcChannel = this.managedSidecarChannel;
         }
 
+        // Apply any registered interceptors (e.g., large payload externalization)
+        if (!builder.interceptors.isEmpty()) {
+            sidecarGrpcChannel = ClientInterceptors.intercept(sidecarGrpcChannel, builder.interceptors);
+        }
+
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
+        this.supportsLargePayloads = builder.supportsLargePayloads;
+        this.maxChunkSizeBytes = builder.maxChunkSizeBytes;
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
@@ -328,7 +339,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     .setCompletionToken(workItem.getCompletionToken())
                                     .build();
 
-                            this.sidecarClient.completeOrchestratorTask(response);
+                            this.completeOrchestratorTaskWithChunking(response);
                         } else {
                             switch(versioningOptions.getFailureStrategy()) {
                                 case FAIL:
@@ -350,7 +361,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                         .addActions(action)
                                         .build();
 
-                                    this.sidecarClient.completeOrchestratorTask(response);
+                                    this.completeOrchestratorTaskWithChunking(response);
                                     break;
                                 // Reject and default share the same behavior as it does not change the orchestration to a terminal state.
                                 case REJECT:
@@ -566,10 +577,123 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             // Signal to the sidecar that this worker can handle entity work items
             builder.setMaxConcurrentEntityWorkItems(this.maxConcurrentEntityWorkItems);
         }
+        if (this.supportsLargePayloads) {
+            builder.addCapabilities(WorkerCapability.WORKER_CAPABILITY_LARGE_PAYLOADS);
+        }
         if (this.workItemFilter != null) {
             builder.setWorkItemFilters(toProtoWorkItemFilters(this.workItemFilter));
         }
         return builder.build();
+    }
+
+    /**
+     * Validates that no single action exceeds the maximum chunk size.
+     * If an oversized action is found, the orchestration is failed with a non-retriable error.
+     */
+    private static TaskFailureDetails validateActionsSize(
+            List<OrchestratorAction> actions, int maxChunkBytes) {
+        for (OrchestratorAction action : actions) {
+            int actionSize = action.getSerializedSize();
+            if (actionSize > maxChunkBytes) {
+                double maxMB = maxChunkBytes / 1024.0 / 1024.0;
+                double actionMB = actionSize / 1024.0 / 1024.0;
+                String errorMessage = String.format(
+                    "A single orchestrator action of type %s with id %d exceeds the %.2fMB limit: %.2fMB. " +
+                    "Enable large-payload externalization to Azure Blob Storage to support oversized actions.",
+                    action.getOrchestratorActionTypeCase(), action.getId(), maxMB, actionMB);
+                return TaskFailureDetails.newBuilder()
+                    .setErrorType("java.lang.IllegalStateException")
+                    .setErrorMessage(errorMessage)
+                    .setIsNonRetriable(true)
+                    .build();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Completes an orchestrator task with automatic chunking if the response exceeds the maximum chunk size.
+     * Matches the .NET SDK's CompleteOrchestratorTaskWithChunkingAsync behavior.
+     */
+    private void completeOrchestratorTaskWithChunking(OrchestratorResponse response) {
+        int maxChunkBytes = this.maxChunkSizeBytes;
+
+        // Pre-send validation: skip if large payload externalization is enabled
+        if (!this.supportsLargePayloads) {
+            TaskFailureDetails validationFailure = validateActionsSize(response.getActionsList(), maxChunkBytes);
+            if (validationFailure != null) {
+                OrchestratorResponse failureResponse = OrchestratorResponse.newBuilder()
+                    .setInstanceId(response.getInstanceId())
+                    .setCompletionToken(response.getCompletionToken())
+                    .addActions(OrchestratorAction.newBuilder()
+                        .setCompleteOrchestration(CompleteOrchestrationAction.newBuilder()
+                            .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                            .setFailureDetails(validationFailure)
+                            .build())
+                        .build())
+                    .build();
+                this.sidecarClient.completeOrchestratorTask(failureResponse);
+                return;
+            }
+        }
+
+        // Fast path: response fits in one message
+        if (response.getSerializedSize() <= maxChunkBytes) {
+            this.sidecarClient.completeOrchestratorTask(response);
+            return;
+        }
+
+        // Chunking path: split actions into multiple gRPC calls
+        List<OrchestratorAction> allActions = new ArrayList<>(response.getActionsList());
+        int actionsCompleted = 0;
+        int chunkIndex = 0;
+        boolean isPartial = true;
+        boolean isChunkedMode = false;
+
+        while (isPartial) {
+            OrchestratorResponse.Builder chunk = OrchestratorResponse.newBuilder()
+                .setInstanceId(response.getInstanceId())
+                .setCustomStatus(response.getCustomStatus())
+                .setCompletionToken(response.getCompletionToken())
+                .setRequiresHistory(response.getRequiresHistory());
+
+            int chunkPayloadSize = 0;
+            while (actionsCompleted < allActions.size()) {
+                int actionSize = allActions.get(actionsCompleted).getSerializedSize();
+                // Always accept the first action in an empty chunk to avoid infinite loops
+                if (chunkPayloadSize + actionSize > maxChunkBytes && chunkPayloadSize > 0) {
+                    break;
+                }
+                chunk.addActions(allActions.get(actionsCompleted));
+                chunkPayloadSize += actionSize;
+                actionsCompleted++;
+            }
+
+            isPartial = actionsCompleted < allActions.size();
+            chunk.setIsPartial(isPartial);
+
+            // Only activate chunked mode when we actually need multiple chunks.
+            // A single oversized action that fits in one chunk should be sent as
+            // non-chunked to avoid backend issues with ChunkIndex=0 + IsPartial=false.
+            if (isPartial) {
+                isChunkedMode = true;
+            }
+            if (isChunkedMode) {
+                chunk.setChunkIndex(Int32Value.of(chunkIndex));
+            }
+
+            if (chunkIndex == 0) {
+                // First chunk: preserve trace context, null numEventsProcessed
+                if (response.hasOrchestrationTraceContext()) {
+                    chunk.setOrchestrationTraceContext(response.getOrchestrationTraceContext());
+                }
+            } else {
+                chunk.setNumEventsProcessed(Int32Value.of(0));
+            }
+
+            chunkIndex++;
+            this.sidecarClient.completeOrchestratorTask(chunk.build());
+        }
     }
 
     static WorkItemFilters toProtoWorkItemFilters(WorkItemFilter filter) {

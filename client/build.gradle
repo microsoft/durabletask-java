@@ -59,6 +59,7 @@ dependencies {
     testImplementation project(':azuremanaged')
     testImplementation "com.azure:azure-core:${azureCoreVersion}"
     testImplementation "com.azure:azure-identity:${azureIdentityVersion}"
+    testImplementation "io.grpc:grpc-inprocess:${grpcVersion}"
 }
 
 compileJava {
