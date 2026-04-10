@@ -4,8 +4,9 @@ package com.microsoft.durabletask.azureblobpayloads;
 
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.models.BlobDownloadHeaders;
+import com.azure.storage.blob.models.BlobDownloadResponse;
 import com.azure.storage.blob.models.BlobHttpHeaders;
-import com.azure.storage.blob.models.BlobProperties;
 import com.azure.storage.blob.models.BlobStorageException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -121,15 +122,7 @@ class BlobPayloadStoreTest {
         String expectedPayload = "Hello, uncompressed world!";
         byte[] payloadBytes = expectedPayload.getBytes(StandardCharsets.UTF_8);
 
-        doAnswer(inv -> {
-            OutputStream out = inv.getArgument(0);
-            out.write(payloadBytes);
-            return null;
-        }).when(mockBlobClient).downloadStream(any(OutputStream.class));
-
-        BlobProperties properties = mock(BlobProperties.class);
-        when(properties.getContentEncoding()).thenReturn(null);
-        when(mockBlobClient.getProperties()).thenReturn(properties);
+        mockDownloadResponse(payloadBytes, null);
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         String token = BlobPayloadStore.encodeToken("durabletask-payloads", "testblob");
@@ -150,15 +143,7 @@ class BlobPayloadStoreTest {
         }
         byte[] compressedBytes = compressedBuffer.toByteArray();
 
-        doAnswer(inv -> {
-            OutputStream out = inv.getArgument(0);
-            out.write(compressedBytes);
-            return null;
-        }).when(mockBlobClient).downloadStream(any(OutputStream.class));
-
-        BlobProperties properties = mock(BlobProperties.class);
-        when(properties.getContentEncoding()).thenReturn("gzip");
-        when(mockBlobClient.getProperties()).thenReturn(properties);
+        mockDownloadResponse(compressedBytes, "gzip");
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         String token = BlobPayloadStore.encodeToken("durabletask-payloads", "compressed-blob");
@@ -172,7 +157,8 @@ class BlobPayloadStoreTest {
     void download_blobNotFound_throwsPayloadStorageException() {
         BlobStorageException notFound = mock(BlobStorageException.class);
         when(notFound.getStatusCode()).thenReturn(404);
-        doThrow(notFound).when(mockBlobClient).downloadStream(any(OutputStream.class));
+        doThrow(notFound).when(mockBlobClient).downloadStreamWithResponse(
+            any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         String token = BlobPayloadStore.encodeToken("durabletask-payloads", "missing-blob");
@@ -194,7 +180,8 @@ class BlobPayloadStoreTest {
     void download_blobStorageError_throwsPayloadStorageException() {
         BlobStorageException serverError = mock(BlobStorageException.class);
         when(serverError.getStatusCode()).thenReturn(500);
-        doThrow(serverError).when(mockBlobClient).downloadStream(any(OutputStream.class));
+        doThrow(serverError).when(mockBlobClient).downloadStreamWithResponse(
+            any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         String token = BlobPayloadStore.encodeToken("durabletask-payloads", "error-blob");
@@ -228,15 +215,7 @@ class BlobPayloadStoreTest {
         String token = store.upload(originalPayload);
 
         // Now set up download to return the captured bytes
-        doAnswer(inv -> {
-            OutputStream out = inv.getArgument(0);
-            out.write(capturedBytes[0]);
-            return null;
-        }).when(mockBlobClient).downloadStream(any(OutputStream.class));
-
-        BlobProperties properties = mock(BlobProperties.class);
-        when(properties.getContentEncoding()).thenReturn("gzip");
-        when(mockBlobClient.getProperties()).thenReturn(properties);
+        mockDownloadResponse(capturedBytes[0], "gzip");
 
         // Need to map the token's blob name back to our mock
         String[] decoded = BlobPayloadStore.decodeToken(token);
@@ -269,15 +248,7 @@ class BlobPayloadStoreTest {
         String token = store.upload(originalPayload);
 
         // Set up download
-        doAnswer(inv -> {
-            OutputStream out = inv.getArgument(0);
-            out.write(capturedBytes[0]);
-            return null;
-        }).when(mockBlobClient).downloadStream(any(OutputStream.class));
-
-        BlobProperties properties = mock(BlobProperties.class);
-        when(properties.getContentEncoding()).thenReturn(null);
-        when(mockBlobClient.getProperties()).thenReturn(properties);
+        mockDownloadResponse(capturedBytes[0], null);
 
         String[] decoded = BlobPayloadStore.decodeToken(token);
         when(mockContainerClient.getBlobClient(decoded[1])).thenReturn(mockBlobClient);
@@ -339,5 +310,26 @@ class BlobPayloadStoreTest {
 
         BlobHttpHeaders capturedHeaders = headersCaptor.getValue();
         assertEquals("gzip", capturedHeaders.getContentEncoding());
+    }
+
+    // ==================== Test helpers ====================
+
+    /**
+     * Sets up the mockBlobClient to return a downloadStreamWithResponse that writes
+     * the given bytes and returns headers with the specified content-encoding.
+     */
+    private void mockDownloadResponse(byte[] content, String contentEncoding) {
+        BlobDownloadHeaders downloadHeaders = mock(BlobDownloadHeaders.class);
+        when(downloadHeaders.getContentEncoding()).thenReturn(contentEncoding);
+
+        BlobDownloadResponse downloadResponse = mock(BlobDownloadResponse.class);
+        when(downloadResponse.getDeserializedHeaders()).thenReturn(downloadHeaders);
+
+        doAnswer(inv -> {
+            OutputStream out = inv.getArgument(0);
+            out.write(content);
+            return downloadResponse;
+        }).when(mockBlobClient).downloadStreamWithResponse(
+            any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
     }
 }

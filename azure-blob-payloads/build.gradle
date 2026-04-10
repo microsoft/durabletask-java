@@ -72,7 +72,7 @@ test {
     }
 }
 
-// Integration tests require DTS emulator on localhost:4001 and Azurite on localhost:10000.
+// Integration tests require DTS emulator (default localhost:8080) and Azurite on localhost:10000.
 task integrationTest(type: Test) {
     useJUnitPlatform {
         includeTags 'integration'

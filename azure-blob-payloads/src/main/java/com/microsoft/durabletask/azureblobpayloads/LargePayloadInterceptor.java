@@ -8,7 +8,6 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 
 import io.grpc.*;
 
-import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -712,7 +711,7 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
         }
 
         String strValue = value.getValue();
-        int size = strValue.getBytes(StandardCharsets.UTF_8).length;
+        int size = utf8ByteLength(strValue);
 
         if (size < this.options.getThresholdBytes()) {
             return value;
@@ -765,5 +764,26 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
         java.io.StringWriter sw = new java.io.StringWriter();
         t.printStackTrace(new java.io.PrintWriter(sw));
         return sw.toString();
+    }
+
+    /**
+     * Computes the UTF-8 encoded byte length of a string without allocating a byte array.
+     */
+    private static int utf8ByteLength(String s) {
+        int count = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            if (ch <= 0x7F) {
+                count++;
+            } else if (ch <= 0x7FF) {
+                count += 2;
+            } else if (Character.isHighSurrogate(ch)) {
+                count += 4;
+                i++; // skip low surrogate
+            } else {
+                count += 3;
+            }
+        }
+        return count;
     }
 }

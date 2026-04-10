@@ -2,23 +2,25 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.azureblobpayloads;
 
-import com.azure.core.credential.TokenCredential;
-import com.azure.core.http.rest.Response;
 import com.azure.core.util.Context;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
+import com.azure.storage.blob.models.BlobDownloadResponse;
 import com.azure.storage.blob.models.BlobHttpHeaders;
+import com.azure.storage.blob.models.BlobRange;
 import com.azure.storage.blob.models.BlobStorageException;
-import com.azure.storage.blob.models.PublicAccessType;
+import com.azure.storage.blob.options.BlobDownloadToFileOptions;
+import com.azure.storage.common.policy.RequestRetryOptions;
+import com.azure.storage.common.policy.RetryPolicyType;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -62,15 +64,27 @@ public final class BlobPayloadStore extends PayloadStore {
                 "Either ConnectionString or AccountUri and Credential must be provided.");
         }
 
+        // Retry policy: exponential (8 retries, 250ms base, 10s max, 2min network timeout)
+        // Matches the .NET BlobPayloadStore retry configuration.
+        RequestRetryOptions retryOptions = new RequestRetryOptions(
+            RetryPolicyType.EXPONENTIAL,
+            8,           // maxTries
+            120,         // tryTimeoutInSeconds (2 min network timeout)
+            250L,        // retryDelayInMs (250ms base)
+            10_000L,     // maxRetryDelayInMs (10s max)
+            null);       // secondaryHost
+
         BlobServiceClient serviceClient;
         if (hasIdentityAuth) {
             serviceClient = new BlobServiceClientBuilder()
                 .endpoint(options.getAccountUri().toString())
                 .credential(options.getCredential())
+                .retryOptions(retryOptions)
                 .buildClient();
         } else {
             serviceClient = new BlobServiceClientBuilder()
                 .connectionString(options.getConnectionString())
+                .retryOptions(retryOptions)
                 .buildClient();
         }
 
@@ -150,11 +164,20 @@ public final class BlobPayloadStore extends PayloadStore {
 
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            blob.downloadStream(outputStream);
+            // Use downloadStreamWithResponse to get content-encoding header in the same call,
+            // avoiding a separate getProperties() round-trip.
+            BlobDownloadResponse downloadResponse = blob.downloadStreamWithResponse(
+                outputStream,
+                null,  // range (full blob)
+                null,  // options
+                null,  // requestConditions
+                false, // getMD5
+                null,  // timeout
+                Context.NONE);
             byte[] rawBytes = outputStream.toByteArray();
 
-            // Check if the content is gzip-compressed by trying to read the gzip header
-            String contentEncoding = blob.getProperties().getContentEncoding();
+            // Check if the content is gzip-compressed via the response header
+            String contentEncoding = downloadResponse.getDeserializedHeaders().getContentEncoding();
             boolean isGzip = CONTENT_ENCODING_GZIP.equalsIgnoreCase(contentEncoding);
 
             if (isGzip) {

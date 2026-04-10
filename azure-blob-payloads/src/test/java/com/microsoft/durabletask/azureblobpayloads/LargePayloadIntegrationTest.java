@@ -24,8 +24,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * These tests require:
  * <ul>
- *   <li>DTS emulator running on localhost:4001:
- *       {@code docker run --name durabletask-emulator -p 4001:8080 -d mcr.microsoft.com/dts/dts-emulator:latest}</li>
+ *   <li>DTS emulator running on localhost:8080:
+ *       {@code docker run --name durabletask-emulator -p 8080:8080 -d mcr.microsoft.com/dts/dts-emulator:latest}</li>
  *   <li>Azurite running on localhost:10000:
  *       {@code docker run --name azurite -p 10000:10000 -p 10001:10001 -p 10002:10002 -d mcr.microsoft.com/azure-storage/azurite}</li>
  * </ul>
