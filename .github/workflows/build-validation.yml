@@ -94,12 +94,38 @@ jobs:
         # Give additional time for gRPC service to fully initialize after port is open
         sleep 5
 
+    - name: Initialize Azurite (Azure Blob Storage Emulator)
+      run: docker run --name azurite -p 10000:10000 -d mcr.microsoft.com/azure-storage/azurite azurite-blob --blobHost 0.0.0.0
+
+    - name: Wait for Azurite to be ready
+      run: |
+        echo "Waiting for Azurite to be ready on port 10000..."
+        MAX_WAIT_SECONDS=60
+        attempt=0
+        while ! (echo > /dev/tcp/localhost/10000) 2>/dev/null; do
+          attempt=$((attempt + 1))
+          if [ $attempt -ge $MAX_WAIT_SECONDS ]; then
+            echo "ERROR: Azurite not ready after $MAX_WAIT_SECONDS seconds"
+            echo "Docker container status:"
+            docker ps -a
+            echo "Container logs:"
+            docker logs azurite 2>&1 | tail -50
+            exit 1
+          fi
+          echo "Attempt $attempt/$MAX_WAIT_SECONDS - waiting for Azurite..."
+          sleep 1
+        done
+        echo "Azurite is ready on port 10000"
+
     - name: Integration Tests with Gradle
       run: ./gradlew integrationTest || echo "TEST_FAILED=true" >> $GITHUB_ENV
       continue-on-error: true
 
     - name: Kill Durable Task Emulator
       run: docker kill durabletask-emulator
+
+    - name: Kill Azurite
+      run: docker kill azurite
     
     - name: Upload Durable Task Emulator Logs
       uses: actions/upload-artifact@v4
