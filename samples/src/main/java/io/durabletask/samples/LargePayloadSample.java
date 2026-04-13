@@ -55,15 +55,13 @@ final class LargePayloadSample {
             "PAYLOAD_STORAGE_CONNECTION_STRING",
             "UseDevelopmentStorage=true");
 
-        int payloadSizeBytes = Integer.parseInt(
-            envOrDefault("PAYLOAD_SIZE_BYTES", "1572864")); // 1.5 MiB
+        int payloadSizeBytes = intEnvOrDefault("PAYLOAD_SIZE_BYTES", 1572864); // 1.5 MiB
 
-        int externalizeThresholdBytes = Integer.parseInt(
-            envOrDefault("EXTERNALIZE_THRESHOLD_BYTES", "900000"));
+        int externalizeThresholdBytes = intEnvOrDefault("EXTERNALIZE_THRESHOLD_BYTES", 900000);
 
         logger.info(String.format(
-            "Config: payloadSize=%d bytes, threshold=%d bytes, storage=%s",
-            payloadSizeBytes, externalizeThresholdBytes, storageConnectionString));
+            "Config: payloadSize=%d bytes, threshold=%d bytes",
+            payloadSizeBytes, externalizeThresholdBytes));
 
         // --- Payload storage options ---
         LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
@@ -183,4 +181,20 @@ final class LargePayloadSample {
         String value = System.getenv(key);
         return (value != null && !value.isEmpty()) ? value : defaultValue;
     }
+
+    private static int intEnvOrDefault(String key, int defaultValue) {
+        String rawValue = System.getenv(key);
+        if (rawValue == null || rawValue.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(rawValue);
+        } catch (NumberFormatException e) {
+            logger.warning(String.format(
+                "Invalid integer value for %s: '%s'. Using default value: %d.",
+                key, rawValue, defaultValue));
+            return defaultValue;
+        }
+    }
+
 }

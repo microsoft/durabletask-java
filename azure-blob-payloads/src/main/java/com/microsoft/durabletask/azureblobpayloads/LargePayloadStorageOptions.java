@@ -58,6 +58,10 @@ public final class LargePayloadStorageOptions {
      * @throws IllegalArgumentException if the value exceeds 1 MiB
      */
     public LargePayloadStorageOptions setThresholdBytes(int thresholdBytes) {
+        if (thresholdBytes < 0) {
+            throw new IllegalArgumentException(
+                "Payload storage threshold cannot be negative.");
+        }
         if (thresholdBytes > ONE_MIB) {
             throw new IllegalArgumentException(
                 "Payload storage threshold cannot exceed 1 MiB (" + ONE_MIB + " bytes).");
@@ -84,6 +88,10 @@ public final class LargePayloadStorageOptions {
      * @return this options object
      */
     public LargePayloadStorageOptions setMaxPayloadBytes(int maxPayloadBytes) {
+        if (maxPayloadBytes <= 0) {
+            throw new IllegalArgumentException(
+                "Maximum payload size must be a positive number of bytes.");
+        }
         this.maxPayloadBytes = maxPayloadBytes;
         return this;
     }

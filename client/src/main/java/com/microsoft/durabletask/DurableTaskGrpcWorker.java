@@ -654,9 +654,11 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         while (isPartial) {
             OrchestratorResponse.Builder chunk = OrchestratorResponse.newBuilder()
                 .setInstanceId(response.getInstanceId())
-                .setCustomStatus(response.getCustomStatus())
                 .setCompletionToken(response.getCompletionToken())
                 .setRequiresHistory(response.getRequiresHistory());
+            if (response.hasCustomStatus()) {
+                chunk.setCustomStatus(response.getCustomStatus());
+            }
 
             while (actionsCompleted < allActions.size()) {
                 OrchestratorAction nextAction = allActions.get(actionsCompleted);

@@ -4,6 +4,8 @@ package com.microsoft.durabletask.azureblobpayloads;
 
 import com.microsoft.durabletask.DurableTaskGrpcWorkerBuilder;
 
+import java.util.Objects;
+
 /**
  * Extension methods for enabling externalized payload storage on a {@link DurableTaskGrpcWorkerBuilder}.
  * <p>
@@ -29,6 +31,8 @@ public final class LargePayloadWorkerExtensions {
     public static DurableTaskGrpcWorkerBuilder useExternalizedPayloads(
             DurableTaskGrpcWorkerBuilder builder,
             LargePayloadStorageOptions options) {
+        Objects.requireNonNull(builder, "builder must not be null");
+        Objects.requireNonNull(options, "options must not be null");
         PayloadStore store = new BlobPayloadStore(options);
         builder.addInterceptor(new LargePayloadInterceptor(store, options));
         builder.setSupportsLargePayloads(true);
@@ -50,6 +54,9 @@ public final class LargePayloadWorkerExtensions {
             DurableTaskGrpcWorkerBuilder builder,
             PayloadStore store,
             LargePayloadStorageOptions options) {
+        Objects.requireNonNull(builder, "builder must not be null");
+        Objects.requireNonNull(store, "store must not be null");
+        Objects.requireNonNull(options, "options must not be null");
         builder.addInterceptor(new LargePayloadInterceptor(store, options));
         builder.setSupportsLargePayloads(true);
         return builder;
