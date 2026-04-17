@@ -8,7 +8,6 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 
 import io.grpc.*;
 
-import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -40,6 +39,11 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
         if (options == null) {
             throw new IllegalArgumentException("options must not be null.");
         }
+        if (options.getMaxPayloadBytes() < options.getThresholdBytes()) {
+            throw new IllegalArgumentException(
+                "maxPayloadBytes (" + options.getMaxPayloadBytes() +
+                ") must be >= thresholdBytes (" + options.getThresholdBytes() + ").");
+        }
         this.payloadStore = payloadStore;
         this.options = options;
     }
@@ -60,8 +64,19 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                     @Override
                     @SuppressWarnings("unchecked")
                     public void onMessage(RespT message) {
-                        RespT resolved = (RespT) resolveResponsePayloads(message);
-                        super.onMessage(resolved);
+                        try {
+                            RespT resolved = (RespT) resolveResponsePayloads(message);
+                            super.onMessage(resolved);
+                        } catch (Exception ex) {
+                            logger.log(Level.SEVERE,
+                                "Failed to resolve externalized payload from blob storage.", ex);
+                            // Surface as a gRPC INTERNAL error so the worker loop can handle
+                            // reconnection via its StatusRuntimeException catch block.
+                            throw Status.INTERNAL
+                                .withDescription("Failed to resolve externalized payload: " + ex.getMessage())
+                                .withCause(ex)
+                                .asRuntimeException();
+                        }
                     }
                 };
                 super.start(wrappedListener, headers);
@@ -140,19 +155,23 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                 return r.toBuilder().setResult(externalized).build();
             }
         } catch (Exception ex) {
-            if (isPermanentStorageFailure(ex)) {
-                // Convert to a failure response so the orchestration sees a failed activity
-                return r.toBuilder()
-                    .clearResult()
-                    .setFailureDetails(TaskFailureDetails.newBuilder()
-                        .setErrorType(ex.getClass().getName())
-                        .setErrorMessage(ex.getMessage())
-                        .setStackTrace(StringValue.of(getStackTraceString(ex)))
-                        .setIsNonRetriable(true)
-                        .build())
-                    .build();
-            }
-            throw ex instanceof RuntimeException ? (RuntimeException) ex : new RuntimeException(ex);
+            boolean permanent = isPermanentStorageFailure(ex);
+            String prefix = permanent
+                ? "Permanent payload storage failure"
+                : "Transient payload storage failure";
+            logger.log(Level.WARNING, prefix + " while externalizing activity response.", ex);
+            // Convert to a failure response so the orchestration sees a failed activity.
+            // Permanent failures are non-retriable; transient failures are retriable so
+            // the sidecar can re-dispatch the work item.
+            return r.toBuilder()
+                .clearResult()
+                .setFailureDetails(TaskFailureDetails.newBuilder()
+                    .setErrorType(ex.getClass().getName())
+                    .setErrorMessage(prefix + ": " + ex.getMessage())
+                    .setStackTrace(StringValue.of(getStackTraceString(ex)))
+                    .setIsNonRetriable(permanent)
+                    .build())
+                .build();
         }
         return r;
     }
@@ -179,109 +198,117 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
 
             return changed ? builder.build() : r;
         } catch (Exception ex) {
-            if (isPermanentStorageFailure(ex)) {
-                // Replace with a single Failed completion
-                return OrchestratorResponse.newBuilder()
-                    .setInstanceId(r.getInstanceId())
-                    .setCompletionToken(r.getCompletionToken())
-                    .setIsPartial(false)
-                    .addActions(OrchestratorAction.newBuilder()
-                        .setCompleteOrchestration(CompleteOrchestrationAction.newBuilder()
-                            .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
-                            .setFailureDetails(TaskFailureDetails.newBuilder()
-                                .setErrorType(ex.getClass().getName())
-                                .setErrorMessage(ex.getMessage())
-                                .setStackTrace(StringValue.of(getStackTraceString(ex)))
-                                .setIsNonRetriable(true)
-                                .build())
+            boolean permanent = isPermanentStorageFailure(ex);
+            String prefix = permanent
+                ? "Permanent payload storage failure"
+                : "Transient payload storage failure";
+            logger.log(Level.WARNING, prefix + " while externalizing orchestrator response.", ex);
+            // Replace with a single Failed completion.
+            // Permanent failures are non-retriable; transient failures are retriable so
+            // the sidecar can re-dispatch the orchestration.
+            return OrchestratorResponse.newBuilder()
+                .setInstanceId(r.getInstanceId())
+                .setCompletionToken(r.getCompletionToken())
+                .setIsPartial(false)
+                .addActions(OrchestratorAction.newBuilder()
+                    .setCompleteOrchestration(CompleteOrchestrationAction.newBuilder()
+                        .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                        .setFailureDetails(TaskFailureDetails.newBuilder()
+                            .setErrorType(ex.getClass().getName())
+                            .setErrorMessage(prefix + ": " + ex.getMessage())
+                            .setStackTrace(StringValue.of(getStackTraceString(ex)))
+                            .setIsNonRetriable(permanent)
                             .build())
                         .build())
-                    .build();
-            }
-            throw ex instanceof RuntimeException ? (RuntimeException) ex : new RuntimeException(ex);
+                    .build())
+                .build();
         }
     }
 
     private OrchestratorAction externalizeOrchestratorAction(OrchestratorAction action) {
         OrchestratorAction.Builder builder = null;
 
-        if (action.hasCompleteOrchestration()) {
-            CompleteOrchestrationAction complete = action.getCompleteOrchestration();
-            CompleteOrchestrationAction.Builder cb = null;
+        switch (action.getOrchestratorActionTypeCase()) {
+            case COMPLETEORCHESTRATION: {
+                CompleteOrchestrationAction complete = action.getCompleteOrchestration();
+                CompleteOrchestrationAction.Builder cb = null;
 
-            StringValue result = maybeExternalize(complete.getResult());
-            if (result != complete.getResult()) {
-                cb = complete.toBuilder().setResult(result);
-            }
-            StringValue details = maybeExternalize(complete.getDetails());
-            if (details != complete.getDetails()) {
-                cb = (cb != null ? cb : complete.toBuilder()).setDetails(details);
-            }
-            if (cb != null) {
-                builder = action.toBuilder().setCompleteOrchestration(cb.build());
-            }
-        }
-
-        if (action.hasTerminateOrchestration()) {
-            TerminateOrchestrationAction term = action.getTerminateOrchestration();
-            StringValue reason = maybeExternalize(term.getReason());
-            if (reason != term.getReason()) {
-                builder = (builder != null ? builder : action.toBuilder())
-                    .setTerminateOrchestration(term.toBuilder().setReason(reason).build());
-            }
-        }
-
-        if (action.hasScheduleTask()) {
-            ScheduleTaskAction schedule = action.getScheduleTask();
-            StringValue input = maybeExternalize(schedule.getInput());
-            if (input != schedule.getInput()) {
-                builder = (builder != null ? builder : action.toBuilder())
-                    .setScheduleTask(schedule.toBuilder().setInput(input).build());
-            }
-        }
-
-        if (action.hasCreateSubOrchestration()) {
-            CreateSubOrchestrationAction sub = action.getCreateSubOrchestration();
-            StringValue input = maybeExternalize(sub.getInput());
-            if (input != sub.getInput()) {
-                builder = (builder != null ? builder : action.toBuilder())
-                    .setCreateSubOrchestration(sub.toBuilder().setInput(input).build());
-            }
-        }
-
-        if (action.hasSendEvent()) {
-            SendEventAction sendEvt = action.getSendEvent();
-            StringValue data = maybeExternalize(sendEvt.getData());
-            if (data != sendEvt.getData()) {
-                builder = (builder != null ? builder : action.toBuilder())
-                    .setSendEvent(sendEvt.toBuilder().setData(data).build());
-            }
-        }
-
-        if (action.hasSendEntityMessage()) {
-            SendEntityMessageAction entityMsg = action.getSendEntityMessage();
-            SendEntityMessageAction.Builder emBuilder = null;
-
-            if (entityMsg.hasEntityOperationSignaled()) {
-                EntityOperationSignaledEvent sig = entityMsg.getEntityOperationSignaled();
-                StringValue input = maybeExternalize(sig.getInput());
-                if (input != sig.getInput()) {
-                    emBuilder = entityMsg.toBuilder()
-                        .setEntityOperationSignaled(sig.toBuilder().setInput(input).build());
+                StringValue result = maybeExternalize(complete.getResult());
+                if (result != complete.getResult()) {
+                    cb = complete.toBuilder().setResult(result);
                 }
-            }
-            if (entityMsg.hasEntityOperationCalled()) {
-                EntityOperationCalledEvent called = entityMsg.getEntityOperationCalled();
-                StringValue input = maybeExternalize(called.getInput());
-                if (input != called.getInput()) {
-                    emBuilder = (emBuilder != null ? emBuilder : entityMsg.toBuilder())
-                        .setEntityOperationCalled(called.toBuilder().setInput(input).build());
+                StringValue details = maybeExternalize(complete.getDetails());
+                if (details != complete.getDetails()) {
+                    cb = (cb != null ? cb : complete.toBuilder()).setDetails(details);
                 }
+                if (cb != null) {
+                    builder = action.toBuilder().setCompleteOrchestration(cb.build());
+                }
+                break;
             }
-            if (emBuilder != null) {
-                builder = (builder != null ? builder : action.toBuilder())
-                    .setSendEntityMessage(emBuilder.build());
+            case TERMINATEORCHESTRATION: {
+                TerminateOrchestrationAction term = action.getTerminateOrchestration();
+                StringValue reason = maybeExternalize(term.getReason());
+                if (reason != term.getReason()) {
+                    builder = action.toBuilder()
+                        .setTerminateOrchestration(term.toBuilder().setReason(reason).build());
+                }
+                break;
             }
+            case SCHEDULETASK: {
+                ScheduleTaskAction schedule = action.getScheduleTask();
+                StringValue input = maybeExternalize(schedule.getInput());
+                if (input != schedule.getInput()) {
+                    builder = action.toBuilder()
+                        .setScheduleTask(schedule.toBuilder().setInput(input).build());
+                }
+                break;
+            }
+            case CREATESUBORCHESTRATION: {
+                CreateSubOrchestrationAction sub = action.getCreateSubOrchestration();
+                StringValue input = maybeExternalize(sub.getInput());
+                if (input != sub.getInput()) {
+                    builder = action.toBuilder()
+                        .setCreateSubOrchestration(sub.toBuilder().setInput(input).build());
+                }
+                break;
+            }
+            case SENDEVENT: {
+                SendEventAction sendEvt = action.getSendEvent();
+                StringValue data = maybeExternalize(sendEvt.getData());
+                if (data != sendEvt.getData()) {
+                    builder = action.toBuilder()
+                        .setSendEvent(sendEvt.toBuilder().setData(data).build());
+                }
+                break;
+            }
+            case SENDENTITYMESSAGE: {
+                SendEntityMessageAction entityMsg = action.getSendEntityMessage();
+                SendEntityMessageAction.Builder emBuilder = null;
+
+                if (entityMsg.hasEntityOperationSignaled()) {
+                    EntityOperationSignaledEvent sig = entityMsg.getEntityOperationSignaled();
+                    StringValue input = maybeExternalize(sig.getInput());
+                    if (input != sig.getInput()) {
+                        emBuilder = entityMsg.toBuilder()
+                            .setEntityOperationSignaled(sig.toBuilder().setInput(input).build());
+                    }
+                } else if (entityMsg.hasEntityOperationCalled()) {
+                    EntityOperationCalledEvent called = entityMsg.getEntityOperationCalled();
+                    StringValue input = maybeExternalize(called.getInput());
+                    if (input != called.getInput()) {
+                        emBuilder = entityMsg.toBuilder()
+                            .setEntityOperationCalled(called.toBuilder().setInput(input).build());
+                    }
+                }
+                if (emBuilder != null) {
+                    builder = action.toBuilder()
+                        .setSendEntityMessage(emBuilder.build());
+                }
+                break;
+            }
+            default:
+                break;
         }
 
         return builder != null ? builder.build() : action;
@@ -768,12 +795,26 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
     }
 
     /**
-     * Computes the UTF-8 encoded byte length of a string.
+     * Computes the UTF-8 encoded byte length of a string without allocating a byte array.
      * <p>
-     * Uses Java's canonical UTF-8 encoding behavior so malformed surrogate
-     * sequences are measured exactly the same way as payload serialization.
+     * Iterates the char sequence and counts bytes per the UTF-8 encoding rules,
+     * correctly handling surrogate pairs as 4-byte sequences.
      */
     private static int utf8ByteLength(String s) {
-        return s.getBytes(StandardCharsets.UTF_8).length;
+        int count = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c <= 0x7F) {
+                count++;
+            } else if (c <= 0x7FF) {
+                count += 2;
+            } else if (Character.isHighSurrogate(c)) {
+                count += 4;
+                i++; // skip the low surrogate
+            } else {
+                count += 3;
+            }
+        }
+        return count;
     }
 }

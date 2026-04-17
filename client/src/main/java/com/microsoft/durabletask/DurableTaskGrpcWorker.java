@@ -660,23 +660,44 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 chunk.setCustomStatus(response.getCustomStatus());
             }
 
+            // Compute envelope overhead once per chunk (empty chunk + overhead fields)
+            int envelopeOverhead = estimateChunkSerializedSize(
+                chunk,
+                chunkIndex,
+                hasTraceContext,
+                response.getOrchestrationTraceContext());
+            int runningSize = envelopeOverhead;
+
             while (actionsCompleted < allActions.size()) {
                 OrchestratorAction nextAction = allActions.get(actionsCompleted);
+                int actionMsgSize = nextAction.getSerializedSize();
+                int actionWireSize = actionMsgSize + protobufTagVarintOverhead(actionMsgSize);
 
+                int newEstimatedSize = runningSize + actionWireSize;
+
+                // Well under the limit — accept without expensive check
+                if (newEstimatedSize <= (int)(maxChunkBytes * 0.99)) {
+                    chunk.addActions(nextAction);
+                    runningSize = newEstimatedSize;
+                    actionsCompleted++;
+                    continue;
+                }
+
+                // Near or over limit — fall back to accurate clone+build check
                 chunk.addActions(nextAction);
-
-                int estimatedSize = estimateChunkSerializedSize(
+                int accurateSize = estimateChunkSerializedSize(
                     chunk,
                     chunkIndex,
                     hasTraceContext,
                     response.getOrchestrationTraceContext());
 
                 // Always accept the first action in an empty chunk to avoid infinite loops
-                if (estimatedSize > maxChunkBytes && chunk.getActionsCount() > 1) {
+                if (accurateSize > maxChunkBytes && chunk.getActionsCount() > 1) {
                     chunk.removeActions(chunk.getActionsCount() - 1);
                     break;
                 }
 
+                runningSize = accurateSize;
                 actionsCompleted++;
             }
 
@@ -731,6 +752,24 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         }
 
         return estimate.build().getSerializedSize();
+    }
+
+    /**
+     * Computes the protobuf overhead for one repeated length-delimited field entry:
+     * 1 byte for the field tag (field numbers 1–15) plus the varint-encoded length.
+     */
+    private static int protobufTagVarintOverhead(int messageSize) {
+        // tag byte + varint length bytes
+        return 1 + varintSize(messageSize);
+    }
+
+    private static int varintSize(int value) {
+        if (value < 0) return 5;
+        if (value < (1 << 7)) return 1;
+        if (value < (1 << 14)) return 2;
+        if (value < (1 << 21)) return 3;
+        if (value < (1 << 28)) return 4;
+        return 5;
     }
 
     static WorkItemFilters toProtoWorkItemFilters(WorkItemFilter filter) {

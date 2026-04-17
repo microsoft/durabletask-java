@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -35,6 +36,7 @@ public final class BlobPayloadStore extends PayloadStore {
 
     private final BlobContainerClient containerClient;
     private final LargePayloadStorageOptions options;
+    private final AtomicBoolean containerVerified = new AtomicBoolean(false);
 
     /**
      * Creates a new {@code BlobPayloadStore} from the given options.
@@ -104,14 +106,18 @@ public final class BlobPayloadStore extends PayloadStore {
 
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
 
-        // Ensure container exists (idempotent)
-        try {
-            this.containerClient.createIfNotExists();
-        } catch (BlobStorageException e) {
-            // 409 Conflict means it already exists — safe to ignore
-            if (e.getStatusCode() != 409) {
-                throw new PayloadStorageException(
-                    "Failed to create blob container '" + this.containerClient.getBlobContainerName() + "'.", e);
+        // Ensure container exists (idempotent) — skip after first successful check
+        if (!this.containerVerified.get()) {
+            try {
+                this.containerClient.createIfNotExists();
+                this.containerVerified.set(true);
+            } catch (BlobStorageException e) {
+                // 409 Conflict means it already exists — safe to ignore
+                if (e.getStatusCode() != 409) {
+                    throw new PayloadStorageException(
+                        "Failed to create blob container '" + this.containerClient.getBlobContainerName() + "'.", e);
+                }
+                this.containerVerified.set(true);
             }
         }
 
