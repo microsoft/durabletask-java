@@ -31,7 +31,7 @@ final class EntityQuerySample {
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         // Build the worker with a simple counter entity
-        DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+        DurableTaskGrpcWorker worker = SampleUtils.newWorkerBuilder()
                 .addEntity("Counter", CounterEntity::new)
                 .addOrchestration(new TaskOrchestrationFactory() {
                     @Override
@@ -54,7 +54,7 @@ final class EntityQuerySample {
         worker.start();
         System.out.println("Worker started. Counter entity registered.");
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = SampleUtils.newClientBuilder().build();
 
         // Step 1: Create several counter entities via an orchestration
         String instanceId = client.scheduleNewOrchestrationInstance("CreateCounters");

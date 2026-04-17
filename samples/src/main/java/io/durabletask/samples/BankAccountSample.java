@@ -3,6 +3,8 @@
 package io.durabletask.samples;
 
 import com.microsoft.durabletask.*;
+import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
+import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -32,7 +34,7 @@ final class BankAccountSample {
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         // Build the worker with bank account entity and transfer orchestration
-        DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+        DurableTaskGrpcWorker worker = SampleUtils.newWorkerBuilder()
                 .addEntity("BankAccount", BankAccountEntity::new)
                 .addOrchestration(new TaskOrchestrationFactory() {
                     @Override
@@ -78,6 +80,9 @@ final class BankAccountSample {
                                         request.amount, request.sourceAccount, sourceBalance,
                                         request.destAccount, destBalance);
                                 ctx.complete(result);
+                            } catch (OrchestratorBlockedException | ContinueAsNewInterruption e) {
+                                // These are framework control-flow signals and must never be swallowed
+                                throw e;
                             } catch (Exception e) {
                                 ctx.complete("Transfer failed: " + e.getMessage());
                             }
@@ -89,7 +94,7 @@ final class BankAccountSample {
         worker.start();
         System.out.println("Worker started. BankAccount entity and TransferFunds orchestration registered.");
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = SampleUtils.newClientBuilder().build();
 
         // Step 1: Initialize accounts
         String setupId = client.scheduleNewOrchestrationInstance("SetupAccounts");

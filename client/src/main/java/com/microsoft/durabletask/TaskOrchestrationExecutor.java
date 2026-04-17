@@ -1066,6 +1066,30 @@ final class TaskOrchestrationExecutor {
                             rawResult != null ? rawResult : "(null)"));
                 }
                 this.handleEntityResponseFromEventRaised(matchingTaskRecord, rawResult);
+            } else if (matchingTaskRecord.getDataType() == AutoCloseable.class) {
+                // In the Azure Functions trigger binding code path, entity lock grants arrive as
+                // EventRaised events (not EntityLockGranted proto events). The lock task's data type
+                // is AutoCloseable, which Jackson cannot instantiate because it's an interface.
+                // The lock handle carries no meaningful state — the actual AutoCloseable is created
+                // via thenApply in lockEntities() — so we complete with null and set critical section
+                // state here, mirroring handleEntityLockGranted().
+                String criticalSectionId = eventName;
+                this.isInCriticalSection = true;
+                this.lockedEntityIds = this.pendingLockSets.remove(criticalSectionId);
+                if (this.lockedEntityIds == null) {
+                    throw new NonDeterministicOrchestratorException(
+                            "Lock granted via EventRaised for criticalSectionId=" + criticalSectionId
+                            + " but no pending lock set was found. This indicates a non-deterministic orchestration.");
+                }
+
+                if (!this.isReplaying) {
+                    this.logger.fine(() -> String.format(
+                            "%s: Entity lock granted via EventRaised for criticalSectionId=%s",
+                            this.instanceId,
+                            criticalSectionId));
+                }
+
+                task.complete(null);
             } else {
                 try {
                     Object result = this.dataConverter.deserialize(

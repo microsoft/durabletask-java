@@ -1331,6 +1331,73 @@ public class TaskOrchestrationEntityEventTest {
         assertTrue(hasComplete, "Expected orchestration to complete");
     }
 
+    /**
+     * Regression test: In the Azure Functions trigger binding code path, entity lock grants
+     * arrive as EventRaised events (not EntityLockGranted proto events). The lock task's data
+     * type is AutoCloseable, which Jackson cannot instantiate because it's an interface.
+     * This test verifies that the orchestration completes successfully when the lock grant
+     * arrives via EventRaised (simulating the Azure Functions path).
+     */
+    @Test
+    void lockEntities_lockGrantedViaEventRaised_succeeds() {
+        final String orchestratorName = "LockGrantedViaEventRaisedTest";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            AutoCloseable lock = ctx.lockEntities(Arrays.asList(entityId)).await();
+            assertTrue(ctx.isInCriticalSection());
+            assertFalse(ctx.getLockedEntities().isEmpty());
+            try {
+                lock.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            ctx.complete("lock-via-event-raised");
+        });
+
+        // First execution: orchestrator calls lockEntities, which produces a lock request action
+        List<HistoryEvent> pastEvents1 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents1 = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result1 = executor.execute(pastEvents1, newEvents1, null);
+
+        // Extract the criticalSectionId from the lock request action
+        String criticalSectionId = null;
+        try {
+            criticalSectionId = extractLockCriticalSectionId(result1.getActions());
+        } catch (Exception e) {
+            fail("Failed to extract criticalSectionId: " + e.getMessage());
+        }
+        assertNotNull(criticalSectionId, "Expected a lock request action with criticalSectionId");
+
+        // Second execution: replay with lock request in past, lock grant arrives as EventRaised
+        // (simulating the Azure Functions trigger binding path where DTFx sends lock grants
+        // as named events rather than proto EntityLockGranted events)
+        List<HistoryEvent> pastEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"),
+                eventSentEvent(0),
+                orchestratorCompleted());
+        List<HistoryEvent> newEvents2 = Arrays.asList(
+                orchestratorStarted(),
+                eventRaisedEvent(criticalSectionId, "null"),
+                orchestratorCompleted());
+
+        TaskOrchestratorResult result2 = executor.execute(pastEvents2, newEvents2, null);
+
+        boolean hasComplete = false;
+        for (OrchestratorAction action : result2.getActions()) {
+            if (action.hasCompleteOrchestration()) {
+                String output = action.getCompleteOrchestration().getResult().getValue();
+                assertEquals("\"lock-via-event-raised\"", output);
+                hasComplete = true;
+            }
+        }
+        assertTrue(hasComplete, "Expected orchestration to complete after lock granted via EventRaised");
+    }
+
     @Test
     void lockEntities_varargs_producesLockAction() {
         final String orchestratorName = "VarargsLockTest";

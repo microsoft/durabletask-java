@@ -2,7 +2,17 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
 import javax.annotation.Nonnull;
+import java.io.IOException;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -11,7 +21,12 @@ import java.util.Objects;
  * <p>
  * The name typically corresponds to the entity class/type name, and the key identifies the specific
  * entity instance (e.g., a user ID or account number).
+ * <p>
+ * Serializes to and deserializes from a compact string format {@code @{name}@{key}},
+ * matching the .NET SDK's {@code EntityInstanceId} JSON representation.
  */
+@JsonSerialize(using = EntityInstanceId.Serializer.class)
+@JsonDeserialize(using = EntityInstanceId.Deserializer.class)
 public final class EntityInstanceId implements Comparable<EntityInstanceId> {
     private final String name;
     private final String key;
@@ -115,5 +130,27 @@ public final class EntityInstanceId implements Comparable<EntityInstanceId> {
             return nameCompare;
         }
         return this.key.compareTo(other.key);
+    }
+
+    /**
+     * Jackson serializer that writes an {@code EntityInstanceId} as a compact {@code "@name@key"} string.
+     */
+    static class Serializer extends JsonSerializer<EntityInstanceId> {
+        @Override
+        public void serialize(EntityInstanceId value, JsonGenerator gen, SerializerProvider serializers)
+                throws IOException {
+            gen.writeString(value.toString());
+        }
+    }
+
+    /**
+     * Jackson deserializer that reads an {@code EntityInstanceId} from a compact {@code "@name@key"} string.
+     */
+    static class Deserializer extends JsonDeserializer<EntityInstanceId> {
+        @Override
+        public EntityInstanceId deserialize(JsonParser p, DeserializationContext ctxt)
+                throws IOException {
+            return EntityInstanceId.fromString(p.getText());
+        }
     }
 }

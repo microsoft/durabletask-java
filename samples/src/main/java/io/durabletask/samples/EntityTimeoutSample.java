@@ -30,7 +30,7 @@ import java.util.concurrent.TimeoutException;
 final class EntityTimeoutSample {
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
-        DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+        DurableTaskGrpcWorker worker = SampleUtils.newWorkerBuilder()
                 .addEntity("SlowCounter", SlowCounterEntity::new)
                 .addOrchestration(new TaskOrchestrationFactory() {
                     @Override
@@ -85,7 +85,7 @@ final class EntityTimeoutSample {
         worker.start();
         System.out.println("Worker started. SlowCounter entity registered.");
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = SampleUtils.newClientBuilder().build();
 
         // --- Demo 1: Successful call with generous timeout ---
         System.out.println("\n--- Demo 1: callEntity with generous timeout ---");
