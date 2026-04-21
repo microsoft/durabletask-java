@@ -166,9 +166,9 @@ public class BankAccountFunctions {
                     authLevel = AuthorizationLevel.ANONYMOUS) HttpRequestMessage<Optional<String>> request,
             @DurableClientInput(name = "durableContext") DurableClientContext durableContext,
             final ExecutionContext context) {
-        String from = request.getQueryParameters().get("from");
-        String to = request.getQueryParameters().get("to");
-        String amountStr = request.getQueryParameters().get("amount");
+        String from = trimOrNull(request.getQueryParameters().get("from"));
+        String to = trimOrNull(request.getQueryParameters().get("to"));
+        String amountStr = trimOrNull(request.getQueryParameters().get("amount"));
 
         if (from == null || to == null || amountStr == null) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
@@ -190,6 +190,14 @@ public class BankAccountFunctions {
         String instanceId = client.scheduleNewOrchestrationInstance("TransferFunds", payload);
         context.getLogger().info("Started TransferFunds orchestration: " + instanceId);
         return durableContext.createCheckStatusResponse(request, instanceId);
+    }
+
+    // ─── Helpers ───
+
+    private static String trimOrNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     // ─── Payload classes ───

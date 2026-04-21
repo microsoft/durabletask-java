@@ -2,10 +2,6 @@
 // Licensed under the MIT License.
 package com.functions.entities;
 
-import com.microsoft.durabletask.AbstractTaskEntity;
-import com.microsoft.durabletask.TaskEntityContext;
-import com.microsoft.durabletask.TaskEntityOperation;
-
 /**
  * State for the {@link SensorEntity} — tracks the last recorded temperature and total readings.
  */

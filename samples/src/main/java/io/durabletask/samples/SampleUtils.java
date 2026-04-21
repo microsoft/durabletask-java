@@ -49,7 +49,8 @@ final class SampleUtils {
         if (taskHub == null || taskHub.isEmpty()) {
             taskHub = "default";
         }
-        String authType = endpoint.startsWith("http://localhost") || endpoint.startsWith("http://127.")
+        String host = endpoint.replaceFirst("^https?://", "");
+        String authType = host.startsWith("localhost") || host.startsWith("127.")
                 ? "None" : "DefaultAzure";
         return String.format("Endpoint=%s;TaskHub=%s;Authentication=%s", endpoint, taskHub, authType);
     }
