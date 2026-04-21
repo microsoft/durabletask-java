@@ -57,6 +57,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
     private final boolean supportsLargePayloads;
     private final int maxChunkSizeBytes;
+    private final int largePayloadThresholdBytes;
 
     DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
@@ -92,6 +93,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
         this.supportsLargePayloads = builder.supportsLargePayloads;
         this.maxChunkSizeBytes = builder.maxChunkSizeBytes;
+        this.largePayloadThresholdBytes = builder.largePayloadThresholdBytes;
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
@@ -587,16 +589,30 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     }
 
     /**
-     * Validates that no single action exceeds the maximum chunk size.
+     * Validates that no single action's effective on-wire size exceeds the maximum chunk size.
+     * <p>
+     * When {@code largePayloadsEnabled} is true, this estimates the post-externalization size
+     * by replacing the byte contribution of any StringValue payload field whose UTF-8 length
+     * meets or exceeds {@code thresholdBytes} with a small blob-token placeholder. This lets
+     * us keep the pre-send safety net in large-payload mode without falsely failing orchestrations
+     * whose oversized content will be externalized by the gRPC interceptor.
+     * <p>
      * If an oversized action is found, the orchestration is failed with a non-retriable error.
      */
     private static TaskFailureDetails validateActionsSize(
-            List<OrchestratorAction> actions, int maxChunkBytes) {
+            List<OrchestratorAction> actions,
+            int maxChunkBytes,
+            boolean largePayloadsEnabled,
+            int thresholdBytes) {
         for (OrchestratorAction action : actions) {
-            int actionSize = action.getSerializedSize();
-            if (actionSize > maxChunkBytes) {
+            int rawSize = action.getSerializedSize();
+            int effectiveSize = rawSize;
+            if (largePayloadsEnabled) {
+                effectiveSize = Math.max(0, rawSize - estimateExternalizationSavings(action, thresholdBytes));
+            }
+            if (effectiveSize > maxChunkBytes) {
                 double maxMB = maxChunkBytes / 1024.0 / 1024.0;
-                double actionMB = actionSize / 1024.0 / 1024.0;
+                double actionMB = effectiveSize / 1024.0 / 1024.0;
                 String errorMessage = String.format(
                     "A single orchestrator action of type %s with id %d exceeds the %.2fMB limit: %.2fMB. " +
                     "Enable large-payload externalization to Azure Blob Storage to support oversized actions.",
@@ -611,30 +627,230 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         return null;
     }
 
+    // Approximate on-wire cost of a blob-reference token (e.g. "blob:v1:<container>:<32hex>")
+    // plus protobuf tag/length overhead. Kept conservative (high) to avoid under-estimating size.
+    private static final int APPROX_TOKEN_WIRE_SIZE = 160;
+
+    /**
+     * Estimates how many bytes would be saved from this action's serialized size if the
+     * large-payload interceptor externalized every StringValue payload field whose UTF-8 byte
+     * length meets or exceeds {@code thresholdBytes}. Mirrors the set of fields that
+     * {@code LargePayloadInterceptor.externalizeOrchestratorAction} walks, so the savings
+     * estimate stays aligned with actual externalization behavior.
+     */
+    private static int estimateExternalizationSavings(OrchestratorAction action, int thresholdBytes) {
+        int savings = 0;
+        switch (action.getOrchestratorActionTypeCase()) {
+            case COMPLETEORCHESTRATION: {
+                CompleteOrchestrationAction c = action.getCompleteOrchestration();
+                savings += stringValueSavings(c.hasResult() ? c.getResult() : null, thresholdBytes);
+                savings += stringValueSavings(c.hasDetails() ? c.getDetails() : null, thresholdBytes);
+                for (int i = 0; i < c.getCarryoverEventsCount(); i++) {
+                    savings += historyEventExternalizationSavings(c.getCarryoverEvents(i), thresholdBytes);
+                }
+                if (c.hasFailureDetails()) {
+                    savings += failureDetailsSavings(c.getFailureDetails(), thresholdBytes);
+                }
+                break;
+            }
+            case TERMINATEORCHESTRATION: {
+                TerminateOrchestrationAction t = action.getTerminateOrchestration();
+                savings += stringValueSavings(t.hasReason() ? t.getReason() : null, thresholdBytes);
+                break;
+            }
+            case SCHEDULETASK: {
+                ScheduleTaskAction s = action.getScheduleTask();
+                savings += stringValueSavings(s.hasInput() ? s.getInput() : null, thresholdBytes);
+                break;
+            }
+            case CREATESUBORCHESTRATION: {
+                CreateSubOrchestrationAction sub = action.getCreateSubOrchestration();
+                savings += stringValueSavings(sub.hasInput() ? sub.getInput() : null, thresholdBytes);
+                break;
+            }
+            case SENDEVENT: {
+                SendEventAction se = action.getSendEvent();
+                savings += stringValueSavings(se.hasData() ? se.getData() : null, thresholdBytes);
+                break;
+            }
+            case SENDENTITYMESSAGE: {
+                SendEntityMessageAction em = action.getSendEntityMessage();
+                if (em.hasEntityOperationSignaled()) {
+                    com.microsoft.durabletask.implementation.protobuf.OrchestratorService
+                        .EntityOperationSignaledEvent sig = em.getEntityOperationSignaled();
+                    savings += stringValueSavings(sig.hasInput() ? sig.getInput() : null, thresholdBytes);
+                } else if (em.hasEntityOperationCalled()) {
+                    com.microsoft.durabletask.implementation.protobuf.OrchestratorService
+                        .EntityOperationCalledEvent called = em.getEntityOperationCalled();
+                    savings += stringValueSavings(called.hasInput() ? called.getInput() : null, thresholdBytes);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+        return savings;
+    }
+
+    private static int historyEventExternalizationSavings(
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.HistoryEvent e,
+            int thresholdBytes) {
+        int savings = 0;
+        if (e.hasExecutionStarted()) {
+            savings += stringValueSavings(
+                e.getExecutionStarted().hasInput() ? e.getExecutionStarted().getInput() : null, thresholdBytes);
+        }
+        if (e.hasExecutionCompleted()) {
+            com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ExecutionCompletedEvent ec =
+                e.getExecutionCompleted();
+            savings += stringValueSavings(ec.hasResult() ? ec.getResult() : null, thresholdBytes);
+            if (ec.hasFailureDetails()) {
+                savings += failureDetailsSavings(ec.getFailureDetails(), thresholdBytes);
+            }
+        }
+        if (e.hasEventRaised()) {
+            savings += stringValueSavings(
+                e.getEventRaised().hasInput() ? e.getEventRaised().getInput() : null, thresholdBytes);
+        }
+        if (e.hasTaskScheduled()) {
+            savings += stringValueSavings(
+                e.getTaskScheduled().hasInput() ? e.getTaskScheduled().getInput() : null, thresholdBytes);
+        }
+        if (e.hasTaskCompleted()) {
+            savings += stringValueSavings(
+                e.getTaskCompleted().hasResult() ? e.getTaskCompleted().getResult() : null, thresholdBytes);
+        }
+        if (e.hasTaskFailed() && e.getTaskFailed().hasFailureDetails()) {
+            savings += failureDetailsSavings(e.getTaskFailed().getFailureDetails(), thresholdBytes);
+        }
+        if (e.hasSubOrchestrationInstanceCreated()) {
+            savings += stringValueSavings(
+                e.getSubOrchestrationInstanceCreated().hasInput()
+                    ? e.getSubOrchestrationInstanceCreated().getInput() : null,
+                thresholdBytes);
+        }
+        if (e.hasSubOrchestrationInstanceCompleted()) {
+            savings += stringValueSavings(
+                e.getSubOrchestrationInstanceCompleted().hasResult()
+                    ? e.getSubOrchestrationInstanceCompleted().getResult() : null,
+                thresholdBytes);
+        }
+        if (e.hasSubOrchestrationInstanceFailed() && e.getSubOrchestrationInstanceFailed().hasFailureDetails()) {
+            savings += failureDetailsSavings(e.getSubOrchestrationInstanceFailed().getFailureDetails(), thresholdBytes);
+        }
+        if (e.hasEventSent()) {
+            savings += stringValueSavings(
+                e.getEventSent().hasInput() ? e.getEventSent().getInput() : null, thresholdBytes);
+        }
+        if (e.hasGenericEvent()) {
+            savings += stringValueSavings(
+                e.getGenericEvent().hasData() ? e.getGenericEvent().getData() : null, thresholdBytes);
+        }
+        if (e.hasContinueAsNew()) {
+            savings += stringValueSavings(
+                e.getContinueAsNew().hasInput() ? e.getContinueAsNew().getInput() : null, thresholdBytes);
+        }
+        if (e.hasExecutionTerminated()) {
+            savings += stringValueSavings(
+                e.getExecutionTerminated().hasInput() ? e.getExecutionTerminated().getInput() : null, thresholdBytes);
+        }
+        if (e.hasExecutionSuspended()) {
+            savings += stringValueSavings(
+                e.getExecutionSuspended().hasInput() ? e.getExecutionSuspended().getInput() : null, thresholdBytes);
+        }
+        if (e.hasExecutionResumed()) {
+            savings += stringValueSavings(
+                e.getExecutionResumed().hasInput() ? e.getExecutionResumed().getInput() : null, thresholdBytes);
+        }
+        if (e.hasEntityOperationSignaled()) {
+            savings += stringValueSavings(
+                e.getEntityOperationSignaled().hasInput() ? e.getEntityOperationSignaled().getInput() : null,
+                thresholdBytes);
+        }
+        if (e.hasEntityOperationCalled()) {
+            savings += stringValueSavings(
+                e.getEntityOperationCalled().hasInput() ? e.getEntityOperationCalled().getInput() : null,
+                thresholdBytes);
+        }
+        if (e.hasEntityOperationCompleted()) {
+            savings += stringValueSavings(
+                e.getEntityOperationCompleted().hasOutput() ? e.getEntityOperationCompleted().getOutput() : null,
+                thresholdBytes);
+        }
+        return savings;
+    }
+
+    private static int failureDetailsSavings(
+            TaskFailureDetails fd, int thresholdBytes) {
+        if (fd == null) return 0;
+        int savings = 0;
+        if (fd.hasStackTrace()) {
+            savings += stringValueSavings(fd.getStackTrace(), thresholdBytes);
+        }
+        if (fd.hasInnerFailure()) {
+            savings += failureDetailsSavings(fd.getInnerFailure(), thresholdBytes);
+        }
+        return savings;
+    }
+
+    /**
+     * Returns the bytes saved if a StringValue with {@code value.length() >= thresholdBytes}
+     * is replaced by a fixed-size blob-reference token. Zero if the value is null, empty,
+     * or below the threshold.
+     */
+    private static int stringValueSavings(StringValue sv, int thresholdBytes) {
+        if (sv == null) return 0;
+        String v = sv.getValue();
+        if (v == null || v.isEmpty()) return 0;
+        // Use String.length() rather than UTF-8 byte length — this is a lower-bound
+        // approximation that is slightly conservative (under-estimates savings), which
+        // means we err toward false positives not false negatives.
+        int n = v.length();
+        if (n < thresholdBytes) return 0;
+        return Math.max(0, n - APPROX_TOKEN_WIRE_SIZE);
+    }
+
     /**
      * Completes an orchestrator task with automatic chunking if the response exceeds the maximum chunk size.
      * Matches the .NET SDK's CompleteOrchestratorTaskWithChunkingAsync behavior.
+     * <p>
+     * <b>Deprecation notice:</b> this method relies on the proto fields
+     * {@code OrchestratorResponse.isPartial} and {@code OrchestratorResponse.chunkIndex}, which are
+     * marked {@code [deprecated=true]} in {@code orchestrator_service.proto}. The long-term
+     * replacement is large-payload externalization via the gRPC interceptor and
+     * {@code WORKER_CAPABILITY_LARGE_PAYLOADS} (see
+     * {@link DurableTaskGrpcWorkerBuilder#setSupportsLargePayloads(boolean)}); chunking remains
+     * only as a transitional fallback for workers that cannot configure an external payload
+     * store. The deprecated fields are still honored by current backends, but a future backend
+     * that stops reading them would silently treat chunked responses as completion-on-chunk-0
+     * and drop subsequent chunks. Prefer enabling large-payload externalization.
      */
     private void completeOrchestratorTaskWithChunking(OrchestratorResponse response) {
         int maxChunkBytes = this.maxChunkSizeBytes;
 
-        // Pre-send validation: skip if large payload externalization is enabled
-        if (!this.supportsLargePayloads) {
-            TaskFailureDetails validationFailure = validateActionsSize(response.getActionsList(), maxChunkBytes);
-            if (validationFailure != null) {
-                OrchestratorResponse failureResponse = OrchestratorResponse.newBuilder()
-                    .setInstanceId(response.getInstanceId())
-                    .setCompletionToken(response.getCompletionToken())
-                    .addActions(OrchestratorAction.newBuilder()
-                        .setCompleteOrchestration(CompleteOrchestrationAction.newBuilder()
-                            .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
-                            .setFailureDetails(validationFailure)
-                            .build())
+        // Always run pre-send validation. In large-payload mode we use an effective
+        // size that accounts for StringValue fields the interceptor will externalize,
+        // so the check still catches oversized non-externalizable content (e.g. tags
+        // maps, large repeated sub-messages) without false-positive failing actions
+        // whose big payload fields are about to be replaced by blob-reference tokens.
+        TaskFailureDetails validationFailure = validateActionsSize(
+            response.getActionsList(),
+            maxChunkBytes,
+            this.supportsLargePayloads,
+            this.largePayloadThresholdBytes);
+        if (validationFailure != null) {
+            OrchestratorResponse failureResponse = OrchestratorResponse.newBuilder()
+                .setInstanceId(response.getInstanceId())
+                .setCompletionToken(response.getCompletionToken())
+                .addActions(OrchestratorAction.newBuilder()
+                    .setCompleteOrchestration(CompleteOrchestrationAction.newBuilder()
+                        .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                        .setFailureDetails(validationFailure)
                         .build())
-                    .build();
-                this.sidecarClient.completeOrchestratorTask(failureResponse);
-                return;
-            }
+                    .build())
+                .build();
+            this.sidecarClient.completeOrchestratorTask(failureResponse);
+            return;
         }
 
         // Fast path: response fits in one message

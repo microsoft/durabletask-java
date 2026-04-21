@@ -52,7 +52,14 @@ class PayloadTokenTest {
     @Test
     void isKnownPayloadToken_validToken_returnsTrue() {
         BlobPayloadStore store = createStoreWithDefaults();
-        assertTrue(store.isKnownPayloadToken("blob:v1:container:name"));
+        assertTrue(store.isKnownPayloadToken(
+            "blob:v1:container:0123456789abcdef0123456789abcdef"));
+    }
+
+    @Test
+    void isKnownPayloadToken_prefixOnly_returnsFalse() {
+        BlobPayloadStore store = createStoreWithDefaults();
+        assertFalse(store.isKnownPayloadToken("blob:v1:arbitrary-user-content"));
     }
 
     @Test

@@ -5,6 +5,8 @@ package com.microsoft.durabletask.azureblobpayloads;
 import com.azure.storage.blob.models.BlobStorageException;
 import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.TaskHubSidecarServiceBlockingStub;
 
 import io.grpc.*;
 
@@ -54,6 +56,11 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
             CallOptions callOptions,
             Channel next) {
 
+        // Capture the underlying channel so the listener can send poison-pill completions
+        // for permanently un-resolvable work items (e.g. blob 404). Using `next` bypasses
+        // this interceptor and avoids re-entrancy on the resolve path.
+        final Channel underlying = next;
+
         return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
                 next.newCall(method, callOptions)) {
 
@@ -64,19 +71,33 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                     @Override
                     @SuppressWarnings("unchecked")
                     public void onMessage(RespT message) {
+                        RespT resolved;
                         try {
-                            RespT resolved = (RespT) resolveResponsePayloads(message);
-                            super.onMessage(resolved);
+                            resolved = (RespT) resolveResponsePayloads(message);
                         } catch (Exception ex) {
+                            // If this is a streamed WorkItem and the failure is permanent,
+                            // complete the work item as non-retriable failed and drop it from
+                            // the stream so the worker is not stuck re-receiving a poison message.
+                            if (message instanceof WorkItem
+                                    && isPermanentStorageFailure(ex)
+                                    && tryFailWorkItem((WorkItem) message, ex, underlying)) {
+                                return;
+                            }
+                            boolean permanent = isPermanentStorageFailure(ex);
                             logger.log(Level.SEVERE,
-                                "Failed to resolve externalized payload from blob storage.", ex);
-                            // Surface as a gRPC INTERNAL error so the worker loop can handle
-                            // reconnection via its StatusRuntimeException catch block.
-                            throw Status.INTERNAL
+                                (permanent ? "Permanent" : "Transient")
+                                    + " failure resolving externalized payload from blob storage.",
+                                ex);
+                            // Transient failures use UNAVAILABLE so the caller/sidecar applies
+                            // standard backoff semantics. Permanent failures use INTERNAL to
+                            // signal that retrying on the current input is unlikely to help.
+                            Status status = permanent ? Status.INTERNAL : Status.UNAVAILABLE;
+                            throw status
                                 .withDescription("Failed to resolve externalized payload: " + ex.getMessage())
                                 .withCause(ex)
                                 .asRuntimeException();
                         }
+                        super.onMessage(resolved);
                     }
                 };
                 super.start(wrappedListener, headers);
@@ -150,9 +171,20 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
 
     private Object externalizeActivityResponse(ActivityResponse r) {
         try {
+            ActivityResponse.Builder builder = null;
             StringValue externalized = maybeExternalize(r.getResult());
             if (externalized != r.getResult()) {
-                return r.toBuilder().setResult(externalized).build();
+                builder = r.toBuilder().setResult(externalized);
+            }
+            // Externalize any user-supplied stack trace on a failed activity response.
+            if (r.hasFailureDetails()) {
+                TaskFailureDetails fd = externalizeFailureDetails(r.getFailureDetails());
+                if (fd != r.getFailureDetails()) {
+                    builder = (builder != null ? builder : r.toBuilder()).setFailureDetails(fd);
+                }
+            }
+            if (builder != null) {
+                return builder.build();
             }
         } catch (Exception ex) {
             boolean permanent = isPermanentStorageFailure(ex);
@@ -240,6 +272,22 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                 StringValue details = maybeExternalize(complete.getDetails());
                 if (details != complete.getDetails()) {
                     cb = (cb != null ? cb : complete.toBuilder()).setDetails(details);
+                }
+                // Externalize any carryover events (populated on continue-as-new with
+                // buffered EventRaised / ExecutionStarted payloads for the next instance).
+                for (int i = 0; i < complete.getCarryoverEventsCount(); i++) {
+                    HistoryEvent carryover = complete.getCarryoverEvents(i);
+                    HistoryEvent externalized = externalizeEventPayloads(carryover);
+                    if (externalized != carryover) {
+                        cb = (cb != null ? cb : complete.toBuilder()).setCarryoverEvents(i, externalized);
+                    }
+                }
+                // Externalize the terminal failure's stack trace (user content, unbounded).
+                if (complete.hasFailureDetails()) {
+                    TaskFailureDetails fd = externalizeFailureDetails(complete.getFailureDetails());
+                    if (fd != complete.getFailureDetails()) {
+                        cb = (cb != null ? cb : complete.toBuilder()).setFailureDetails(fd);
+                    }
                 }
                 if (cb != null) {
                     builder = action.toBuilder().setCompleteOrchestration(cb.build());
@@ -552,8 +600,39 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
         if (customStatus != s.getCustomStatus()) {
             builder = (builder != null ? builder : s.toBuilder()).setCustomStatus(customStatus);
         }
+        if (s.hasFailureDetails()) {
+            TaskFailureDetails fd = resolveFailureDetails(s.getFailureDetails());
+            if (fd != s.getFailureDetails()) {
+                builder = (builder != null ? builder : s.toBuilder()).setFailureDetails(fd);
+            }
+        }
 
         return builder != null ? builder.build() : s;
+    }
+
+    /**
+     * Inbound counterpart of {@link #externalizeFailureDetails(TaskFailureDetails)}:
+     * resolves any externalized {@code stackTrace} tokens and recurses into
+     * {@code innerFailure}.
+     */
+    private TaskFailureDetails resolveFailureDetails(TaskFailureDetails fd) {
+        if (fd == null) {
+            return fd;
+        }
+        TaskFailureDetails.Builder builder = null;
+        if (fd.hasStackTrace()) {
+            StringValue stack = maybeResolve(fd.getStackTrace());
+            if (stack != fd.getStackTrace()) {
+                builder = fd.toBuilder().setStackTrace(stack);
+            }
+        }
+        if (fd.hasInnerFailure()) {
+            TaskFailureDetails inner = resolveFailureDetails(fd.getInnerFailure());
+            if (inner != fd.getInnerFailure()) {
+                builder = (builder != null ? builder : fd.toBuilder()).setInnerFailure(inner);
+            }
+        }
+        return builder != null ? builder.build() : fd;
     }
 
     private HistoryEvent resolveEventPayloads(HistoryEvent e) {
@@ -570,9 +649,19 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
             case EXECUTIONCOMPLETED:
                 if (e.hasExecutionCompleted()) {
                     ExecutionCompletedEvent ec = e.getExecutionCompleted();
+                    ExecutionCompletedEvent.Builder ecb = null;
                     StringValue result = maybeResolve(ec.getResult());
                     if (result != ec.getResult()) {
-                        return e.toBuilder().setExecutionCompleted(ec.toBuilder().setResult(result)).build();
+                        ecb = ec.toBuilder().setResult(result);
+                    }
+                    if (ec.hasFailureDetails()) {
+                        TaskFailureDetails fd = resolveFailureDetails(ec.getFailureDetails());
+                        if (fd != ec.getFailureDetails()) {
+                            ecb = (ecb != null ? ecb : ec.toBuilder()).setFailureDetails(fd);
+                        }
+                    }
+                    if (ecb != null) {
+                        return e.toBuilder().setExecutionCompleted(ecb).build();
                     }
                 }
                 break;
@@ -603,6 +692,15 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                     }
                 }
                 break;
+            case TASKFAILED:
+                if (e.hasTaskFailed() && e.getTaskFailed().hasFailureDetails()) {
+                    TaskFailedEvent tf = e.getTaskFailed();
+                    TaskFailureDetails fd = resolveFailureDetails(tf.getFailureDetails());
+                    if (fd != tf.getFailureDetails()) {
+                        return e.toBuilder().setTaskFailed(tf.toBuilder().setFailureDetails(fd)).build();
+                    }
+                }
+                break;
             case SUBORCHESTRATIONINSTANCECREATED:
                 if (e.hasSubOrchestrationInstanceCreated()) {
                     SubOrchestrationInstanceCreatedEvent soc = e.getSubOrchestrationInstanceCreated();
@@ -620,6 +718,16 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                     if (result != sox.getResult()) {
                         return e.toBuilder().setSubOrchestrationInstanceCompleted(
                             sox.toBuilder().setResult(result)).build();
+                    }
+                }
+                break;
+            case SUBORCHESTRATIONINSTANCEFAILED:
+                if (e.hasSubOrchestrationInstanceFailed() && e.getSubOrchestrationInstanceFailed().hasFailureDetails()) {
+                    SubOrchestrationInstanceFailedEvent sof = e.getSubOrchestrationInstanceFailed();
+                    TaskFailureDetails fd = resolveFailureDetails(sof.getFailureDetails());
+                    if (fd != sof.getFailureDetails()) {
+                        return e.toBuilder().setSubOrchestrationInstanceFailed(
+                            sof.toBuilder().setFailureDetails(fd)).build();
                     }
                 }
                 break;
@@ -726,6 +834,224 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
         return e;
     }
 
+    /**
+     * Outbound counterpart of {@link #resolveEventPayloads(HistoryEvent)}: walks the
+     * same payload fields but uploads oversized values via {@link #maybeExternalize}.
+     * Used for {@code CompleteOrchestrationAction.carryoverEvents} so continue-as-new
+     * does not send oversized payloads to the sidecar.
+     */
+    private HistoryEvent externalizeEventPayloads(HistoryEvent e) {
+        switch (e.getEventTypeCase()) {
+            case EXECUTIONSTARTED:
+                if (e.hasExecutionStarted()) {
+                    ExecutionStartedEvent es = e.getExecutionStarted();
+                    StringValue input = maybeExternalize(es.getInput());
+                    if (input != es.getInput()) {
+                        return e.toBuilder().setExecutionStarted(es.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case EXECUTIONCOMPLETED:
+                if (e.hasExecutionCompleted()) {
+                    ExecutionCompletedEvent ec = e.getExecutionCompleted();
+                    ExecutionCompletedEvent.Builder ecb = null;
+                    StringValue result = maybeExternalize(ec.getResult());
+                    if (result != ec.getResult()) {
+                        ecb = ec.toBuilder().setResult(result);
+                    }
+                    if (ec.hasFailureDetails()) {
+                        TaskFailureDetails fd = externalizeFailureDetails(ec.getFailureDetails());
+                        if (fd != ec.getFailureDetails()) {
+                            ecb = (ecb != null ? ecb : ec.toBuilder()).setFailureDetails(fd);
+                        }
+                    }
+                    if (ecb != null) {
+                        return e.toBuilder().setExecutionCompleted(ecb).build();
+                    }
+                }
+                break;
+            case EVENTRAISED:
+                if (e.hasEventRaised()) {
+                    EventRaisedEvent er = e.getEventRaised();
+                    StringValue input = maybeExternalize(er.getInput());
+                    if (input != er.getInput()) {
+                        return e.toBuilder().setEventRaised(er.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case TASKSCHEDULED:
+                if (e.hasTaskScheduled()) {
+                    TaskScheduledEvent ts = e.getTaskScheduled();
+                    StringValue input = maybeExternalize(ts.getInput());
+                    if (input != ts.getInput()) {
+                        return e.toBuilder().setTaskScheduled(ts.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case TASKCOMPLETED:
+                if (e.hasTaskCompleted()) {
+                    TaskCompletedEvent tc = e.getTaskCompleted();
+                    StringValue result = maybeExternalize(tc.getResult());
+                    if (result != tc.getResult()) {
+                        return e.toBuilder().setTaskCompleted(tc.toBuilder().setResult(result)).build();
+                    }
+                }
+                break;
+            case TASKFAILED:
+                if (e.hasTaskFailed() && e.getTaskFailed().hasFailureDetails()) {
+                    TaskFailedEvent tf = e.getTaskFailed();
+                    TaskFailureDetails fd = externalizeFailureDetails(tf.getFailureDetails());
+                    if (fd != tf.getFailureDetails()) {
+                        return e.toBuilder().setTaskFailed(tf.toBuilder().setFailureDetails(fd)).build();
+                    }
+                }
+                break;
+            case SUBORCHESTRATIONINSTANCECREATED:
+                if (e.hasSubOrchestrationInstanceCreated()) {
+                    SubOrchestrationInstanceCreatedEvent soc = e.getSubOrchestrationInstanceCreated();
+                    StringValue input = maybeExternalize(soc.getInput());
+                    if (input != soc.getInput()) {
+                        return e.toBuilder().setSubOrchestrationInstanceCreated(
+                            soc.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case SUBORCHESTRATIONINSTANCECOMPLETED:
+                if (e.hasSubOrchestrationInstanceCompleted()) {
+                    SubOrchestrationInstanceCompletedEvent sox = e.getSubOrchestrationInstanceCompleted();
+                    StringValue result = maybeExternalize(sox.getResult());
+                    if (result != sox.getResult()) {
+                        return e.toBuilder().setSubOrchestrationInstanceCompleted(
+                            sox.toBuilder().setResult(result)).build();
+                    }
+                }
+                break;
+            case SUBORCHESTRATIONINSTANCEFAILED:
+                if (e.hasSubOrchestrationInstanceFailed() && e.getSubOrchestrationInstanceFailed().hasFailureDetails()) {
+                    SubOrchestrationInstanceFailedEvent sof = e.getSubOrchestrationInstanceFailed();
+                    TaskFailureDetails fd = externalizeFailureDetails(sof.getFailureDetails());
+                    if (fd != sof.getFailureDetails()) {
+                        return e.toBuilder().setSubOrchestrationInstanceFailed(
+                            sof.toBuilder().setFailureDetails(fd)).build();
+                    }
+                }
+                break;
+            case EVENTSENT:
+                if (e.hasEventSent()) {
+                    EventSentEvent esent = e.getEventSent();
+                    StringValue input = maybeExternalize(esent.getInput());
+                    if (input != esent.getInput()) {
+                        return e.toBuilder().setEventSent(esent.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case GENERICEVENT:
+                if (e.hasGenericEvent()) {
+                    GenericEvent ge = e.getGenericEvent();
+                    StringValue data = maybeExternalize(ge.getData());
+                    if (data != ge.getData()) {
+                        return e.toBuilder().setGenericEvent(ge.toBuilder().setData(data)).build();
+                    }
+                }
+                break;
+            case CONTINUEASNEW:
+                if (e.hasContinueAsNew()) {
+                    ContinueAsNewEvent can = e.getContinueAsNew();
+                    StringValue input = maybeExternalize(can.getInput());
+                    if (input != can.getInput()) {
+                        return e.toBuilder().setContinueAsNew(can.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case EXECUTIONTERMINATED:
+                if (e.hasExecutionTerminated()) {
+                    ExecutionTerminatedEvent et = e.getExecutionTerminated();
+                    StringValue input = maybeExternalize(et.getInput());
+                    if (input != et.getInput()) {
+                        return e.toBuilder().setExecutionTerminated(et.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case EXECUTIONSUSPENDED:
+                if (e.hasExecutionSuspended()) {
+                    ExecutionSuspendedEvent esus = e.getExecutionSuspended();
+                    StringValue input = maybeExternalize(esus.getInput());
+                    if (input != esus.getInput()) {
+                        return e.toBuilder().setExecutionSuspended(esus.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case EXECUTIONRESUMED:
+                if (e.hasExecutionResumed()) {
+                    ExecutionResumedEvent eres = e.getExecutionResumed();
+                    StringValue input = maybeExternalize(eres.getInput());
+                    if (input != eres.getInput()) {
+                        return e.toBuilder().setExecutionResumed(eres.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case ENTITYOPERATIONSIGNALED:
+                if (e.hasEntityOperationSignaled()) {
+                    EntityOperationSignaledEvent eos = e.getEntityOperationSignaled();
+                    StringValue input = maybeExternalize(eos.getInput());
+                    if (input != eos.getInput()) {
+                        return e.toBuilder().setEntityOperationSignaled(
+                            eos.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case ENTITYOPERATIONCALLED:
+                if (e.hasEntityOperationCalled()) {
+                    EntityOperationCalledEvent eoc = e.getEntityOperationCalled();
+                    StringValue input = maybeExternalize(eoc.getInput());
+                    if (input != eoc.getInput()) {
+                        return e.toBuilder().setEntityOperationCalled(
+                            eoc.toBuilder().setInput(input)).build();
+                    }
+                }
+                break;
+            case ENTITYOPERATIONCOMPLETED:
+                if (e.hasEntityOperationCompleted()) {
+                    EntityOperationCompletedEvent ecomp = e.getEntityOperationCompleted();
+                    StringValue output = maybeExternalize(ecomp.getOutput());
+                    if (output != ecomp.getOutput()) {
+                        return e.toBuilder().setEntityOperationCompleted(
+                            ecomp.toBuilder().setOutput(output)).build();
+                    }
+                }
+                break;
+            default:
+                // No payload fields to externalize for this event type
+                break;
+        }
+        return e;
+    }
+
+    /**
+     * Externalizes large {@code stackTrace} content on a {@link TaskFailureDetails},
+     * recursing into {@code innerFailure}. Returns the input reference unchanged when
+     * no field exceeds the threshold.
+     */
+    private TaskFailureDetails externalizeFailureDetails(TaskFailureDetails fd) {
+        if (fd == null) {
+            return fd;
+        }
+        TaskFailureDetails.Builder builder = null;
+        if (fd.hasStackTrace()) {
+            StringValue stack = maybeExternalize(fd.getStackTrace());
+            if (stack != fd.getStackTrace()) {
+                builder = fd.toBuilder().setStackTrace(stack);
+            }
+        }
+        if (fd.hasInnerFailure()) {
+            TaskFailureDetails inner = externalizeFailureDetails(fd.getInnerFailure());
+            if (inner != fd.getInnerFailure()) {
+                builder = (builder != null ? builder : fd.toBuilder()).setInnerFailure(inner);
+            }
+        }
+        return builder != null ? builder.build() : fd;
+    }
+
     // ==================== Helpers ====================
 
     /**
@@ -786,6 +1112,93 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
             return status >= 400 && status < 500 && status != 408 && status != 429;
         }
         return false;
+    }
+
+    /**
+     * Attempts to fail a {@link WorkItem} whose inbound payloads cannot be resolved
+     * (e.g. blob 404 from retention/cleanup, malformed token, container mismatch) by
+     * sending a non-retriable completion back to the sidecar. This avoids an infinite
+     * replay loop where the sidecar keeps re-dispatching the poisoned work item every
+     * time the worker reconnects after an onMessage failure.
+     * <p>
+     * Completions are sent over the underlying channel (bypassing this interceptor)
+     * to avoid re-entering the resolve path with synthesized failure payloads.
+     *
+     * @return {@code true} if the work item was completed as failed and can be dropped
+     *         from the stream; {@code false} if no completion path exists for this
+     *         work item variant (caller should surface the error instead).
+     */
+    private boolean tryFailWorkItem(WorkItem wi, Exception cause, Channel underlying) {
+        String completionToken = wi.getCompletionToken();
+        TaskFailureDetails failureDetails = TaskFailureDetails.newBuilder()
+            .setErrorType(cause.getClass().getName())
+            .setErrorMessage(
+                "Permanent payload storage failure while resolving externalized payload: "
+                    + cause.getMessage())
+            .setStackTrace(StringValue.of(getStackTraceString(cause)))
+            .setIsNonRetriable(true)
+            .build();
+
+        try {
+            TaskHubSidecarServiceBlockingStub stub = TaskHubSidecarServiceGrpc.newBlockingStub(underlying);
+            if (wi.hasActivityRequest()) {
+                ActivityRequest ar = wi.getActivityRequest();
+                ActivityResponse response = ActivityResponse.newBuilder()
+                    .setInstanceId(ar.getOrchestrationInstance().getInstanceId())
+                    .setTaskId(ar.getTaskId())
+                    .setFailureDetails(failureDetails)
+                    .setCompletionToken(completionToken)
+                    .build();
+                logger.log(Level.SEVERE,
+                    "Permanent payload resolve failure on activity work item (instanceId="
+                        + response.getInstanceId() + ", taskId=" + ar.getTaskId()
+                        + "); completing as non-retriable failed to avoid replay loop.",
+                    cause);
+                stub.completeActivityTask(response);
+                return true;
+            }
+            if (wi.hasOrchestratorRequest()) {
+                OrchestratorRequest or = wi.getOrchestratorRequest();
+                OrchestratorResponse response = OrchestratorResponse.newBuilder()
+                    .setInstanceId(or.getInstanceId())
+                    .setCompletionToken(completionToken)
+                    .addActions(OrchestratorAction.newBuilder()
+                        .setCompleteOrchestration(CompleteOrchestrationAction.newBuilder()
+                            .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                            .setFailureDetails(failureDetails)
+                            .build())
+                        .build())
+                    .build();
+                logger.log(Level.SEVERE,
+                    "Permanent payload resolve failure on orchestrator work item (instanceId="
+                        + or.getInstanceId() + "); completing as non-retriable failed to avoid replay loop.",
+                    cause);
+                stub.completeOrchestratorTask(response);
+                return true;
+            }
+            if (wi.hasEntityRequest() || wi.hasEntityRequestV2()) {
+                EntityBatchResult response = EntityBatchResult.newBuilder()
+                    .setFailureDetails(failureDetails)
+                    .setCompletionToken(completionToken)
+                    .build();
+                logger.log(Level.SEVERE,
+                    "Permanent payload resolve failure on entity work item; completing as "
+                        + "non-retriable failed to avoid replay loop.",
+                    cause);
+                stub.completeEntityTask(response);
+                return true;
+            }
+            // HealthPing or unknown variant — no completion path; surface error to caller.
+            return false;
+        } catch (Exception completionEx) {
+            // If we can't even send the failure completion, fall through and let the
+            // caller surface the resolve error to the stream so the worker reconnects.
+            logger.log(Level.SEVERE,
+                "Failed to send non-retriable failure completion for poisoned work item; "
+                    + "stream will be terminated and sidecar may re-dispatch.",
+                completionEx);
+            return false;
+        }
     }
 
     private static String getStackTraceString(Throwable t) {

@@ -9,6 +9,7 @@ import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobDownloadResponse;
 import com.azure.storage.blob.models.BlobHttpHeaders;
+import com.azure.storage.blob.models.BlobRequestConditions;
 import com.azure.storage.blob.models.BlobStorageException;
 import com.azure.storage.common.policy.RequestRetryOptions;
 import com.azure.storage.common.policy.RetryPolicyType;
@@ -20,6 +21,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -33,6 +35,13 @@ public final class BlobPayloadStore extends PayloadStore {
 
     static final String TOKEN_PREFIX = "blob:v1:";
     private static final String CONTENT_ENCODING_GZIP = "gzip";
+
+    // Blob name is UUID.randomUUID().toString().replace("-", ""): exactly 32 lowercase hex chars.
+    // Container name follows Azure rules: 3-63 chars, lowercase alphanumerics and single hyphens,
+    // must start and end with alphanumeric (see isValidContainerName).
+    // Full token grammar: blob:v1:<container>:<32-lowercase-hex>
+    private static final Pattern TOKEN_PATTERN = Pattern.compile(
+        "^blob:v1:[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){1,61}[a-z0-9]:[0-9a-f]{32}$");
 
     private final BlobContainerClient containerClient;
     private final LargePayloadStorageOptions options;
@@ -106,22 +115,33 @@ public final class BlobPayloadStore extends PayloadStore {
 
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
 
-        // Ensure container exists (idempotent) — skip after first successful check
-        if (!this.containerVerified.get()) {
+        // Ensure container exists (idempotent) — skip after first successful check.
+        // compareAndSet lets only one concurrent caller perform the RPC; others skip.
+        // On failure we reset the flag so a later call can retry.
+        if (this.containerVerified.compareAndSet(false, true)) {
             try {
                 this.containerClient.createIfNotExists();
-                this.containerVerified.set(true);
             } catch (BlobStorageException e) {
-                // 409 Conflict means it already exists — safe to ignore
+                // 409 Conflict means it already exists — safe to ignore, leave flag set.
                 if (e.getStatusCode() != 409) {
+                    this.containerVerified.set(false); // allow a future upload to retry
                     throw new PayloadStorageException(
                         "Failed to create blob container '" + this.containerClient.getBlobContainerName() + "'.", e);
                 }
-                this.containerVerified.set(true);
+            } catch (RuntimeException e) {
+                // Any other transport/SDK failure: also allow retry on next upload.
+                this.containerVerified.set(false);
+                throw e;
             }
         }
 
         try {
+            // Defense-in-depth: require the blob to not already exist (If-None-Match: *).
+            // Blob names are random UUIDs so collisions are astronomically unlikely, but this
+            // guards against future regressions (e.g. a caller-supplied PayloadStore that
+            // generates deterministic names or a refactor that reuses names) by failing loudly
+            // instead of silently overwriting someone else's payload.
+            BlobRequestConditions conditions = new BlobRequestConditions().setIfNoneMatch("*");
             if (this.options.isCompressionEnabled()) {
                 ByteArrayOutputStream compressedBuffer = new ByteArrayOutputStream();
                 try (GZIPOutputStream gzip = new GZIPOutputStream(compressedBuffer)) {
@@ -133,19 +153,39 @@ public final class BlobPayloadStore extends PayloadStore {
                     blob.uploadWithResponse(
                         stream,
                         compressedBytes.length,
-                        null, // parallelTransferOptions
+                        null,       // parallelTransferOptions
                         headers,
-                        null, // metadata
-                        null, // tier
-                        null, // requestConditions
-                        null, // timeout
+                        null,       // metadata
+                        null,       // tier
+                        conditions, // requestConditions
+                        null,       // timeout
                         Context.NONE);
                 }
             } else {
                 try (InputStream stream = new ByteArrayInputStream(payloadBytes)) {
-                    blob.upload(stream, payloadBytes.length, true);
+                    blob.uploadWithResponse(
+                        stream,
+                        payloadBytes.length,
+                        null,       // parallelTransferOptions
+                        null,       // headers
+                        null,       // metadata
+                        null,       // tier
+                        conditions, // requestConditions
+                        null,       // timeout
+                        Context.NONE);
                 }
             }
+        } catch (BlobStorageException e) {
+            // 409 BlobAlreadyExists and 412 ConditionNotMet (from If-None-Match: *) both indicate
+            // a name collision on upload — treat as a hard failure rather than silently overwriting.
+            if (e.getStatusCode() == 409 || e.getStatusCode() == 412) {
+                throw new PayloadStorageException(
+                    "Payload blob '" + blobName + "' already exists in container '"
+                        + this.containerClient.getBlobContainerName()
+                        + "'. Refusing to overwrite. This should not happen with random UUID blob names "
+                        + "and likely indicates a bug in a custom PayloadStore implementation.", e);
+            }
+            throw new PayloadStorageException("Failed to upload payload blob '" + blobName + "'.", e);
         } catch (IOException e) {
             throw new PayloadStorageException("Failed to upload payload blob '" + blobName + "'.", e);
         }
@@ -213,7 +253,14 @@ public final class BlobPayloadStore extends PayloadStore {
         if (value == null || value.isEmpty()) {
             return false;
         }
-        return value.startsWith(TOKEN_PREFIX);
+        // Validate the full token grammar (prefix + container + blob name), not just the
+        // prefix, so arbitrary user strings that happen to start with "blob:v1:" are not
+        // treated as tokens. This avoids spurious blob GETs (DoS surface) and spurious
+        // "container mismatch" failures on the response path.
+        if (value.length() < TOKEN_PREFIX.length() || !value.startsWith(TOKEN_PREFIX)) {
+            return false;
+        }
+        return TOKEN_PATTERN.matcher(value).matches();
     }
 
     static String encodeToken(String container, String name) {

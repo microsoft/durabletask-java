@@ -136,7 +136,9 @@ class LargePayloadInterceptorTest {
 
     @Test
     void externalize_exceedsMaxPayload_throws() {
-        options.setMaxPayloadBytes(5); // very small max
+        // Configure a consistent pair: threshold <= max (interceptor invariant),
+        // and a payload that exceeds max so the size check fires.
+        options.setThresholdBytes(5).setMaxPayloadBytes(5);
         interceptor = new LargePayloadInterceptor(mockStore, options);
 
         CreateInstanceRequest request = CreateInstanceRequest.newBuilder()

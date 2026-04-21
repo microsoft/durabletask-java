@@ -7,6 +7,7 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.models.BlobDownloadHeaders;
 import com.azure.storage.blob.models.BlobDownloadResponse;
 import com.azure.storage.blob.models.BlobHttpHeaders;
+import com.azure.storage.blob.models.BlobRequestConditions;
 import com.azure.storage.blob.models.BlobStorageException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -57,10 +58,13 @@ class BlobPayloadStoreTest {
 
         assertTrue(token.startsWith("blob:v1:durabletask-payloads:"));
         verify(mockContainerClient).createIfNotExists();
-        // Verify uploadWithResponse was called (compressed path)
+        // Verify uploadWithResponse was called (compressed path) with If-None-Match: * precondition
+        ArgumentCaptor<BlobRequestConditions> conditionsCaptor = ArgumentCaptor.forClass(BlobRequestConditions.class);
         verify(mockBlobClient).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(),
-            any(BlobHttpHeaders.class), isNull(), isNull(), isNull(), isNull(), any());
+            any(BlobHttpHeaders.class), isNull(), isNull(), conditionsCaptor.capture(), isNull(), any());
+        assertEquals("*", conditionsCaptor.getValue().getIfNoneMatch(),
+            "Upload must set If-None-Match: * to prevent overwriting an existing blob.");
     }
 
     @Test
@@ -73,8 +77,46 @@ class BlobPayloadStoreTest {
 
         assertTrue(token.startsWith("blob:v1:durabletask-payloads:"));
         verify(mockContainerClient).createIfNotExists();
-        // Verify upload was called (uncompressed path)
-        verify(mockBlobClient).upload(any(InputStream.class), anyLong(), eq(true));
+        // Verify uploadWithResponse was called (uncompressed path) with If-None-Match: * precondition
+        ArgumentCaptor<BlobRequestConditions> conditionsCaptor = ArgumentCaptor.forClass(BlobRequestConditions.class);
+        verify(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(),
+            isNull(), isNull(), isNull(), conditionsCaptor.capture(), isNull(), any());
+        assertEquals("*", conditionsCaptor.getValue().getIfNoneMatch(),
+            "Upload must set If-None-Match: * to prevent overwriting an existing blob.");
+    }
+
+    @Test
+    void upload_blobAlreadyExists_throwsPayloadStorageException() {
+        // Simulate a 409 BlobAlreadyExists from Azure — must surface as a hard failure
+        // rather than silently overwriting.
+        BlobStorageException conflict = mock(BlobStorageException.class);
+        when(conflict.getStatusCode()).thenReturn(409);
+        doThrow(conflict).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(),
+            any(BlobHttpHeaders.class), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        PayloadStorageException ex = assertThrows(PayloadStorageException.class,
+            () -> store.upload("test payload"));
+        assertTrue(ex.getMessage().contains("already exists"),
+            "Exception message should indicate a blob-name collision: " + ex.getMessage());
+    }
+
+    @Test
+    void upload_preconditionFailed_throwsPayloadStorageException() {
+        // Simulate a 412 ConditionNotMet (from If-None-Match: *) — same treatment as 409.
+        BlobStorageException preconditionFailed = mock(BlobStorageException.class);
+        when(preconditionFailed.getStatusCode()).thenReturn(412);
+        doThrow(preconditionFailed).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(),
+            any(BlobHttpHeaders.class), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        PayloadStorageException ex = assertThrows(PayloadStorageException.class,
+            () -> store.upload("test payload"));
+        assertTrue(ex.getMessage().contains("already exists"),
+            "Exception message should indicate a blob-name collision: " + ex.getMessage());
     }
 
     @Test
@@ -209,7 +251,7 @@ class BlobPayloadStoreTest {
             return null;
         }).when(mockBlobClient).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(),
-            any(BlobHttpHeaders.class), isNull(), isNull(), isNull(), isNull(), any());
+            any(BlobHttpHeaders.class), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         String token = store.upload(originalPayload);
@@ -242,7 +284,9 @@ class BlobPayloadStoreTest {
             }
             capturedBytes[0] = buf.toByteArray();
             return null;
-        }).when(mockBlobClient).upload(any(InputStream.class), anyLong(), eq(true));
+        }).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(),
+            isNull(), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         String token = store.upload(originalPayload);
@@ -262,7 +306,8 @@ class BlobPayloadStoreTest {
     @Test
     void isKnownPayloadToken_validToken_returnsTrue() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        assertTrue(store.isKnownPayloadToken("blob:v1:container:name"));
+        assertTrue(store.isKnownPayloadToken(
+            "blob:v1:container:0123456789abcdef0123456789abcdef"));
     }
 
     @Test
@@ -281,6 +326,36 @@ class BlobPayloadStoreTest {
     void isKnownPayloadToken_empty_returnsFalse() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         assertFalse(store.isKnownPayloadToken(""));
+    }
+
+    @Test
+    void isKnownPayloadToken_prefixOnly_returnsFalse() {
+        // Prefix match alone must not be accepted as a token — guards against user
+        // strings that happen to start with "blob:v1:" causing spurious blob GETs.
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        assertFalse(store.isKnownPayloadToken("blob:v1:user-controlled-garbage"));
+    }
+
+    @Test
+    void isKnownPayloadToken_nonHexBlobName_returnsFalse() {
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        assertFalse(store.isKnownPayloadToken("blob:v1:container:not-a-uuid"));
+    }
+
+    @Test
+    void isKnownPayloadToken_shortBlobName_returnsFalse() {
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        // 31 hex chars — one short of 32.
+        assertFalse(store.isKnownPayloadToken(
+            "blob:v1:container:0123456789abcdef0123456789abcde"));
+    }
+
+    @Test
+    void isKnownPayloadToken_invalidContainerChars_returnsFalse() {
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        // Uppercase is not a legal Azure container char.
+        assertFalse(store.isKnownPayloadToken(
+            "blob:v1:Container:0123456789abcdef0123456789abcdef"));
     }
 
     // ==================== Constructor validation ====================
@@ -306,7 +381,7 @@ class BlobPayloadStoreTest {
 
         verify(mockBlobClient).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(),
-            headersCaptor.capture(), isNull(), isNull(), isNull(), isNull(), any());
+            headersCaptor.capture(), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
 
         BlobHttpHeaders capturedHeaders = headersCaptor.getValue();
         assertEquals("gzip", capturedHeaders.getContentEncoding());

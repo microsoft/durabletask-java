@@ -33,7 +33,7 @@ public final class LargePayloadStorageOptions {
 
     private int thresholdBytes = 900_000;
     private int maxPayloadBytes = 10 * ONE_MIB;
-    private String connectionString = "";
+    private String connectionString;
     private URI accountUri;
     private TokenCredential credential;
     private String containerName = "durabletask-payloads";
@@ -99,8 +99,9 @@ public final class LargePayloadStorageOptions {
     /**
      * Gets the Azure Storage connection string.
      *
-     * @return the connection string, or empty string if not set
+     * @return the connection string, or {@code null} if not set
      */
+    @Nullable
     public String getConnectionString() {
         return this.connectionString;
     }
@@ -108,12 +109,13 @@ public final class LargePayloadStorageOptions {
     /**
      * Sets the Azure Storage connection string.
      * Either this or {@link #setAccountUri(URI)} and {@link #setCredential(TokenCredential)} must be set.
+     * Pass {@code null} to clear a previously-set value (for example, to switch to identity-based auth).
      *
-     * @param connectionString the Azure Storage connection string
+     * @param connectionString the Azure Storage connection string, or {@code null} to clear
      * @return this options object
      */
-    public LargePayloadStorageOptions setConnectionString(String connectionString) {
-        this.connectionString = connectionString != null ? connectionString : "";
+    public LargePayloadStorageOptions setConnectionString(@Nullable String connectionString) {
+        this.connectionString = connectionString;
         return this;
     }
 
@@ -130,11 +132,12 @@ public final class LargePayloadStorageOptions {
     /**
      * Sets the Azure Storage account URI for identity-based authentication.
      * Must be used together with {@link #setCredential(TokenCredential)}.
+     * Pass {@code null} to clear a previously-set value.
      *
-     * @param accountUri the Azure Storage account URI
+     * @param accountUri the Azure Storage account URI, or {@code null} to clear
      * @return this options object
      */
-    public LargePayloadStorageOptions setAccountUri(URI accountUri) {
+    public LargePayloadStorageOptions setAccountUri(@Nullable URI accountUri) {
         this.accountUri = accountUri;
         return this;
     }
@@ -152,11 +155,12 @@ public final class LargePayloadStorageOptions {
     /**
      * Sets the credential for identity-based authentication.
      * Must be used together with {@link #setAccountUri(URI)}.
+     * Pass {@code null} to clear a previously-set value.
      *
-     * @param credential the credential
+     * @param credential the credential, or {@code null} to clear
      * @return this options object
      */
-    public LargePayloadStorageOptions setCredential(TokenCredential credential) {
+    public LargePayloadStorageOptions setCredential(@Nullable TokenCredential credential) {
         this.credential = credential;
         return this;
     }

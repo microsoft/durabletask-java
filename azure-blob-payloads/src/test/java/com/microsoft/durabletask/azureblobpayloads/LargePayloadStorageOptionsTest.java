@@ -16,7 +16,7 @@ class LargePayloadStorageOptionsTest {
         LargePayloadStorageOptions options = new LargePayloadStorageOptions();
         assertEquals(900_000, options.getThresholdBytes());
         assertEquals(10 * 1024 * 1024, options.getMaxPayloadBytes());
-        assertEquals("", options.getConnectionString());
+        assertNull(options.getConnectionString());
         assertNull(options.getAccountUri());
         assertNull(options.getCredential());
         assertEquals("durabletask-payloads", options.getContainerName());
@@ -54,10 +54,15 @@ class LargePayloadStorageOptionsTest {
     }
 
     @Test
-    void setConnectionString_null_becomesEmpty() {
+    void setConnectionString_null_clearsValue() {
+        // Null handling is consistent across all three auth setters: each accepts null
+        // to clear a previously-set value. This lets callers switch from connection-string
+        // auth to identity-based auth (or vice versa) without ambiguity.
         LargePayloadStorageOptions options = new LargePayloadStorageOptions();
+        options.setConnectionString("UseDevelopmentStorage=true");
+        assertEquals("UseDevelopmentStorage=true", options.getConnectionString());
         options.setConnectionString(null);
-        assertEquals("", options.getConnectionString());
+        assertNull(options.getConnectionString());
     }
 
     @Test

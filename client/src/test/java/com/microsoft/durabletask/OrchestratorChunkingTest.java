@@ -505,9 +505,9 @@ public class OrchestratorChunkingTest {
     private TaskFailureDetails invokeValidateActionsSize(
             List<OrchestratorAction> actions, int maxChunkBytes) throws Exception {
         Method method = DurableTaskGrpcWorker.class.getDeclaredMethod(
-            "validateActionsSize", List.class, int.class);
+            "validateActionsSize", List.class, int.class, boolean.class, int.class);
         method.setAccessible(true);
-        return (TaskFailureDetails) method.invoke(null, actions, maxChunkBytes);
+        return (TaskFailureDetails) method.invoke(null, actions, maxChunkBytes, false, 0);
     }
 
     /**
