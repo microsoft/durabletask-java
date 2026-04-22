@@ -1,0 +1,29 @@
+@host = http://localhost:7071/api
+
+# Initialize account A with $1000
+POST {{host}}/bankaccounts/account-A/deposit/1000
+
+###
+
+# Initialize account B with $500
+POST {{host}}/bankaccounts/account-B/deposit/500
+
+###
+
+# Get balance of account A
+GET {{host}}/bankaccounts/account-A
+
+###
+
+# Get balance of account B
+GET {{host}}/bankaccounts/account-B
+
+###
+
+# Transfer $250 from account A to account B (uses entity locking)
+POST {{host}}/bankaccounts/transfer?from=account-A&to=account-B&amount=250
+
+###
+
+# Withdraw $100 from account A
+POST {{host}}/bankaccounts/account-A/withdraw/100

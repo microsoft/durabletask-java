@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -212,4 +213,61 @@ public class EntityInstanceIdTest {
         assertEquals("counter", ids.get(3).getName());
         assertEquals("3", ids.get(3).getKey());
     }
+
+    // region Jackson serialization tests
+
+    @Test
+    void jacksonSerialization_serializesToCompactString() throws Exception {
+        EntityInstanceId id = new EntityInstanceId("Counter", "myKey");
+        ObjectMapper mapper = new ObjectMapper();
+        String json = mapper.writeValueAsString(id);
+        assertEquals("\"@counter@myKey\"", json);
+    }
+
+    @Test
+    void jacksonDeserialization_deserializesFromCompactString() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        EntityInstanceId id = mapper.readValue("\"@counter@myKey\"", EntityInstanceId.class);
+        assertEquals("counter", id.getName());
+        assertEquals("myKey", id.getKey());
+    }
+
+    @Test
+    void jacksonRoundTrip_preservesIdentity() throws Exception {
+        EntityInstanceId original = new EntityInstanceId("BankAccount", "acct-123");
+        ObjectMapper mapper = new ObjectMapper();
+        String json = mapper.writeValueAsString(original);
+        EntityInstanceId deserialized = mapper.readValue(json, EntityInstanceId.class);
+        assertEquals(original, deserialized);
+    }
+
+    @Test
+    void jacksonDeserialization_inPojo_works() throws Exception {
+        // Simulates the CounterPayload scenario where EntityInstanceId is a field
+        String json = "{\"entityId\":\"@counter@c1\",\"value\":42}";
+        ObjectMapper mapper = new ObjectMapper();
+        TestPayload payload = mapper.readValue(json, TestPayload.class);
+        assertEquals("counter", payload.entityId.getName());
+        assertEquals("c1", payload.entityId.getKey());
+        assertEquals(42, payload.value);
+    }
+
+    @Test
+    void jacksonSerialization_inPojo_works() throws Exception {
+        TestPayload payload = new TestPayload();
+        payload.entityId = new EntityInstanceId("Counter", "c1");
+        payload.value = 42;
+        ObjectMapper mapper = new ObjectMapper();
+        String json = mapper.writeValueAsString(payload);
+        assertTrue(json.contains("\"@counter@c1\""));
+        assertTrue(json.contains("\"value\":42"));
+    }
+
+    /** Test POJO that embeds an EntityInstanceId, mirroring CounterPayload. */
+    public static class TestPayload {
+        public EntityInstanceId entityId;
+        public int value;
+    }
+
+    // endregion
 }

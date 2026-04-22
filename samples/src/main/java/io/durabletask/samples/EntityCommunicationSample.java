@@ -33,7 +33,7 @@ import java.util.concurrent.TimeoutException;
 final class EntityCommunicationSample {
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
-        DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+        DurableTaskGrpcWorker worker = SampleUtils.newWorkerBuilder()
                 .addEntity("Sensor", SensorEntity::new)
                 .addEntity("Aggregator", AggregatorEntity::new)
                 .addOrchestration(new TaskOrchestrationFactory() {
@@ -74,7 +74,7 @@ final class EntityCommunicationSample {
         worker.start();
         System.out.println("Worker started. Sensor and Aggregator entities registered.");
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = SampleUtils.newClientBuilder().build();
 
         // Send readings through an orchestration
         String instanceId = client.scheduleNewOrchestrationInstance("SendReadings");

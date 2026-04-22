@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import javax.annotation.Nullable;
 import java.time.Instant;
 
@@ -18,8 +21,10 @@ public class EntityMetadata {
     private final Instant lastModifiedTime;
     private final int backlogQueueSize;
     private final String lockedBy;
+    @JsonIgnore
     private final String serializedState;
     private final boolean includesState;
+    @JsonIgnore
     private final DataConverter dataConverter;
     private volatile EntityInstanceId cachedEntityInstanceId;
 
@@ -56,6 +61,7 @@ public class EntityMetadata {
      *
      * @return the instance ID
      */
+    @JsonIgnore
     public String getInstanceId() {
         return this.instanceId;
     }
@@ -65,6 +71,7 @@ public class EntityMetadata {
      *
      * @return the parsed entity instance ID
      */
+    @JsonProperty("entityId")
     public EntityInstanceId getEntityInstanceId() {
         if (this.cachedEntityInstanceId == null) {
             this.cachedEntityInstanceId = EntityInstanceId.fromString(this.instanceId);

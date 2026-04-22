@@ -27,6 +27,62 @@ task runWorkItemFilterSample(type: JavaExec) {
     mainClass = 'io.durabletask.samples.WorkItemFilterSample'
 }
 
+// --- Entity samples (require a Durable Task sidecar / DTS emulator on localhost:4001) ---
+// When ENDPOINT is set (or the default applies), these tasks connect to a Durable Task
+// Scheduler such as the DTS emulator. Override by setting ENDPOINT/TASKHUB env vars.
+def dtsEnv = [
+        ENDPOINT: System.getenv('ENDPOINT') ?: 'http://localhost:4001',
+        TASKHUB : System.getenv('TASKHUB')  ?: 'default',
+]
+
+task runCounterEntitySample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.CounterEntitySample'
+    environment dtsEnv
+}
+
+task runBankAccountSample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.BankAccountSample'
+    environment dtsEnv
+}
+
+task runEntityCommunicationSample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.EntityCommunicationSample'
+    environment dtsEnv
+}
+
+task runEntityQuerySample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.EntityQuerySample'
+    environment dtsEnv
+}
+
+task runEntityReentrantSample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.EntityReentrantSample'
+    environment dtsEnv
+}
+
+task runEntityTimeoutSample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.EntityTimeoutSample'
+    environment dtsEnv
+}
+
+task runLowLevelEntitySample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.LowLevelEntitySample'
+    environment dtsEnv
+}
+
+task runTypedEntityProxySample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.TypedEntityProxySample'
+    environment dtsEnv
+}
+
 task printClasspath {
     doLast {
         println sourceSets.main.runtimeClasspath.asPath

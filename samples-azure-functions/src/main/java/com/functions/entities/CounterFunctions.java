@@ -133,7 +133,7 @@ public class CounterFunctions {
 
         return request.createResponseBuilder(HttpStatus.OK)
                 .header("Content-Type", "application/json")
-                .body(entity)
+                .body(new JacksonDataConverter().serialize(entity))
                 .build();
     }
 

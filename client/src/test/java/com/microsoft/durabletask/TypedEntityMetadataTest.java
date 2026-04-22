@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -108,4 +110,73 @@ public class TypedEntityMetadataTest {
         Integer state = typed.readStateAs(Integer.class);
         assertEquals(42, state);
     }
+
+    // region Jackson serialization tests
+
+    @Test
+    void jacksonSerialization_typedEntityMetadata_hidesInternalFields() throws Exception {
+        Instant now = Instant.parse("2026-01-15T10:30:00Z");
+        EntityMetadata base = new EntityMetadata(
+                "@counter@myKey", now, 3, "orch-lock-123", "42", true, dataConverter);
+
+        TypedEntityMetadata<Integer> typed = new TypedEntityMetadata<>(base, Integer.class);
+
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.findAndRegisterModules();
+        String json = mapper.writeValueAsString(typed);
+        JsonNode root = mapper.readTree(json);
+
+        // Should include public API fields
+        assertTrue(root.has("entityId"), "Should have entityId field");
+        assertTrue(root.has("lastModifiedTime"), "Should have lastModifiedTime field");
+        assertTrue(root.has("backlogQueueSize"), "Should have backlogQueueSize field");
+        assertTrue(root.has("lockedBy"), "Should have lockedBy field");
+        assertTrue(root.has("includesState"), "Should have includesState field");
+        assertTrue(root.has("state"), "Should have state field");
+
+        // Should NOT include internal fields
+        assertFalse(root.has("serializedState"), "Should not expose serializedState");
+        assertFalse(root.has("dataConverter"), "Should not expose dataConverter");
+        assertFalse(root.has("stateType"), "Should not expose stateType");
+        assertFalse(root.has("instanceId"), "Should not expose raw instanceId (use entityId instead)");
+
+        // Verify field values
+        assertEquals("@counter@myKey", root.get("entityId").asText());
+        assertEquals(3, root.get("backlogQueueSize").asInt());
+        assertEquals("orch-lock-123", root.get("lockedBy").asText());
+        assertTrue(root.get("includesState").asBoolean());
+        assertEquals(42, root.get("state").asInt());
+    }
+
+    @Test
+    void jacksonSerialization_entityMetadata_hidesInternalFields() throws Exception {
+        Instant now = Instant.parse("2026-01-15T10:30:00Z");
+        EntityMetadata base = new EntityMetadata(
+                "@counter@c1", now, 3, "orch-lock-456", "99", true, dataConverter);
+
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.findAndRegisterModules();
+        String json = mapper.writeValueAsString(base);
+        JsonNode root = mapper.readTree(json);
+
+        // Should include public API fields
+        assertTrue(root.has("entityId"), "Should have entityId field");
+        assertTrue(root.has("lastModifiedTime"), "Should have lastModifiedTime field");
+        assertTrue(root.has("backlogQueueSize"), "Should have backlogQueueSize field");
+        assertTrue(root.has("lockedBy"), "Should have lockedBy field");
+        assertTrue(root.has("includesState"), "Should have includesState field");
+
+        // Should NOT include internal fields
+        assertFalse(root.has("serializedState"), "Should not expose serializedState");
+        assertFalse(root.has("dataConverter"), "Should not expose dataConverter");
+        assertFalse(root.has("instanceId"), "Should not expose raw instanceId");
+
+        // Verify field values
+        assertEquals("@counter@c1", root.get("entityId").asText());
+        assertEquals(3, root.get("backlogQueueSize").asInt());
+        assertEquals("orch-lock-456", root.get("lockedBy").asText());
+        assertTrue(root.get("includesState").asBoolean());
+    }
+
+    // endregion
 }

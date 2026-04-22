@@ -87,7 +87,7 @@ final class TypedEntityProxySample {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
-        DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+        DurableTaskGrpcWorker worker = SampleUtils.newWorkerBuilder()
                 .addEntity("ShoppingCart", ShoppingCartEntity::new)
                 .addOrchestration(new TaskOrchestrationFactory() {
                     @Override
@@ -124,7 +124,7 @@ final class TypedEntityProxySample {
         worker.start();
         System.out.println("Worker started. ShoppingCart entity registered.");
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = SampleUtils.newClientBuilder().build();
 
         String instanceId = client.scheduleNewOrchestrationInstance("ShoppingWorkflow");
         System.out.printf("Started orchestration: %s%n", instanceId);
