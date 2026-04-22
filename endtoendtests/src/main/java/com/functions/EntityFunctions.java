@@ -57,6 +57,9 @@ public class EntityFunctions {
         // Signal — fire-and-forget
         ctx.signalEntity(entityId, "add", input.addValue);
 
+        // Wait for the signal to be processed before reading state
+        ctx.createTimer(java.time.Duration.ofSeconds(2)).await();
+
         // Call — request-response (should see the updated state)
         return ctx.callEntity(entityId, "get", null, Integer.class).await();
     }
@@ -89,6 +92,9 @@ public class EntityFunctions {
         ctx.signalEntity(counterId, "add", 5);
         result.append("Step 1: Signaled add(5)\n");
 
+        // Wait for the signal to be processed before reading state
+        ctx.createTimer(java.time.Duration.ofSeconds(2)).await();
+
         // Test 2: callEntity (request-response) — get current value, should be 5
         int valueAfterAdd5 = ctx.callEntity(counterId, "get", null, Integer.class).await();
         result.append("Step 2: callEntity get() returned ").append(valueAfterAdd5).append("\n");
@@ -97,6 +103,9 @@ public class EntityFunctions {
         ctx.signalEntity(counterId, "add", 10);
         result.append("Step 3: Signaled add(10)\n");
 
+        // Wait for the signal to be processed before reading state
+        ctx.createTimer(java.time.Duration.ofSeconds(2)).await();
+
         // Test 4: callEntity — get current value, should be 15
         int valueAfterAdd10 = ctx.callEntity(counterId, "get", null, Integer.class).await();
         result.append("Step 4: callEntity get() returned ").append(valueAfterAdd10).append("\n");
@@ -104,6 +113,9 @@ public class EntityFunctions {
         // Test 5: signalEntity — reset
         ctx.signalEntity(counterId, "reset");
         result.append("Step 5: Signaled reset()\n");
+
+        // Wait for the signal to be processed before reading state
+        ctx.createTimer(java.time.Duration.ofSeconds(2)).await();
 
         // Test 6: callEntity — get current value, should be 0
         int valueAfterReset = ctx.callEntity(counterId, "get", null, Integer.class).await();
