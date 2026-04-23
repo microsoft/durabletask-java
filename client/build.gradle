@@ -53,6 +53,7 @@ dependencies {
     implementation "io.opentelemetry:opentelemetry-api:${openTelemetryVersion}"
     implementation "io.opentelemetry:opentelemetry-context:${openTelemetryVersion}"
     
+    testImplementation "io.grpc:grpc-inprocess:${grpcVersion}"
     testImplementation "io.opentelemetry:opentelemetry-sdk:${openTelemetryVersion}"
     testImplementation "io.opentelemetry:opentelemetry-sdk-trace:${openTelemetryVersion}"
     testImplementation "io.opentelemetry:opentelemetry-sdk-testing:${openTelemetryVersion}"

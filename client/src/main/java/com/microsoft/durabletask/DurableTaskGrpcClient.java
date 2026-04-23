@@ -161,6 +161,8 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             CreateInstanceRequest request = builder.build();
             CreateInstanceResponse response = this.sidecarClient.startInstance(request);
             return response.getInstanceId();
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "scheduleNewOrchestrationInstance");
         } finally {
             createScope.close();
             createSpan.end();
@@ -184,7 +186,11 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         }
 
         RaiseEventRequest request = builder.build();
-        this.sidecarClient.raiseEvent(request);
+        try {
+            this.sidecarClient.raiseEvent(request);
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "raiseEvent");
+        }
     }
 
     @Override
@@ -193,8 +199,12 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 .setInstanceId(instanceId)
                 .setGetInputsAndOutputs(getInputsAndOutputs)
                 .build();
-        GetInstanceResponse response = this.sidecarClient.getInstance(request);
-        return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
+        try {
+            GetInstanceResponse response = this.sidecarClient.getInstance(request);
+            return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "getInstanceMetadata");
+        }
     }
 
     @Override
@@ -219,7 +229,13 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
                 throw new TimeoutException("Start orchestration timeout reached.");
             }
-            throw e;
+            Exception translated = StatusRuntimeExceptionHelper.toException(e, "waitForInstanceStart");
+            if (translated instanceof TimeoutException) {
+                throw (TimeoutException) translated;
+            } else if (translated instanceof RuntimeException) {
+                throw (RuntimeException) translated;
+            }
+            throw new RuntimeException(translated);
         }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
@@ -246,7 +262,13 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             if (e.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
                 throw new TimeoutException("Orchestration instance completion timeout reached.");
             }
-            throw e;
+            Exception translated = StatusRuntimeExceptionHelper.toException(e, "waitForInstanceCompletion");
+            if (translated instanceof TimeoutException) {
+                throw (TimeoutException) translated;
+            } else if (translated instanceof RuntimeException) {
+                throw (RuntimeException) translated;
+            }
+            throw new RuntimeException(translated);
         }
         return new OrchestrationMetadata(response, this.dataConverter, request.getGetInputsAndOutputs());
     }
@@ -263,7 +285,11 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         if (serializeOutput != null){
             builder.setOutput(StringValue.of(serializeOutput));
         }
-        this.sidecarClient.terminateInstance(builder.build());
+        try {
+            this.sidecarClient.terminateInstance(builder.build());
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "terminate");
+        }
     }
 
     @Override
@@ -277,8 +303,12 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         instanceQueryBuilder.setMaxInstanceCount(query.getMaxInstanceCount());
         query.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> instanceQueryBuilder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
         query.getTaskHubNames().forEach(taskHubName -> Optional.ofNullable(taskHubName).ifPresent(name -> instanceQueryBuilder.addTaskHubNames(StringValue.of(name))));
-        QueryInstancesResponse queryInstancesResponse = this.sidecarClient.queryInstances(QueryInstancesRequest.newBuilder().setQuery(instanceQueryBuilder).build());
-        return toQueryResult(queryInstancesResponse, query.isFetchInputsAndOutputs());
+        try {
+            QueryInstancesResponse queryInstancesResponse = this.sidecarClient.queryInstances(QueryInstancesRequest.newBuilder().setQuery(instanceQueryBuilder).build());
+            return toQueryResult(queryInstancesResponse, query.isFetchInputsAndOutputs());
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "queryInstances");
+        }
     }
 
     private OrchestrationStatusQueryResult toQueryResult(QueryInstancesResponse queryInstancesResponse, boolean fetchInputsAndOutputs){
@@ -291,12 +321,20 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
 
     @Override
     public void createTaskHub(boolean recreateIfExists) {
-        this.sidecarClient.createTaskHub(CreateTaskHubRequest.newBuilder().setRecreateIfExists(recreateIfExists).build());
+        try {
+            this.sidecarClient.createTaskHub(CreateTaskHubRequest.newBuilder().setRecreateIfExists(recreateIfExists).build());
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "createTaskHub");
+        }
     }
 
     @Override
     public void deleteTaskHub() {
-        this.sidecarClient.deleteTaskHub(DeleteTaskHubRequest.newBuilder().build());
+        try {
+            this.sidecarClient.deleteTaskHub(DeleteTaskHubRequest.newBuilder().build());
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "deleteTaskHub");
+        }
     }
 
     @Override
@@ -305,8 +343,12 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 .setInstanceId(instanceId)
                 .build();
 
-        PurgeInstancesResponse response = this.sidecarClient.purgeInstances(request);
-        return toPurgeResult(response);
+        try {
+            PurgeInstancesResponse response = this.sidecarClient.purgeInstances(request);
+            return toPurgeResult(response);
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "purgeInstance");
+        }
     }
 
     @Override
@@ -334,7 +376,13 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 String timeOutException = String.format("Purge instances timeout duration of %s reached.", timeout);
                 throw new TimeoutException(timeOutException);
             }
-            throw e;
+            Exception translated = StatusRuntimeExceptionHelper.toException(e, "purgeInstances");
+            if (translated instanceof TimeoutException) {
+                throw (TimeoutException) translated;
+            } else if (translated instanceof RuntimeException) {
+                throw (RuntimeException) translated;
+            }
+            throw new RuntimeException(translated);
         }
     }
 
@@ -345,7 +393,11 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         if (reason != null) {
             suspendRequestBuilder.setReason(StringValue.of(reason));
         }
-        this.sidecarClient.suspendInstance(suspendRequestBuilder.build());
+        try {
+            this.sidecarClient.suspendInstance(suspendRequestBuilder.build());
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "suspendInstance");
+        }
     }
 
     @Override
@@ -355,7 +407,11 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         if (reason != null) {
             resumeRequestBuilder.setReason(StringValue.of(reason));
         }
-        this.sidecarClient.resumeInstance(resumeRequestBuilder.build());
+        try {
+            this.sidecarClient.resumeInstance(resumeRequestBuilder.build());
+        } catch (StatusRuntimeException e) {
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "resumeInstance");
+        }
     }
 
     @Override
@@ -377,7 +433,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                 throw new IllegalStateException(
                         "Orchestration instance '" + instanceId + "' is not in a failed state and cannot be rewound.", e);
             }
-            throw e;
+            throw StatusRuntimeExceptionHelper.toRuntimeException(e, "rewindInstance");
         }
     }
 
