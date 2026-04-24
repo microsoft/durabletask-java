@@ -1,5 +1,9 @@
 ## Unreleased
-* Add work item filtering support for `DurableTaskGrpcWorker` to enable worker-side filtering of orchestration and activity work items ([#275](https://github.com/microsoft/durabletask-java/pull/275)) 
+
+## v1.9.0
+* Fix entity locking deserialization and add Jackson support for EntityInstanceId/EntityMetadata ([#281](https://github.com/microsoft/durabletask-java/pull/281))
+* Durable Entities ([#268](https://github.com/microsoft/durabletask-java/pull/268))
+* Add work item filtering support for `DurableTaskGrpcWorker` to enable worker-side filtering of orchestration and activity work items ([#275](https://github.com/microsoft/durabletask-java/pull/275))
 * Add support for calls to HTTP endpoints ([#271](https://github.com/microsoft/durabletask-java/pull/271))
 * Add getSuspendPostUri and getResumePostUri getters to HttpManagementPayload ([#264](https://github.com/microsoft/durabletask-java/pull/264))
 
