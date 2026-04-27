@@ -53,15 +53,6 @@ public final class FailureDetails {
         this.properties = properties != null ? Collections.unmodifiableMap(new HashMap<>(properties)) : null;
     }
 
-    FailureDetails(Exception exception) {
-        this(exception.getClass().getName(),
-             exception.getMessage(),
-             getFullStackTrace(exception),
-             false,
-             fromExceptionRecursive(exception.getCause(), null, 1),
-             null);
-    }
-
     /**
      * Creates a {@code FailureDetails} from an exception, optionally using the provided
      * {@link ExceptionPropertiesProvider} to extract custom properties.
@@ -143,10 +134,7 @@ public final class FailureDetails {
      */
     @Nullable
     public Map<String, Object> getProperties() {
-        if (this.properties == null) {
-            return null;
-        }
-        return Collections.unmodifiableMap(this.properties);
+        return this.properties;
     }
 
     /**
