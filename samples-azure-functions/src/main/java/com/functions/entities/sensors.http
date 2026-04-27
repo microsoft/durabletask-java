@@ -1,0 +1,32 @@
+@host = http://localhost:7071/api
+
+# Record normal temperature readings for sensor-1
+# The sensor entity forwards each reading to the aggregator entity (entity-to-entity signaling)
+POST {{host}}/sensors/sensor-1/record/22.5
+
+###
+
+POST {{host}}/sensors/sensor-1/record/24.0
+
+###
+
+POST {{host}}/sensors/sensor-1/record/26.5
+
+###
+
+# Record a high temperature — the aggregator will start a TemperatureAlert orchestration
+POST {{host}}/sensors/sensor-1/record/35.0
+
+###
+
+POST {{host}}/sensors/sensor-1/record/23.0
+
+###
+
+# Get the sensor state (last reading, total readings)
+GET {{host}}/sensors/sensor-1
+
+###
+
+# Get the aggregator state (sum, count, average)
+GET {{host}}/sensors/sensor-1/aggregator

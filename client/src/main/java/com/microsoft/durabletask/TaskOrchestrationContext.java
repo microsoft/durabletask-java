@@ -3,12 +3,15 @@
 package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import javax.annotation.Nonnull;
 
 /**
  * Used by orchestrators to perform actions such as scheduling tasks, durable timers, waiting for external events,
@@ -559,6 +562,221 @@ public interface TaskOrchestrationContext {
     }
 
     /**
+     * Creates a typed entity proxy that maps interface method calls to entity operations.
+     * <p>
+     * This is a convenience method equivalent to calling
+     * {@code EntityProxy.create(this, entityId, proxyInterface)}.
+     *
+     * @param entityId       the target entity's instance ID
+     * @param proxyInterface the interface whose methods map to entity operations;
+     *                       {@code void} methods become signals, {@code Task<V>} methods become calls
+     * @param <T>            the proxy interface type
+     * @return a proxy instance that implements {@code proxyInterface}
+     * @throws IllegalArgumentException if {@code proxyInterface} is not an interface
+     * @see EntityProxy#create(TaskOrchestrationContext, EntityInstanceId, Class)
+     */
+    default <T> T createEntityProxy(@Nonnull EntityInstanceId entityId, @Nonnull Class<T> proxyInterface) {
+        return EntityProxy.create(this, entityId, proxyInterface);
+    }
+
+    /**
+     * Gets the durable entity feature for this orchestration context.
+     * <p>
+     * This mirrors the .NET SDK's {@code TaskOrchestrationContext.Entities} surface,
+     * adapted to Java as a method-based accessor.
+     *
+     * @return the entity feature for this orchestration context
+     */
+    default TaskOrchestrationEntityFeature getEntities() {
+        return new ContextBackedTaskOrchestrationEntityFeature(this);
+    }
+
+    /**
+     * Gets the durable entity feature for this orchestration context.
+     * <p>
+     * This is an alias of {@link #getEntities()}.
+     *
+     * @return the entity feature for this orchestration context
+     */
+    default TaskOrchestrationEntityFeature entities() {
+        return this.getEntities();
+    }
+
+    // region Entity integration methods
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity.
+     * <p>
+     * Signals are one-way messages that do not return a result. The target entity will execute the specified
+     * operation asynchronously. If the entity does not exist, it will be created automatically.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     */
+    default void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName) {
+        this.signalEntity(entityId, operationName, null, null);
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity with the specified input.
+     * <p>
+     * Signals are one-way messages that do not return a result. The target entity will execute the specified
+     * operation asynchronously. If the entity does not exist, it will be created automatically.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     */
+    default void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input) {
+        this.signalEntity(entityId, operationName, input, null);
+    }
+
+    /**
+     * Sends a fire-and-forget signal to a durable entity with the specified input and options.
+     * <p>
+     * Signals are one-way messages that do not return a result. The target entity will execute the specified
+     * operation asynchronously. If the entity does not exist, it will be created automatically.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     * @param options signal options such as scheduled delivery time, or {@code null}
+     */
+    void signalEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input, @Nullable SignalEntityOptions options);
+
+    /**
+     * Calls an operation on a durable entity and waits for the result.
+     * <p>
+     * Unlike {@link #signalEntity}, this method is a two-way call that returns a result. The calling orchestration
+     * will block until the entity operation completes and returns a response.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     * @param returnType the expected class type of the entity operation output
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input, @Nonnull Class<V> returnType);
+
+    /**
+     * Calls an operation on a durable entity and waits for the result, with options.
+     * <p>
+     * Unlike {@link #signalEntity}, this method is a two-way call that returns a result. The calling orchestration
+     * will block until the entity operation completes and returns a response.
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param input the serializable input to pass to the entity operation, or {@code null}
+     * @param returnType the expected class type of the entity operation output
+     * @param options call options such as timeout, or {@code null}
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable Object input, @Nonnull Class<V> returnType, @Nullable CallEntityOptions options);
+
+    /**
+     * Calls an operation on a durable entity and waits for it to complete (no return value).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    default Task<Void> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName) {
+        return this.callEntity(entityId, operationName, null, Void.class);
+    }
+
+    /**
+     * Calls an operation on a durable entity and waits for the result (no input).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param returnType the expected class type of the entity operation output
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    default <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nonnull Class<V> returnType) {
+        return this.callEntity(entityId, operationName, null, returnType);
+    }
+
+    /**
+     * Calls an operation on a durable entity with options and waits for the result (no input).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param returnType the expected class type of the entity operation output
+     * @param options call options such as timeout, or {@code null}
+     * @param <V> the expected type of the entity operation output
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    default <V> Task<V> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nonnull Class<V> returnType, @Nullable CallEntityOptions options) {
+        return this.callEntity(entityId, operationName, null, returnType, options);
+    }
+
+    /**
+     * Calls an operation on a durable entity with options and waits for it to complete (no input, no return value).
+     *
+     * @param entityId the unique identifier of the target entity
+     * @param operationName the name of the operation to invoke on the entity
+     * @param options call options such as timeout, or {@code null}
+     * @return a {@link Task} that completes when the entity operation completes
+     */
+    default Task<Void> callEntity(@Nonnull EntityInstanceId entityId, @Nonnull String operationName, @Nullable CallEntityOptions options) {
+        return this.callEntity(entityId, operationName, null, Void.class, options);
+    }
+
+    /**
+     * Acquires one or more entity locks for the duration of a critical section.
+     * <p>
+     * Entity locks are used to coordinate access and prevent conflicts when multiple orchestrations need
+     * to access the same entities. The returned {@link AutoCloseable} must be closed to release the locks.
+     * <p>
+     * Entity IDs are sorted deterministically before acquiring locks to prevent deadlocks.
+     * Nesting of lock calls is not supported and will throw an {@link IllegalStateException}.
+     * <p>
+     * Example usage:
+     * <pre>{@code
+     * try (AutoCloseable lock = ctx.lockEntities(entityIds).await()) {
+     *     // Perform operations on the locked entities
+     *     ctx.callEntity(entityId, "transfer", amount).await();
+     * }
+     * }</pre>
+     *
+     * @param entityIds the list of entity instance IDs to lock; must not be empty
+     * @return a {@link Task} that completes with an {@link AutoCloseable} when all locks are acquired
+     */
+    Task<AutoCloseable> lockEntities(@Nonnull List<EntityInstanceId> entityIds);
+
+    /**
+     * Acquires one or more entity locks for the duration of a critical section (varargs overload).
+     *
+     * @param entityIds the entity instance IDs to lock; must not be empty
+     * @return a {@link Task} that completes with an {@link AutoCloseable} when all locks are acquired
+     */
+    default Task<AutoCloseable> lockEntities(@Nonnull EntityInstanceId... entityIds) {
+        return this.lockEntities(Arrays.asList(entityIds));
+    }
+
+    /**
+     * Gets a value indicating whether this orchestration is currently executing inside a critical section
+     * that was created by {@link #lockEntities}.
+     *
+     * @return {@code true} if the orchestration is inside a critical section, otherwise {@code false}
+     */
+    boolean isInCriticalSection();
+
+    /**
+     * Gets the list of entity instance IDs that are currently locked by this orchestration.
+     * <p>
+     * Returns an empty list if the orchestration is not inside a critical section.
+     *
+     * @return an unmodifiable list of locked entity instance IDs
+     */
+    List<EntityInstanceId> getLockedEntities();
+
+    // endregion
+
+    /**
      * Assigns a custom status value to the current orchestration.
      * <p>
      * The {@code customStatus} value is serialized and stored in orchestration state and will be made available to the
@@ -575,4 +793,66 @@ public interface TaskOrchestrationContext {
      * Clears the orchestration's custom status.
      */
     void clearCustomStatus();
+
+    /**
+     * Makes a durable HTTP request using the specified {@link DurableHttpRequest} and returns a {@link Task}
+     * that completes when the HTTP call completes.
+     * <p>
+     * This is a convenience method that delegates to {@link DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest)}.
+     *
+     * @param request the {@link DurableHttpRequest} describing the HTTP request to make
+     * @return a new {@link Task} that completes when the HTTP call completes
+     * @see DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest)
+     */
+    default Task<DurableHttpResponse> callHttp(DurableHttpRequest request) {
+        return DurableHttp.callHttp(this, request);
+    }
+
+    /**
+     * Makes a durable HTTP request using the specified {@link DurableHttpRequest} with additional
+     * options (e.g., retry policies) and returns a {@link Task} that completes when the HTTP call completes.
+     * <p>
+     * This is a convenience method that delegates to
+     * {@link DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest, TaskOptions)}.
+     *
+     * @param request the {@link DurableHttpRequest} describing the HTTP request to make
+     * @param options additional options that control the execution and processing of the HTTP call, or {@code null}
+     * @return a new {@link Task} that completes when the HTTP call completes
+     * @see DurableHttp#callHttp(TaskOrchestrationContext, DurableHttpRequest, TaskOptions)
+     */
+    default Task<DurableHttpResponse> callHttp(DurableHttpRequest request, @Nullable TaskOptions options) {
+        return DurableHttp.callHttp(this, request, options);
+    }
+
+    /**
+     * Makes a simple durable HTTP request to the specified URI.
+     * <p>
+     * This is a convenience method that delegates to
+     * {@link DurableHttp#callHttp(TaskOrchestrationContext, String, java.net.URI)}.
+     *
+     * @param method the HTTP method (e.g., "GET", "POST", "PUT", "DELETE")
+     * @param uri the target URI for the HTTP request
+     * @return a new {@link Task} that completes when the HTTP call completes
+     */
+    default Task<DurableHttpResponse> callHttp(String method, URI uri) {
+        return DurableHttp.callHttp(this, method, uri);
+    }
+
+    /**
+     * Makes a durable HTTP request with headers and content to the specified URI.
+     * <p>
+     * This is a convenience method that delegates to
+     * {@link DurableHttp#callHttp(TaskOrchestrationContext, String, java.net.URI, Map, String)}.
+     *
+     * @param method the HTTP method (e.g., "GET", "POST", "PUT", "DELETE")
+     * @param uri the target URI for the HTTP request
+     * @param headers the HTTP headers to include in the request, or {@code null} for no headers
+     * @param content the body content of the HTTP request, or {@code null} for no body
+     * @return a new {@link Task} that completes when the HTTP call completes
+     */
+    default Task<DurableHttpResponse> callHttp(String method, URI uri,
+                                               @Nullable Map<String, String> headers,
+                                               @Nullable String content) {
+        return DurableHttp.callHttp(this, method, uri, headers, content);
+    }
 }

@@ -124,5 +124,10 @@ public class IntegrationTestBase {
             this.innerBuilder.exceptionPropertiesProvider(provider);
             return this;
         }
+
+        public TestDurableTaskWorkerBuilder addEntity(String name, TaskEntityFactory factory) {
+            this.innerBuilder.addEntity(name, factory);
+            return this;
+        }
     }
 }
