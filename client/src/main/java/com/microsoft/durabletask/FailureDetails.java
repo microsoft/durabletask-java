@@ -12,6 +12,8 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.Tas
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Class that represents the details of a task failure.
@@ -21,6 +23,8 @@ import java.util.*;
  * result in task failures, in which case there may not be any exception-specific information.
  */
 public final class FailureDetails {
+    private static final Logger logger = Logger.getLogger(FailureDetails.class.getName());
+
     private final String errorType;
     private final String errorMessage;
     private final String stackTrace;
@@ -138,17 +142,32 @@ public final class FailureDetails {
     }
 
     /**
-     * Returns {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}.
+     * Returns {@code true} if this failure's top-level error type matches the specified exception type, otherwise
+     * {@code false}.
      * <p>
-     * This method allows checking if a task failed due to a specific exception type by attempting to load the class
-     * specified in {@link #getErrorType()}. If the exception class cannot be loaded for any reason, this method will
-     * return {@code false}. Base types are supported by this method, as shown in the following example:
+     * This method only inspects the error type reported by {@link #getErrorType()} on <em>this</em> instance; it
+     * does <strong>not</strong> traverse the inner failure chain exposed by {@link #getInnerFailure()}. This matches
+     * the behavior of {@code TaskFailureDetails.IsCausedBy} in the Durable Task .NET SDK. If you also want to test
+     * wrapped causes, walk the chain explicitly, for example:
+     * <pre>{@code
+     * for (FailureDetails f = failureDetails; f != null; f = f.getInnerFailure()) {
+     *     if (f.isCausedBy(IllegalStateException.class)) {
+     *         // handle
+     *         break;
+     *     }
+     * }
+     * }</pre>
+     * <p>
+     * Internally the method attempts to load the class named by {@link #getErrorType()} via reflection. If the
+     * exception class cannot be loaded for any reason (for example, it is not on the worker's classpath), this
+     * method returns {@code false}. Base types are supported, as shown below:
      * <pre>{@code
      * boolean isRuntimeException = failureDetails.isCausedBy(RuntimeException.class);
      * }</pre>
      *
      * @param exceptionClass the class representing the exception type to test
-     * @return {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}
+     * @return {@code true} if this failure's top-level error type is assignable to {@code exceptionClass};
+     *         {@code false} otherwise
      */
     public boolean isCausedBy(Class<? extends Exception> exceptionClass) {
         String actualClassName = this.getErrorType();
@@ -211,8 +230,13 @@ public final class FailureDetails {
         if (provider != null && exception instanceof Exception) {
             try {
                 properties = provider.getExceptionProperties((Exception) exception);
-            } catch (Exception ignored) {
-                // Don't let provider errors mask the original failure
+            } catch (Exception providerException) {
+                // Don't let provider errors mask the original failure, but log so the issue is diagnosable.
+                logger.log(
+                        Level.WARNING,
+                        providerException,
+                        () -> "ExceptionPropertiesProvider threw while extracting properties for "
+                                + exception.getClass().getName() + "; ignoring provider output.");
             }
         }
         return new FailureDetails(
@@ -256,13 +280,13 @@ public final class FailureDetails {
                 for (Value item : value.getListValue().getValuesList()) {
                     list.add(convertProtoValue(item));
                 }
-                return list;
+                return Collections.unmodifiableList(list);
             case STRUCT_VALUE:
                 Map<String, Object> map = new HashMap<>();
                 for (Map.Entry<String, Value> entry : value.getStructValue().getFieldsMap().entrySet()) {
                     map.put(entry.getKey(), convertProtoValue(entry.getValue()));
                 }
-                return map;
+                return Collections.unmodifiableMap(map);
             default:
                 return value.toString();
         }

@@ -46,7 +46,7 @@ final class TaskOrchestrationExecutor {
             Duration maximumTimerInterval,
             Logger logger,
             DurableTaskGrpcWorkerVersioningOptions versioningOptions) {
-        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions, false,null);
+        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions, false, null);
     }
 
     public TaskOrchestrationExecutor(
