@@ -392,9 +392,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 activityRequest.getTaskId());
                         } catch (Throwable e) {
                             activityError = e;
-                            Exception ex = e instanceof Exception ? (Exception) e : new RuntimeException(e);
                             failureDetails = FailureDetails.fromException(
-                                    ex, this.exceptionPropertiesProvider).toProto();
+                                    e, this.exceptionPropertiesProvider).toProto();
                         } finally {
                             activityScope.close();
                             TracingHelper.endSpan(activitySpan, activityError);

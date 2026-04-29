@@ -58,15 +58,21 @@ public final class FailureDetails {
     }
 
     /**
-     * Creates a {@code FailureDetails} from an exception, optionally using the provided
+     * Creates a {@code FailureDetails} from a throwable, optionally using the provided
      * {@link ExceptionPropertiesProvider} to extract custom properties.
+     * <p>
+     * Accepts any {@link Throwable} so callers that catch {@code Throwable} (for example, activity
+     * dispatchers that need to report {@link Error} subclasses such as {@link StackOverflowError}
+     * or {@link OutOfMemoryError}) can preserve the original error type instead of having to wrap
+     * it in a {@link RuntimeException}. The {@link ExceptionPropertiesProvider}, however, is only
+     * invoked for {@link Exception} instances, since that is what its contract accepts.
      *
-     * @param exception the exception that caused the failure
+     * @param throwable the throwable that caused the failure
      * @param provider  the provider for extracting custom properties, or {@code null}
      * @return a new {@code FailureDetails} instance
      */
-    static FailureDetails fromException(Exception exception, @Nullable ExceptionPropertiesProvider provider) {
-        return fromExceptionRecursive(exception, provider, 0);
+    static FailureDetails fromException(Throwable throwable, @Nullable ExceptionPropertiesProvider provider) {
+        return fromExceptionRecursive(throwable, provider, 0);
     }
 
     FailureDetails(TaskFailureDetails proto) {

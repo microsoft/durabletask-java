@@ -207,6 +207,52 @@ public class FailureDetailsTest {
     }
 
     @Test
+    void fromException_acceptsErrorAndPreservesType() {
+        // Errors aren't Exceptions, but activity dispatchers catch Throwable. fromException should
+        // accept them so the original error type (e.g. StackOverflowError) is reported instead of
+        // being hidden behind a synthetic RuntimeException wrapper.
+        StackOverflowError error = new StackOverflowError("too deep");
+
+        FailureDetails details = FailureDetails.fromException(error, null);
+
+        assertEquals("java.lang.StackOverflowError", details.getErrorType());
+        assertEquals("too deep", details.getErrorMessage());
+        assertNull(details.getProperties());
+    }
+
+    @Test
+    void fromException_errorWithCause_preservesInnerFailure() {
+        IOException cause = new IOException("disk full");
+        OutOfMemoryError error = new OutOfMemoryError("heap exhausted");
+        error.initCause(cause);
+
+        FailureDetails details = FailureDetails.fromException(error, null);
+
+        assertEquals("java.lang.OutOfMemoryError", details.getErrorType());
+        assertNotNull(details.getInnerFailure());
+        assertEquals("java.io.IOException", details.getInnerFailure().getErrorType());
+        assertEquals("disk full", details.getInnerFailure().getErrorMessage());
+    }
+
+    @Test
+    void fromException_errorWithProvider_skipsProviderForError() {
+        // The provider contract takes Exception, not Throwable, so for an Error we shouldn't
+        // call the provider at all. The Error itself still needs to be reported faithfully.
+        ExceptionPropertiesProvider provider = exception -> {
+            Map<String, Object> props = new HashMap<>();
+            props.put("called", true);
+            return props;
+        };
+
+        StackOverflowError error = new StackOverflowError("too deep");
+
+        FailureDetails details = FailureDetails.fromException(error, provider);
+
+        assertEquals("java.lang.StackOverflowError", details.getErrorType());
+        assertNull(details.getProperties());
+    }
+
+    @Test
     void fromException_providerSelectivelyReturnsProperties() {
         ExceptionPropertiesProvider provider = exception -> {
             if (exception instanceof IllegalArgumentException) {
