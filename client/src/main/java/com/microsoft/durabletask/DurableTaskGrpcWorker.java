@@ -46,6 +46,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final DataConverter dataConverter;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final ExceptionPropertiesProvider exceptionPropertiesProvider;
     private final int maxConcurrentEntityWorkItems;
     private final ExecutorService workItemExecutor;
 
@@ -84,6 +85,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
+        this.exceptionPropertiesProvider = builder.exceptionPropertiesProvider;
         int maxThreads = builder.maxWorkItemThreads > 0 ? builder.maxWorkItemThreads : DEFAULT_MAX_WORK_ITEM_THREADS;
         this.workItemExecutor = new ThreadPoolExecutor(
                 0, maxThreads,
@@ -159,7 +161,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 this.maximumTimerInterval,
                 logger,
                 this.versioningOptions,
-                true);
+                true,
+                this.exceptionPropertiesProvider);
         TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,
                 this.dataConverter,
@@ -389,11 +392,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                 activityRequest.getTaskId());
                         } catch (Throwable e) {
                             activityError = e;
-                            failureDetails = TaskFailureDetails.newBuilder()
-                                .setErrorType(e.getClass().getName())
-                                .setErrorMessage(e.getMessage())
-                                .setStackTrace(StringValue.of(FailureDetails.getFullStackTrace(e)))
-                                .build();
+                            failureDetails = FailureDetails.fromException(
+                                    e, this.exceptionPropertiesProvider).toProto();
                         } finally {
                             activityScope.close();
                             TracingHelper.endSpan(activitySpan, activityError);

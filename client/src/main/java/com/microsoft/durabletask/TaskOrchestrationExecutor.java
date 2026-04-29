@@ -37,6 +37,7 @@ final class TaskOrchestrationExecutor {
     private final Logger logger;
     private final Duration maximumTimerInterval;
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    private final ExceptionPropertiesProvider exceptionPropertiesProvider;
     private final boolean useNativeEntityActions;
 
     public TaskOrchestrationExecutor(
@@ -45,7 +46,7 @@ final class TaskOrchestrationExecutor {
             Duration maximumTimerInterval,
             Logger logger,
             DurableTaskGrpcWorkerVersioningOptions versioningOptions) {
-        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions, false);
+        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions, false, null);
     }
 
     public TaskOrchestrationExecutor(
@@ -55,12 +56,24 @@ final class TaskOrchestrationExecutor {
             Logger logger,
             DurableTaskGrpcWorkerVersioningOptions versioningOptions,
             boolean useNativeEntityActions) {
+        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions, useNativeEntityActions, null);
+    }
+
+    public TaskOrchestrationExecutor(
+            HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
+            DataConverter dataConverter,
+            Duration maximumTimerInterval,
+            Logger logger,
+            DurableTaskGrpcWorkerVersioningOptions versioningOptions,
+            boolean useNativeEntityActions,
+            ExceptionPropertiesProvider exceptionPropertiesProvider) {
         this.orchestrationFactories = orchestrationFactories;
         this.dataConverter = dataConverter;
         this.maximumTimerInterval = maximumTimerInterval;
         this.logger = logger;
         this.versioningOptions = versioningOptions;
         this.useNativeEntityActions = useNativeEntityActions;
+        this.exceptionPropertiesProvider = exceptionPropertiesProvider;
     }
 
     public TaskOrchestratorResult execute(
@@ -93,7 +106,7 @@ final class TaskOrchestrationExecutor {
             // The orchestrator threw an unhandled exception - fail it
             // TODO: What's the right way to log this?
             logger.warning("The orchestrator failed with an unhandled exception: " + e.toString());
-            context.fail(new FailureDetails(e));
+            context.fail(FailureDetails.fromException(e, this.exceptionPropertiesProvider));
         }
 
         if ((context.continuedAsNew && !context.isComplete) || (completed && context.pendingActions.isEmpty() && !context.waitingForEvents())) {

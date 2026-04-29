@@ -2,11 +2,18 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.google.protobuf.ListValue;
+import com.google.protobuf.NullValue;
 import com.google.protobuf.StringValue;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.TaskFailureDetails;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Class that represents the details of a task failure.
@@ -16,33 +23,65 @@ import javax.annotation.Nullable;
  * result in task failures, in which case there may not be any exception-specific information.
  */
 public final class FailureDetails {
+    private static final Logger logger = Logger.getLogger(FailureDetails.class.getName());
+
     private final String errorType;
     private final String errorMessage;
     private final String stackTrace;
     private final boolean isNonRetriable;
+    private final FailureDetails innerFailure;
+    private final Map<String, Object> properties;
 
     FailureDetails(
             String errorType,
             @Nullable String errorMessage,
             @Nullable String errorDetails,
             boolean isNonRetriable) {
+        this(errorType, errorMessage, errorDetails, isNonRetriable, null, null);
+    }
+
+    FailureDetails(
+            String errorType,
+            @Nullable String errorMessage,
+            @Nullable String errorDetails,
+            boolean isNonRetriable,
+            @Nullable FailureDetails innerFailure,
+            @Nullable Map<String, Object> properties) {
         this.errorType = errorType;
         this.stackTrace = errorDetails;
 
         // Error message can be null for things like NullPointerException but the gRPC contract doesn't allow null
         this.errorMessage = errorMessage != null ? errorMessage : "";
         this.isNonRetriable = isNonRetriable;
+        this.innerFailure = innerFailure;
+        this.properties = properties != null ? Collections.unmodifiableMap(new HashMap<>(properties)) : null;
     }
 
-    FailureDetails(Exception exception) {
-        this(exception.getClass().getName(), exception.getMessage(), getFullStackTrace(exception), false);
+    /**
+     * Creates a {@code FailureDetails} from a throwable, optionally using the provided
+     * {@link ExceptionPropertiesProvider} to extract custom properties.
+     * <p>
+     * Accepts any {@link Throwable} so callers that catch {@code Throwable} (for example, activity
+     * dispatchers that need to report {@link Error} subclasses such as {@link StackOverflowError}
+     * or {@link OutOfMemoryError}) can preserve the original error type instead of having to wrap
+     * it in a {@link RuntimeException}. The {@link ExceptionPropertiesProvider}, however, is only
+     * invoked for {@link Exception} instances, since that is what its contract accepts.
+     *
+     * @param throwable the throwable that caused the failure
+     * @param provider  the provider for extracting custom properties, or {@code null}
+     * @return a new {@code FailureDetails} instance
+     */
+    static FailureDetails fromException(Throwable throwable, @Nullable ExceptionPropertiesProvider provider) {
+        return fromExceptionRecursive(throwable, provider, 0);
     }
 
     FailureDetails(TaskFailureDetails proto) {
         this(proto.getErrorType(),
              proto.getErrorMessage(),
              proto.getStackTrace().getValue(),
-             proto.getIsNonRetriable());
+             proto.getIsNonRetriable(),
+             proto.hasInnerFailure() ? new FailureDetails(proto.getInnerFailure()) : null,
+             convertProtoProperties(proto.getPropertiesMap()));
     }
 
     /**
@@ -87,17 +126,54 @@ public final class FailureDetails {
     }
 
     /**
-     * Returns {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}.
+     * Gets the inner failure that caused this failure, or {@code null} if there is no inner cause.
+     *
+     * @return the inner {@code FailureDetails} or {@code null}
+     */
+    @Nullable
+    public FailureDetails getInnerFailure() {
+        return this.innerFailure;
+    }
+
+    /**
+     * Gets additional properties associated with the exception, or {@code null} if no properties are available.
      * <p>
-     * This method allows checking if a task failed due to a specific exception type by attempting to load the class
-     * specified in {@link #getErrorType()}. If the exception class cannot be loaded for any reason, this method will
-     * return {@code false}. Base types are supported by this method, as shown in the following example:
+     * The returned map is unmodifiable.
+     *
+     * @return an unmodifiable map of property names to values, or {@code null}
+     */
+    @Nullable
+    public Map<String, Object> getProperties() {
+        return this.properties;
+    }
+
+    /**
+     * Returns {@code true} if this failure's top-level error type matches the specified exception type, otherwise
+     * {@code false}.
+     * <p>
+     * This method only inspects the error type reported by {@link #getErrorType()} on <em>this</em> instance; it
+     * does <strong>not</strong> traverse the inner failure chain exposed by {@link #getInnerFailure()}. This matches
+     * the behavior of {@code TaskFailureDetails.IsCausedBy} in the Durable Task .NET SDK. If you also want to test
+     * wrapped causes, walk the chain explicitly, for example:
+     * <pre>{@code
+     * for (FailureDetails f = failureDetails; f != null; f = f.getInnerFailure()) {
+     *     if (f.isCausedBy(IllegalStateException.class)) {
+     *         // handle
+     *         break;
+     *     }
+     * }
+     * }</pre>
+     * <p>
+     * Internally the method attempts to load the class named by {@link #getErrorType()} via reflection. If the
+     * exception class cannot be loaded for any reason (for example, it is not on the worker's classpath), this
+     * method returns {@code false}. Base types are supported, as shown below:
      * <pre>{@code
      * boolean isRuntimeException = failureDetails.isCausedBy(RuntimeException.class);
      * }</pre>
      *
      * @param exceptionClass the class representing the exception type to test
-     * @return {@code true} if the task failure was provided by the specified exception type, otherwise {@code false}
+     * @return {@code true} if this failure's top-level error type is assignable to {@code exceptionClass};
+     *         {@code false} otherwise
      */
     public boolean isCausedBy(Class<? extends Exception> exceptionClass) {
         String actualClassName = this.getErrorType();
@@ -112,6 +188,11 @@ public final class FailureDetails {
         }
     }
 
+    @Override
+    public String toString() {
+        return this.errorType + ": " + this.errorMessage;
+    }
+
     static String getFullStackTrace(Throwable e) {
         StackTraceElement[] elements = e.getStackTrace();
 
@@ -124,10 +205,131 @@ public final class FailureDetails {
     }
 
     TaskFailureDetails toProto() {
-        return TaskFailureDetails.newBuilder()
+        TaskFailureDetails.Builder builder = TaskFailureDetails.newBuilder()
                 .setErrorType(this.getErrorType())
                 .setErrorMessage(this.getErrorMessage())
                 .setStackTrace(StringValue.of(this.getStackTrace() != null ? this.getStackTrace() : ""))
-                .build();
+                .setIsNonRetriable(this.isNonRetriable);
+
+        if (this.innerFailure != null) {
+            builder.setInnerFailure(this.innerFailure.toProto());
+        }
+
+        if (this.properties != null) {
+            builder.putAllProperties(convertToProtoProperties(this.properties));
+        }
+
+        return builder.build();
+    }
+
+    private static final int MAX_INNER_FAILURE_DEPTH = 10;
+
+    @Nullable
+    private static FailureDetails fromExceptionRecursive(
+            @Nullable Throwable exception,
+            @Nullable ExceptionPropertiesProvider provider,
+            int depth) {
+        if (exception == null || depth > MAX_INNER_FAILURE_DEPTH) {
+            return null;
+        }
+        Map<String, Object> properties = null;
+        if (provider != null && exception instanceof Exception) {
+            try {
+                properties = provider.getExceptionProperties((Exception) exception);
+            } catch (Exception providerException) {
+                // Don't let provider errors mask the original failure, but log so the issue is diagnosable.
+                logger.log(
+                        Level.WARNING,
+                        providerException,
+                        () -> "ExceptionPropertiesProvider threw while extracting properties for "
+                                + exception.getClass().getName() + "; ignoring provider output.");
+            }
+        }
+        return new FailureDetails(
+                exception.getClass().getName(),
+                exception.getMessage(),
+                getFullStackTrace(exception),
+                false,
+                fromExceptionRecursive(exception.getCause(), provider, depth + 1),
+                properties);
+    }
+
+    @Nullable
+    private static Map<String, Object> convertProtoProperties(Map<String, Value> protoProperties) {
+        if (protoProperties == null || protoProperties.isEmpty()) {
+            return null;
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        for (Map.Entry<String, Value> entry : protoProperties.entrySet()) {
+            result.put(entry.getKey(), convertProtoValue(entry.getValue()));
+        }
+        return result;
+    }
+
+    @Nullable
+    private static Object convertProtoValue(Value value) {
+        if (value == null) {
+            return null;
+        }
+        switch (value.getKindCase()) {
+            case NULL_VALUE:
+                return null;
+            case NUMBER_VALUE:
+                return value.getNumberValue();
+            case STRING_VALUE:
+                return value.getStringValue();
+            case BOOL_VALUE:
+                return value.getBoolValue();
+            case LIST_VALUE:
+                List<Object> list = new ArrayList<>();
+                for (Value item : value.getListValue().getValuesList()) {
+                    list.add(convertProtoValue(item));
+                }
+                return Collections.unmodifiableList(list);
+            case STRUCT_VALUE:
+                Map<String, Object> map = new HashMap<>();
+                for (Map.Entry<String, Value> entry : value.getStructValue().getFieldsMap().entrySet()) {
+                    map.put(entry.getKey(), convertProtoValue(entry.getValue()));
+                }
+                return Collections.unmodifiableMap(map);
+            default:
+                return value.toString();
+        }
+    }
+
+    private static Map<String, Value> convertToProtoProperties(Map<String, Object> properties) {
+        Map<String, Value> result = new HashMap<>();
+        for (Map.Entry<String, Object> entry : properties.entrySet()) {
+            result.put(entry.getKey(), convertToProtoValue(entry.getValue()));
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Value convertToProtoValue(@Nullable Object obj) {
+        if (obj == null) {
+            return Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build();
+        } else if (obj instanceof Number) {
+            return Value.newBuilder().setNumberValue(((Number) obj).doubleValue()).build();
+        } else if (obj instanceof Boolean) {
+            return Value.newBuilder().setBoolValue((Boolean) obj).build();
+        } else if (obj instanceof String) {
+            return Value.newBuilder().setStringValue((String) obj).build();
+        } else if (obj instanceof List) {
+            ListValue.Builder listBuilder = ListValue.newBuilder();
+            for (Object item : (List<?>) obj) {
+                listBuilder.addValues(convertToProtoValue(item));
+            }
+            return Value.newBuilder().setListValue(listBuilder).build();
+        } else if (obj instanceof Map) {
+            Struct.Builder structBuilder = Struct.newBuilder();
+            for (Map.Entry<String, Object> entry : ((Map<String, Object>) obj).entrySet()) {
+                structBuilder.putFields(entry.getKey(), convertToProtoValue(entry.getValue()));
+            }
+            return Value.newBuilder().setStructValue(structBuilder).build();
+        } else {
+            return Value.newBuilder().setStringValue(obj.toString()).build();
+        }
     }
 }
