@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import javax.annotation.Nullable;
 
 /**
@@ -60,6 +63,7 @@ public final class TypedEntityMetadata<T> extends EntityMetadata {
      * @throws IllegalStateException if state was not included in this metadata
      *         (i.e., {@link #isIncludesState()} returns {@code false})
      */
+    @JsonProperty("state")
     @Nullable
     public T getState() {
         if (!this.isIncludesState()) {
@@ -75,6 +79,7 @@ public final class TypedEntityMetadata<T> extends EntityMetadata {
      *
      * @return the state type class
      */
+    @JsonIgnore
     public Class<T> getStateType() {
         return this.stateType;
     }

@@ -29,7 +29,7 @@ import java.util.concurrent.TimeoutException;
 final class LowLevelEntitySample {
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
-        DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+        DurableTaskGrpcWorker worker = SampleUtils.newWorkerBuilder()
                 // Demo 1: TaskEntity — manual dispatch
                 .addEntity("KeyValue", KeyValueEntity::new)
                 // Demo 2: TaskEntity with POJO state and state dispatch
@@ -99,7 +99,7 @@ final class LowLevelEntitySample {
         worker.start();
         System.out.println("Worker started. KeyValue and ShoppingCart entities registered.");
 
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = SampleUtils.newClientBuilder().build();
 
         // --- Demo 1: Low-level TaskEntity ---
         System.out.println("\n--- Demo 1: TaskEntity with manual dispatch ---");

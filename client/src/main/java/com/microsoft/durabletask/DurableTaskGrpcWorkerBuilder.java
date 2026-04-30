@@ -25,6 +25,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     DataConverter dataConverter;
     Duration maximumTimerInterval;
     DurableTaskGrpcWorkerVersioningOptions versioningOptions;
+    ExceptionPropertiesProvider exceptionPropertiesProvider;
     int maxConcurrentEntityWorkItems = 1;
     int maxWorkItemThreads;
     private WorkItemFilter workItemFilter;
@@ -311,6 +312,21 @@ public final class DurableTaskGrpcWorkerBuilder {
      */
     public DurableTaskGrpcWorkerBuilder useVersioning(DurableTaskGrpcWorkerVersioningOptions options) {
         this.versioningOptions = options;
+        return this;
+    }
+
+    /**
+     * Sets the {@link ExceptionPropertiesProvider} to use for extracting custom properties from exceptions.
+     * <p>
+     * When set, the provider is invoked whenever an activity or orchestration fails with an exception. The returned
+     * properties are included in the {@link FailureDetails} and can be retrieved via
+     * {@link FailureDetails#getProperties()}.
+     *
+     * @param provider the exception properties provider
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder exceptionPropertiesProvider(ExceptionPropertiesProvider provider) {
+        this.exceptionPropertiesProvider = provider;
         return this;
     }
 

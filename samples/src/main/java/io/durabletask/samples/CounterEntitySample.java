@@ -28,7 +28,7 @@ final class CounterEntitySample {
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         // Build the worker with the counter entity registered
-        DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+        DurableTaskGrpcWorker worker = SampleUtils.newWorkerBuilder()
                 .addEntity("Counter", CounterEntity::new)
                 .addOrchestration(new TaskOrchestrationFactory() {
                     @Override
@@ -57,7 +57,7 @@ final class CounterEntitySample {
         System.out.println("Worker started. Counter entity registered.");
 
         // Use the client to schedule an orchestration that interacts with the entity
-        DurableTaskClient client = new DurableTaskGrpcClientBuilder().build();
+        DurableTaskClient client = SampleUtils.newClientBuilder().build();
 
         String instanceId = client.scheduleNewOrchestrationInstance("CounterOrchestration");
         System.out.printf("Started orchestration: %s%n", instanceId);
