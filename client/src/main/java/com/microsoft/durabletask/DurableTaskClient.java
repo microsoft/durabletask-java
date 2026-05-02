@@ -4,6 +4,9 @@ package com.microsoft.durabletask;
 
 import javax.annotation.Nullable;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -491,6 +494,48 @@ public abstract class DurableTaskClient implements AutoCloseable {
     @Deprecated
     public CleanEntityStorageResult cleanEntityStorage(CleanEntityStorageRequest request) {
         return this.getEntities().cleanEntityStorage(request);
+    }
+
+    // endregion
+
+    // region History and Instance Listing APIs
+
+    /**
+     * Retrieves the full history of the specified orchestration instance.
+     * <p>
+     * Each history event is returned as a transport-neutral {@link OrchestrationHistoryEvent} that
+     * decouples the public API from the underlying wire format.
+     *
+     * @param instanceId the orchestration instance ID
+     * @return list of history events for the orchestration
+     * @throws UnsupportedOperationException if this client implementation does not support history retrieval
+     * @throws IllegalArgumentException if the instance is not found
+     */
+    public List<OrchestrationHistoryEvent> getOrchestrationHistory(String instanceId) {
+        throw new UnsupportedOperationException(
+                this.getClass().getName() + " does not support retrieving orchestration history.");
+    }
+
+    /**
+     * Lists orchestration instance IDs that match the specified runtime status and
+     * completed time range, using key-based pagination.
+     *
+     * @param runtimeStatus   optional set of runtime statuses to filter by; if {@code null}, all statuses are included
+     * @param completedTimeFrom inclusive lower bound of the orchestration completed time filter
+     * @param completedTimeTo   inclusive upper bound of the orchestration completed time filter
+     * @param pageSize          maximum number of instance IDs to return in a single page
+     * @param lastInstanceKey   continuation key from the previous page; {@code null} to start from the beginning
+     * @return a page of orchestration instance IDs along with a continuation token
+     * @throws UnsupportedOperationException if this client implementation does not support instance ID listing
+     */
+    public InstanceIdPage listInstanceIds(
+            @Nullable Collection<OrchestrationRuntimeStatus> runtimeStatus,
+            @Nullable Instant completedTimeFrom,
+            @Nullable Instant completedTimeTo,
+            int pageSize,
+            @Nullable String lastInstanceKey) {
+        throw new UnsupportedOperationException(
+                this.getClass().getName() + " does not support listing instance IDs by completed time.");
     }
 
     // endregion
