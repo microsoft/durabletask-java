@@ -1,4 +1,5 @@
 ## Unreleased
+* Add export history support for the DurableTask SDK ([#283](https://github.com/microsoft/durabletask-java/pull/283))
 
 ## v1.9.0
 * Fix entity locking deserialization and add Jackson support for EntityInstanceId/EntityMetadata ([#281](https://github.com/microsoft/durabletask-java/pull/281))
