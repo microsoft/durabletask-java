@@ -36,6 +36,7 @@ public final class LargePayloadWorkerExtensions {
         PayloadStore store = new BlobPayloadStore(options);
         builder.addInterceptor(new LargePayloadInterceptor(store, options));
         builder.setSupportsLargePayloads(true);
+        builder.setLargePayloadThresholdBytes(options.getThresholdBytes());
         return builder;
     }
 
@@ -59,6 +60,7 @@ public final class LargePayloadWorkerExtensions {
         Objects.requireNonNull(options, "options must not be null");
         builder.addInterceptor(new LargePayloadInterceptor(store, options));
         builder.setSupportsLargePayloads(true);
+        builder.setLargePayloadThresholdBytes(options.getThresholdBytes());
         return builder;
     }
 }

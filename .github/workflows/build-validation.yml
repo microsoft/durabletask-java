@@ -122,12 +122,15 @@ jobs:
       continue-on-error: true
 
     - name: Kill Durable Task Emulator
+      if: always()
       run: docker kill durabletask-emulator
 
     - name: Kill Azurite
+      if: always()
       run: docker kill azurite
     
     - name: Upload Durable Task Emulator Logs
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: Durable Task Emulator Logs

@@ -613,10 +613,14 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             if (effectiveSize > maxChunkBytes) {
                 double maxMB = maxChunkBytes / 1024.0 / 1024.0;
                 double actionMB = effectiveSize / 1024.0 / 1024.0;
+                String advice = largePayloadsEnabled
+                    ? "Large-payload externalization is enabled but the action still exceeds the limit after " +
+                      "estimated externalization of string payload fields. Reduce non-string field sizes or " +
+                      "increase the maximum chunk size."
+                    : "Enable large-payload externalization to Azure Blob Storage to support oversized actions.";
                 String errorMessage = String.format(
-                    "A single orchestrator action of type %s with id %d exceeds the %.2fMB limit: %.2fMB. " +
-                    "Enable large-payload externalization to Azure Blob Storage to support oversized actions.",
-                    action.getOrchestratorActionTypeCase(), action.getId(), maxMB, actionMB);
+                    "A single orchestrator action of type %s with id %d exceeds the %.2fMB limit: %.2fMB. %s",
+                    action.getOrchestratorActionTypeCase(), action.getId(), maxMB, actionMB, advice);
                 return TaskFailureDetails.newBuilder()
                     .setErrorType("java.lang.IllegalStateException")
                     .setErrorMessage(errorMessage)
@@ -794,20 +798,44 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     }
 
     /**
-     * Returns the bytes saved if a StringValue with {@code value.length() >= thresholdBytes}
-     * is replaced by a fixed-size blob-reference token. Zero if the value is null, empty,
-     * or below the threshold.
+     * Returns the bytes saved if a StringValue whose UTF-8 byte length meets or exceeds
+     * {@code thresholdBytes} is replaced by a fixed-size blob-reference token.
+     * Zero if the value is null, empty, or below the threshold.
+     * <p>
+     * Uses the same UTF-8 byte-counting logic as {@code LargePayloadInterceptor.utf8ByteLength}
+     * to ensure the estimation threshold and the interceptor's externalization threshold
+     * are compared in consistent units.
      */
     private static int stringValueSavings(StringValue sv, int thresholdBytes) {
         if (sv == null) return 0;
         String v = sv.getValue();
         if (v == null || v.isEmpty()) return 0;
-        // Use String.length() rather than UTF-8 byte length — this is a lower-bound
-        // approximation that is slightly conservative (under-estimates savings), which
-        // means we err toward false positives not false negatives.
-        int n = v.length();
+        int n = utf8ByteLength(v);
         if (n < thresholdBytes) return 0;
         return Math.max(0, n - APPROX_TOKEN_WIRE_SIZE);
+    }
+
+    /**
+     * Computes the UTF-8 encoded byte length of a string without allocating a byte array.
+     * Mirrors {@code LargePayloadInterceptor.utf8ByteLength} to keep estimation consistent
+     * with actual externalization decisions.
+     */
+    private static int utf8ByteLength(String s) {
+        int count = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c <= 0x7F) {
+                count++;
+            } else if (c <= 0x7FF) {
+                count += 2;
+            } else if (Character.isHighSurrogate(c)) {
+                count += 4;
+                i++; // skip the low surrogate
+            } else {
+                count += 3;
+            }
+        }
+        return count;
     }
 
     /**

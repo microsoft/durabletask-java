@@ -390,8 +390,11 @@ public final class DurableTaskGrpcWorkerBuilder {
      * Indicates that this worker supports large payload externalization.
      * <p>
      * When enabled, the worker announces the {@code WORKER_CAPABILITY_LARGE_PAYLOADS} capability
-     * to the sidecar and skips the pre-send action size validation (since the gRPC interceptor
-     * will externalize oversized payloads before they hit the wire).
+     * to the sidecar. Pre-send action size validation still runs but uses an estimated
+     * post-externalization size that accounts for payload fields the gRPC interceptor will
+     * replace with small blob-reference tokens. Use
+     * {@link #setLargePayloadThresholdBytes(int)} to align the estimation threshold with
+     * the interceptor's externalization threshold.
      *
      * @param enabled whether large payload support is enabled
      * @return this builder object
