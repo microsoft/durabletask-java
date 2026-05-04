@@ -22,4 +22,6 @@ public final class ExportCheckpoint {
     public String getLastInstanceKey() {
         return this.lastInstanceKey;
     }
+
+    public void setLastInstanceKey(String lastInstanceKey) { this.lastInstanceKey = lastInstanceKey; }
 }

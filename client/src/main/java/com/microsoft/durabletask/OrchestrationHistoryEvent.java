@@ -6,6 +6,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -47,7 +48,7 @@ public final class OrchestrationHistoryEvent {
         this.eventId = eventId;
         this.timestamp = timestamp;
         this.eventType = eventType;
-        this.data = Collections.unmodifiableMap(data);
+        this.data = Collections.unmodifiableMap(new HashMap<>(data));
     }
 
     /**

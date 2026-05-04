@@ -47,4 +47,9 @@ public final class ExportFailure {
     public Instant getLastAttempt() {
         return this.lastAttempt;
     }
+
+    public void setInstanceId(String instanceId) { this.instanceId = instanceId; }
+    public void setReason(String reason) { this.reason = reason; }
+    public void setAttemptCount(int attemptCount) { this.attemptCount = attemptCount; }
+    public void setLastAttempt(Instant lastAttempt) { this.lastAttempt = lastAttempt; }
 }

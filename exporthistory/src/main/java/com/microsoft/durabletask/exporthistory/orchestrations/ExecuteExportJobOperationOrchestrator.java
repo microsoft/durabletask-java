@@ -19,12 +19,12 @@ public class ExecuteExportJobOperationOrchestrator implements TaskOrchestration 
             throw new IllegalArgumentException("ExportJobOperationRequest with entityId and operationName is required.");
         }
 
-        ctx.callEntity(
+        Object result = ctx.callEntity(
                 input.getEntityId(),
                 input.getOperationName(),
                 input.getInput(),
                 Object.class).await();
 
-        ctx.complete(null);
+        ctx.complete(result);
     }
 }

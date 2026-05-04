@@ -47,4 +47,8 @@ public final class ExportFilter {
     public Collection<OrchestrationRuntimeStatus> getRuntimeStatus() {
         return this.runtimeStatus;
     }
+
+    public void setCompletedTimeFrom(Instant completedTimeFrom) { this.completedTimeFrom = completedTimeFrom; }
+    public void setCompletedTimeTo(Instant completedTimeTo) { this.completedTimeTo = completedTimeTo; }
+    public void setRuntimeStatus(Collection<OrchestrationRuntimeStatus> runtimeStatus) { this.runtimeStatus = runtimeStatus; }
 }

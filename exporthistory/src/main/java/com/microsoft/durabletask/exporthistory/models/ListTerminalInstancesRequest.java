@@ -14,11 +14,11 @@ import java.util.Collection;
  */
 public final class ListTerminalInstancesRequest {
 
-    private final Instant completedTimeFrom;
-    private final Instant completedTimeTo;
-    private final Collection<OrchestrationRuntimeStatus> runtimeStatus;
-    private final String lastInstanceKey;
-    private final int maxInstancesPerBatch;
+    private Instant completedTimeFrom;
+    private Instant completedTimeTo;
+    private Collection<OrchestrationRuntimeStatus> runtimeStatus;
+    private String lastInstanceKey;
+    private int maxInstancesPerBatch;
 
     public ListTerminalInstancesRequest(
             @Nonnull Instant completedTimeFrom,
@@ -55,4 +55,10 @@ public final class ListTerminalInstancesRequest {
     public String getLastInstanceKey() { return this.lastInstanceKey; }
 
     public int getMaxInstancesPerBatch() { return this.maxInstancesPerBatch; }
+
+    public void setCompletedTimeFrom(Instant completedTimeFrom) { this.completedTimeFrom = completedTimeFrom; }
+    public void setCompletedTimeTo(Instant completedTimeTo) { this.completedTimeTo = completedTimeTo; }
+    public void setRuntimeStatus(Collection<OrchestrationRuntimeStatus> runtimeStatus) { this.runtimeStatus = runtimeStatus; }
+    public void setLastInstanceKey(String lastInstanceKey) { this.lastInstanceKey = lastInstanceKey; }
+    public void setMaxInstancesPerBatch(int maxInstancesPerBatch) { this.maxInstancesPerBatch = maxInstancesPerBatch; }
 }

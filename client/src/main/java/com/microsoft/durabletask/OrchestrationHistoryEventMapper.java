@@ -129,6 +129,13 @@ final class OrchestrationHistoryEventMapper {
             case EXECUTIONSUSPENDED: return proto.getExecutionSuspended();
             case EXECUTIONRESUMED: return proto.getExecutionResumed();
             case EXECUTIONREWOUND: return proto.getExecutionRewound();
+            case ENTITYOPERATIONSIGNALED: return proto.getEntityOperationSignaled();
+            case ENTITYOPERATIONCALLED: return proto.getEntityOperationCalled();
+            case ENTITYOPERATIONCOMPLETED: return proto.getEntityOperationCompleted();
+            case ENTITYOPERATIONFAILED: return proto.getEntityOperationFailed();
+            case ENTITYLOCKREQUESTED: return proto.getEntityLockRequested();
+            case ENTITYLOCKGRANTED: return proto.getEntityLockGranted();
+            case ENTITYUNLOCKSENT: return proto.getEntityUnlockSent();
             default: return null;
         }
     }
@@ -141,8 +148,11 @@ final class OrchestrationHistoryEventMapper {
         if (value instanceof com.google.protobuf.StringValue) {
             return ((com.google.protobuf.StringValue) value).getValue();
         }
-        if (value instanceof com.google.protobuf.Enum) {
-            return value.toString();
+        if (value instanceof Descriptors.EnumValueDescriptor) {
+            return ((Descriptors.EnumValueDescriptor) value).getName();
+        }
+        if (value instanceof com.google.protobuf.ProtocolMessageEnum) {
+            return ((com.google.protobuf.ProtocolMessageEnum) value).getValueDescriptor().getName();
         }
         if (value instanceof Message) {
             // Recursively flatten nested messages

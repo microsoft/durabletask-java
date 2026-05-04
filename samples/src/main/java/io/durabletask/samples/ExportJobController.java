@@ -86,10 +86,15 @@ public class ExportJobController {
             ExportJobQuery query = null;
             if (status != null || jobIdPrefix != null || createdFrom != null
                     || createdTo != null || pageSize != null || continuationToken != null) {
-                query = new ExportJobQuery(status, jobIdPrefix,
-                        createdFrom != null ? java.time.Instant.parse(createdFrom) : null,
-                        createdTo != null ? java.time.Instant.parse(createdTo) : null,
-                        pageSize, continuationToken);
+                try {
+                    query = new ExportJobQuery(status, jobIdPrefix,
+                            createdFrom != null ? java.time.Instant.parse(createdFrom) : null,
+                            createdTo != null ? java.time.Instant.parse(createdTo) : null,
+                            pageSize, continuationToken);
+                } catch (java.time.format.DateTimeParseException e) {
+                    return ResponseEntity.badRequest()
+                            .body("Invalid date format. Use ISO-8601 (e.g., 2026-01-01T00:00:00Z): " + e.getMessage());
+                }
             }
 
             List<ExportJobDescription> jobs = new ArrayList<>();

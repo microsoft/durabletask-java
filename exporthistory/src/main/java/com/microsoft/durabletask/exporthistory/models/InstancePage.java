@@ -12,8 +12,8 @@ import java.util.List;
  */
 public final class InstancePage {
 
-    private final List<String> instanceIds;
-    private final ExportCheckpoint nextCheckpoint;
+    private List<String> instanceIds;
+    private ExportCheckpoint nextCheckpoint;
 
     public InstancePage(@Nonnull List<String> instanceIds, @Nonnull ExportCheckpoint nextCheckpoint) {
         this.instanceIds = instanceIds != null ? Collections.unmodifiableList(instanceIds) : Collections.emptyList();
@@ -31,4 +31,7 @@ public final class InstancePage {
 
     @Nullable
     public ExportCheckpoint getNextCheckpoint() { return this.nextCheckpoint; }
+
+    public void setInstanceIds(List<String> instanceIds) { this.instanceIds = instanceIds; }
+    public void setNextCheckpoint(ExportCheckpoint nextCheckpoint) { this.nextCheckpoint = nextCheckpoint; }
 }

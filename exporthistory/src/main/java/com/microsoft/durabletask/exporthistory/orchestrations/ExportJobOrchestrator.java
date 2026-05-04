@@ -31,7 +31,9 @@ public class ExportJobOrchestrator implements TaskOrchestration {
 
     // Activity-level retry: 3 attempts, 15s initial, 2x backoff, 60s max
     private static final RetryPolicy EXPORT_ACTIVITY_RETRY_POLICY = new RetryPolicy(
-            3, Duration.ofSeconds(15));
+            3, Duration.ofSeconds(15))
+            .setBackoffCoefficient(2.0)
+            .setMaxRetryInterval(Duration.ofSeconds(60));
 
     @Override
     public void run(TaskOrchestrationContext ctx) {
@@ -104,7 +106,7 @@ public class ExportJobOrchestrator implements TaskOrchestration {
                 }
 
                 // Process batch with outer retry
-                BatchExportResult batchResult = processBatchWithRetry(ctx, input.getJobEntityId(), instancesToExport, config);
+                BatchExportResult batchResult = processBatchWithRetry(ctx, instancesToExport, config);
 
                 if (batchResult.isAllSucceeded()) {
                     // Commit checkpoint with progress
@@ -139,7 +141,6 @@ public class ExportJobOrchestrator implements TaskOrchestration {
 
     private BatchExportResult processBatchWithRetry(
             TaskOrchestrationContext ctx,
-            com.microsoft.durabletask.EntityInstanceId jobEntityId,
             List<String> instanceIds,
             ExportJobConfiguration config) {
 
@@ -153,7 +154,8 @@ public class ExportJobOrchestrator implements TaskOrchestration {
                 return new BatchExportResult(true, results.size(), null);
             }
 
-            if (attempt == MAX_RETRY_ATTEMPTS) {
+            // Last attempt — return failures without retrying
+            if (attempt >= MAX_RETRY_ATTEMPTS) {
                 final int finalAttempt = attempt;
                 List<ExportFailure> failures = failedResults.stream()
                         .map(r -> new ExportFailure(
@@ -167,12 +169,13 @@ public class ExportJobOrchestrator implements TaskOrchestration {
                 return new BatchExportResult(false, exportedCount, failures);
             }
 
-            // Exponential backoff: 60s, 120s, 240s (capped at 300s)
+            // Exponential backoff between retry attempts: 60s, 120s (capped at 300s)
             int backoffSeconds = Math.min(MIN_BACKOFF_SECONDS * (int) Math.pow(2, attempt - 1), MAX_BACKOFF_SECONDS);
             ctx.createTimer(Duration.ofSeconds(backoffSeconds)).await();
         }
 
-        return new BatchExportResult(true, 0, null); // Unreachable
+        // All attempts exhausted (unreachable due to return above, but satisfies compiler)
+        return new BatchExportResult(false, 0, null);
     }
 
     private List<ExportResult> exportBatch(
@@ -198,12 +201,12 @@ public class ExportJobOrchestrator implements TaskOrchestration {
 
         // Wait for all exports in the batch
         List<ExportResult> results = new ArrayList<>();
-        for (Task<ExportResult> task : exportTasks) {
+        for (int i = 0; i < exportTasks.size(); i++) {
             try {
-                results.add(task.await());
+                results.add(exportTasks.get(i).await());
             } catch (Exception ex) {
-                // Activity failure after all retries — record as failed result
-                results.add(new ExportResult("unknown", false, ex.getMessage()));
+                // Activity failure after all retries — preserve the instance ID for diagnostics
+                results.add(new ExportResult(instanceIds.get(i), false, ex.getMessage()));
             }
         }
         return results;

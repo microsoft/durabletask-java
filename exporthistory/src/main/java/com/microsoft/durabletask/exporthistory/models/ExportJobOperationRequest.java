@@ -13,9 +13,9 @@ import javax.annotation.Nullable;
  */
 public final class ExportJobOperationRequest {
 
-    private final EntityInstanceId entityId;
-    private final String operationName;
-    private final Object input;
+    private EntityInstanceId entityId;
+    private String operationName;
+    private Object input;
 
     public ExportJobOperationRequest(
             @Nonnull EntityInstanceId entityId,
@@ -45,4 +45,8 @@ public final class ExportJobOperationRequest {
 
     @Nullable
     public Object getInput() { return this.input; }
+
+    public void setEntityId(EntityInstanceId entityId) { this.entityId = entityId; }
+    public void setOperationName(String operationName) { this.operationName = operationName; }
+    public void setInput(Object input) { this.input = input; }
 }

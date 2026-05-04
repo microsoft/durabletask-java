@@ -51,4 +51,7 @@ public final class ExportFormat {
     public String getSchemaVersion() {
         return this.schemaVersion;
     }
+
+    public void setKind(ExportFormatKind kind) { this.kind = kind; }
+    public void setSchemaVersion(String schemaVersion) { this.schemaVersion = schemaVersion; }
 }

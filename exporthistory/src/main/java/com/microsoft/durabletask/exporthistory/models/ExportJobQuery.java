@@ -43,4 +43,11 @@ public final class ExportJobQuery {
     @Nullable public Instant getCreatedTo() { return this.createdTo; }
     @Nullable public Integer getPageSize() { return this.pageSize; }
     @Nullable public String getContinuationToken() { return this.continuationToken; }
+
+    public void setStatus(ExportJobStatus status) { this.status = status; }
+    public void setJobIdPrefix(String jobIdPrefix) { this.jobIdPrefix = jobIdPrefix; }
+    public void setCreatedFrom(Instant createdFrom) { this.createdFrom = createdFrom; }
+    public void setCreatedTo(Instant createdTo) { this.createdTo = createdTo; }
+    public void setPageSize(Integer pageSize) { this.pageSize = pageSize; }
+    public void setContinuationToken(String continuationToken) { this.continuationToken = continuationToken; }
 }

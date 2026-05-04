@@ -102,7 +102,7 @@ public final class ExportJobCreationOptions {
         this.destination = destination;
         this.format = format != null ? format : ExportFormat.DEFAULT;
         this.runtimeStatus = runtimeStatus;
-        this.maxInstancesPerBatch = maxInstancesPerBatch > 0 ? maxInstancesPerBatch : DEFAULT_MAX_INSTANCES_PER_BATCH;
+        this.maxInstancesPerBatch = maxInstancesPerBatch;
     }
 
     @Nonnull
@@ -143,4 +143,13 @@ public final class ExportJobCreationOptions {
     public int getMaxInstancesPerBatch() {
         return this.maxInstancesPerBatch;
     }
+
+    public void setJobId(String jobId) { this.jobId = jobId; }
+    public void setMode(ExportMode mode) { this.mode = mode; }
+    public void setCompletedTimeFrom(Instant completedTimeFrom) { this.completedTimeFrom = completedTimeFrom; }
+    public void setCompletedTimeTo(Instant completedTimeTo) { this.completedTimeTo = completedTimeTo; }
+    public void setDestination(ExportDestination destination) { this.destination = destination; }
+    public void setFormat(ExportFormat format) { this.format = format; }
+    public void setRuntimeStatus(List<OrchestrationRuntimeStatus> runtimeStatus) { this.runtimeStatus = runtimeStatus; }
+    public void setMaxInstancesPerBatch(int maxInstancesPerBatch) { this.maxInstancesPerBatch = maxInstancesPerBatch; }
 }

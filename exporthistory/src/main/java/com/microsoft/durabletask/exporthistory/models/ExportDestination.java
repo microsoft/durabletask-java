@@ -51,4 +51,7 @@ public final class ExportDestination {
     public String getPrefix() {
         return this.prefix;
     }
+
+    public void setContainer(String container) { this.container = container; }
+    public void setPrefix(String prefix) { this.prefix = prefix; }
 }

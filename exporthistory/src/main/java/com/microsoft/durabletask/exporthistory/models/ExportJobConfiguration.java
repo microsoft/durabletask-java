@@ -13,12 +13,12 @@ public final class ExportJobConfiguration {
     private static final int DEFAULT_MAX_PARALLEL_EXPORTS = 32;
     private static final int DEFAULT_MAX_INSTANCES_PER_BATCH = 100;
 
-    private final ExportMode mode;
-    private final ExportFilter filter;
-    private final ExportDestination destination;
-    private final ExportFormat format;
-    private final int maxParallelExports;
-    private final int maxInstancesPerBatch;
+    private ExportMode mode;
+    private ExportFilter filter;
+    private ExportDestination destination;
+    private ExportFormat format;
+    private int maxParallelExports;
+    private int maxInstancesPerBatch;
 
     public ExportJobConfiguration(
             @Nonnull ExportMode mode,
@@ -81,4 +81,11 @@ public final class ExportJobConfiguration {
     public int getMaxInstancesPerBatch() {
         return this.maxInstancesPerBatch;
     }
+
+    public void setMode(ExportMode mode) { this.mode = mode; }
+    public void setFilter(ExportFilter filter) { this.filter = filter; }
+    public void setDestination(ExportDestination destination) { this.destination = destination; }
+    public void setFormat(ExportFormat format) { this.format = format; }
+    public void setMaxParallelExports(int maxParallelExports) { this.maxParallelExports = maxParallelExports; }
+    public void setMaxInstancesPerBatch(int maxInstancesPerBatch) { this.maxInstancesPerBatch = maxInstancesPerBatch; }
 }

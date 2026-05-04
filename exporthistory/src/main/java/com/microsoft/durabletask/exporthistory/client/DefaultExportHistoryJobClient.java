@@ -78,9 +78,15 @@ public class DefaultExportHistoryJobClient extends ExportHistoryJobClient {
         // Wait for completion
         try {
             OrchestrationMetadata result = this.durableTaskClient.waitForInstanceCompletion(
-                    instanceId, OPERATION_TIMEOUT, false);
+                    instanceId, OPERATION_TIMEOUT, true);
             if (result != null && result.isRunning()) {
                 throw new RuntimeException("Create operation did not complete in time for job: " + this.jobId);
+            }
+            if (result != null && result.getRuntimeStatus() == com.microsoft.durabletask.OrchestrationRuntimeStatus.FAILED) {
+                String details = result.getFailureDetails() != null
+                        ? result.getFailureDetails().getErrorMessage()
+                        : "unknown error";
+                throw new RuntimeException("Create operation failed for job '" + this.jobId + "': " + details);
             }
         } catch (TimeoutException e) {
             throw new RuntimeException("Timed out waiting for create operation for job: " + this.jobId, e);
@@ -100,6 +106,9 @@ public class DefaultExportHistoryJobClient extends ExportHistoryJobClient {
                 throw new RuntimeException("Interrupted waiting for entity visibility", ie);
             }
         }
+        throw new RuntimeException(
+                "Create operation completed but entity metadata for job '" + this.jobId
+                        + "' did not become visible within the expected time.");
     }
 
     @Override

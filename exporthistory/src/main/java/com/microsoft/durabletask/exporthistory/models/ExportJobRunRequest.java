@@ -11,8 +11,8 @@ import javax.annotation.Nonnull;
  */
 public final class ExportJobRunRequest {
 
-    private final EntityInstanceId jobEntityId;
-    private final int processedCycles;
+    private EntityInstanceId jobEntityId;
+    private int processedCycles;
 
     public ExportJobRunRequest(@Nonnull EntityInstanceId jobEntityId) {
         this(jobEntityId, 0);
@@ -33,4 +33,7 @@ public final class ExportJobRunRequest {
     public EntityInstanceId getJobEntityId() { return this.jobEntityId; }
 
     public int getProcessedCycles() { return this.processedCycles; }
+
+    public void setJobEntityId(EntityInstanceId jobEntityId) { this.jobEntityId = jobEntityId; }
+    public void setProcessedCycles(int processedCycles) { this.processedCycles = processedCycles; }
 }
