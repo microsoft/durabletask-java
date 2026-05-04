@@ -53,6 +53,10 @@ public class ExportInstanceHistoryActivity implements TaskActivity {
     private final DurableTaskClient client;
     private final ExportHistoryStorageOptions storageOptions;
 
+    // Lazily initialized and cached to avoid rebuilding per invocation
+    private volatile BlobContainerClient cachedContainerClient;
+    private volatile String cachedContainerName;
+
     public ExportInstanceHistoryActivity(DurableTaskClient client, ExportHistoryStorageOptions storageOptions) {
         this.client = client;
         this.storageOptions = storageOptions;
@@ -150,11 +154,7 @@ public class ExportInstanceHistoryActivity implements TaskActivity {
             ExportFormatKind kind,
             String instanceId) throws IOException {
 
-        BlobServiceClient serviceClient = new BlobServiceClientBuilder()
-                .connectionString(this.storageOptions.getConnectionString())
-                .buildClient();
-        BlobContainerClient containerClient = serviceClient.getBlobContainerClient(containerName);
-        containerClient.createIfNotExists();
+        BlobContainerClient containerClient = getOrCreateContainerClient(containerName);
 
         BlobClient blobClient = containerClient.getBlobClient(blobPath);
         Map<String, String> metadata = Collections.singletonMap("instanceId", instanceId);
@@ -183,6 +183,26 @@ public class ExportInstanceHistoryActivity implements TaskActivity {
                             .setContentType("application/json"))
                     .setMetadata(metadata);
             blobClient.uploadWithResponse(uploadOptions, null, null);
+        }
+    }
+
+    private BlobContainerClient getOrCreateContainerClient(String containerName) {
+        // Double-checked locking: reuse the cached client if the container name matches
+        if (this.cachedContainerClient != null && containerName.equals(this.cachedContainerName)) {
+            return this.cachedContainerClient;
+        }
+        synchronized (this) {
+            if (this.cachedContainerClient != null && containerName.equals(this.cachedContainerName)) {
+                return this.cachedContainerClient;
+            }
+            BlobServiceClient serviceClient = new BlobServiceClientBuilder()
+                    .connectionString(this.storageOptions.getConnectionString())
+                    .buildClient();
+            BlobContainerClient containerClient = serviceClient.getBlobContainerClient(containerName);
+            containerClient.createIfNotExists();
+            this.cachedContainerName = containerName;
+            this.cachedContainerClient = containerClient;
+            return containerClient;
         }
     }
 }

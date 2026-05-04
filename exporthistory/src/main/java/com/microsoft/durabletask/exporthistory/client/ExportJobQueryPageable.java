@@ -80,7 +80,6 @@ public class ExportJobQueryPageable implements Iterable<ExportJobDescription> {
         return () -> new Iterator<ExportJobQueryResult>() {
             private String continuationToken = baseQuery != null ? baseQuery.getContinuationToken() : null;
             private boolean hasMorePages = true;
-            private boolean firstPage = true;
 
             @Override
             public boolean hasNext() {
@@ -103,7 +102,6 @@ public class ExportJobQueryPageable implements Iterable<ExportJobDescription> {
                 ExportJobQueryResult result = queryExecutor.apply(query);
                 this.continuationToken = result.getContinuationToken();
                 this.hasMorePages = this.continuationToken != null && !this.continuationToken.isEmpty();
-                this.firstPage = false;
                 return result;
             }
         };

@@ -48,18 +48,21 @@ public class DefaultExportHistoryJobClient extends ExportHistoryJobClient {
             throw new IllegalArgumentException("options must not be null.");
         }
 
-        // Build options with destination from storage options if not set
-        ExportDestination destination = options.getDestination();
-        if (destination == null) {
-            String prefix = options.getMode().name().toLowerCase() + "-" + this.jobId + "/";
-            destination = new ExportDestination(
-                    this.storageOptions.getContainerName(),
-                    this.storageOptions.getPrefix() != null ? this.storageOptions.getPrefix() : prefix);
-        }
+        // Resolve destination by independently falling back each field:
+        // prefix:    user destination → storageOptions → auto-generated per-job default
+        // container: user destination → storageOptions
+        String defaultPrefix = options.getMode().name().toLowerCase() + "-" + this.jobId + "/";
+        ExportDestination userDest = options.getDestination();
+        String prefix = userDest != null && userDest.getPrefix() != null ? userDest.getPrefix()
+                : this.storageOptions.getPrefix() != null ? this.storageOptions.getPrefix()
+                : defaultPrefix;
+        String container = userDest != null && userDest.getContainer() != null ? userDest.getContainer()
+                : this.storageOptions.getContainerName();
+        ExportDestination destination = new ExportDestination(container, prefix);
 
-        // Create options with resolved destination
+        // Create options with resolved destination, always using this client's bound jobId
         ExportJobCreationOptions resolvedOptions = new ExportJobCreationOptions(
-                options.getJobId(),
+                this.jobId,
                 options.getMode(),
                 options.getCompletedTimeFrom(),
                 options.getCompletedTimeTo(),
