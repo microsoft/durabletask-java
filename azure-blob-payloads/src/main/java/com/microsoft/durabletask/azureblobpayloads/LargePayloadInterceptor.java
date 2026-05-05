@@ -363,54 +363,94 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
     }
 
     private Object externalizeEntityBatchResult(EntityBatchResult r) {
-        EntityBatchResult.Builder builder = r.toBuilder();
-        boolean changed = false;
+        try {
+            EntityBatchResult.Builder builder = r.toBuilder();
+            boolean changed = false;
 
-        StringValue entityState = maybeExternalize(r.getEntityState());
-        if (entityState != r.getEntityState()) {
-            builder.setEntityState(entityState);
-            changed = true;
-        }
+            StringValue entityState = maybeExternalize(r.getEntityState());
+            if (entityState != r.getEntityState()) {
+                builder.setEntityState(entityState);
+                changed = true;
+            }
 
-        for (int i = 0; i < r.getResultsCount(); i++) {
-            OperationResult result = r.getResults(i);
-            if (result.hasSuccess()) {
-                OperationResultSuccess success = result.getSuccess();
-                StringValue resultVal = maybeExternalize(success.getResult());
-                if (resultVal != success.getResult()) {
-                    builder.setResults(i, result.toBuilder()
-                        .setSuccess(success.toBuilder().setResult(resultVal).build())
-                        .build());
+            // Externalize the top-level failure's stack trace (user content, unbounded).
+            if (r.hasFailureDetails()) {
+                TaskFailureDetails fd = externalizeFailureDetails(r.getFailureDetails());
+                if (fd != r.getFailureDetails()) {
+                    builder.setFailureDetails(fd);
                     changed = true;
                 }
             }
-        }
 
-        for (int i = 0; i < r.getActionsCount(); i++) {
-            OperationAction action = r.getActions(i);
-            if (action.hasSendSignal()) {
-                SendSignalAction sendSig = action.getSendSignal();
-                StringValue input = maybeExternalize(sendSig.getInput());
-                if (input != sendSig.getInput()) {
-                    builder.setActions(i, action.toBuilder()
-                        .setSendSignal(sendSig.toBuilder().setInput(input).build())
-                        .build());
-                    changed = true;
+            for (int i = 0; i < r.getResultsCount(); i++) {
+                OperationResult result = r.getResults(i);
+                if (result.hasSuccess()) {
+                    OperationResultSuccess success = result.getSuccess();
+                    StringValue resultVal = maybeExternalize(success.getResult());
+                    if (resultVal != success.getResult()) {
+                        builder.setResults(i, result.toBuilder()
+                            .setSuccess(success.toBuilder().setResult(resultVal).build())
+                            .build());
+                        changed = true;
+                    }
+                } else if (result.hasFailure()) {
+                    OperationResultFailure failure = result.getFailure();
+                    if (failure.hasFailureDetails()) {
+                        TaskFailureDetails fd = externalizeFailureDetails(failure.getFailureDetails());
+                        if (fd != failure.getFailureDetails()) {
+                            builder.setResults(i, result.toBuilder()
+                                .setFailure(failure.toBuilder().setFailureDetails(fd).build())
+                                .build());
+                            changed = true;
+                        }
+                    }
                 }
             }
-            if (action.hasStartNewOrchestration()) {
-                StartNewOrchestrationAction start = action.getStartNewOrchestration();
-                StringValue input = maybeExternalize(start.getInput());
-                if (input != start.getInput()) {
-                    builder.setActions(i, action.toBuilder()
-                        .setStartNewOrchestration(start.toBuilder().setInput(input).build())
-                        .build());
-                    changed = true;
+
+            for (int i = 0; i < r.getActionsCount(); i++) {
+                OperationAction action = r.getActions(i);
+                if (action.hasSendSignal()) {
+                    SendSignalAction sendSig = action.getSendSignal();
+                    StringValue input = maybeExternalize(sendSig.getInput());
+                    if (input != sendSig.getInput()) {
+                        builder.setActions(i, action.toBuilder()
+                            .setSendSignal(sendSig.toBuilder().setInput(input).build())
+                            .build());
+                        changed = true;
+                    }
+                }
+                if (action.hasStartNewOrchestration()) {
+                    StartNewOrchestrationAction start = action.getStartNewOrchestration();
+                    StringValue input = maybeExternalize(start.getInput());
+                    if (input != start.getInput()) {
+                        builder.setActions(i, action.toBuilder()
+                            .setStartNewOrchestration(start.toBuilder().setInput(input).build())
+                            .build());
+                        changed = true;
+                    }
                 }
             }
-        }
 
-        return changed ? builder.build() : r;
+            return changed ? builder.build() : r;
+        } catch (Exception ex) {
+            boolean permanent = isPermanentStorageFailure(ex);
+            String prefix = permanent
+                ? "Permanent payload storage failure"
+                : "Transient payload storage failure";
+            logger.log(Level.WARNING, prefix + " while externalizing entity batch result.", ex);
+            // Convert to a failure result so the sidecar records the entity failure.
+            // Permanent failures are non-retriable; transient failures are retriable so
+            // the sidecar can re-dispatch the entity work item.
+            return EntityBatchResult.newBuilder()
+                .setCompletionToken(r.getCompletionToken())
+                .setFailureDetails(TaskFailureDetails.newBuilder()
+                    .setErrorType(ex.getClass().getName())
+                    .setErrorMessage(prefix + ": " + ex.getMessage())
+                    .setStackTrace(StringValue.of(getStackTraceString(ex)))
+                    .setIsNonRetriable(permanent)
+                    .build())
+                .build();
+        }
     }
 
     private Object externalizeEntityBatchRequest(EntityBatchRequest r) {
@@ -1101,17 +1141,35 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
 
     /**
      * Determines whether an exception represents a permanent storage failure.
+     * <p>
+     * {@link PayloadStorageException} wraps both permanent and transient
+     * {@link BlobStorageException}s, so we unwrap and classify the underlying
+     * cause rather than treating every {@code PayloadStorageException} as permanent.
+     * A {@code PayloadStorageException} with no {@code BlobStorageException} cause
+     * (e.g. payload-too-large, token-decode error) is always permanent.
      */
     static boolean isPermanentStorageFailure(Exception ex) {
+        // Unwrap PayloadStorageException to inspect the underlying cause.
+        if (ex instanceof PayloadStorageException && ex.getCause() instanceof BlobStorageException) {
+            return isBlobStatusPermanent(((BlobStorageException) ex.getCause()).getStatusCode());
+        }
         if (ex instanceof PayloadStorageException) {
+            // No BlobStorageException cause — programming error, token decode failure,
+            // payload-too-large, etc. These are permanent.
             return true;
         }
         if (ex instanceof BlobStorageException) {
-            int status = ((BlobStorageException) ex).getStatusCode();
-            // 4xx errors are permanent except 408 (timeout) and 429 (throttle)
-            return status >= 400 && status < 500 && status != 408 && status != 429;
+            return isBlobStatusPermanent(((BlobStorageException) ex).getStatusCode());
         }
         return false;
+    }
+
+    /**
+     * Returns {@code true} for HTTP status codes that indicate a permanent blob storage failure.
+     * 4xx errors are permanent except 408 (timeout) and 429 (throttle).
+     */
+    private static boolean isBlobStatusPermanent(int status) {
+        return status >= 400 && status < 500 && status != 408 && status != 429;
     }
 
     /**

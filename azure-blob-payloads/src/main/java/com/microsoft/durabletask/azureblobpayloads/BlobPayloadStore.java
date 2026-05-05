@@ -197,8 +197,13 @@ public final class BlobPayloadStore extends PayloadStore {
         }
 
         CountDownLatch latch = new CountDownLatch(1);
-        CountDownLatch existing = this.containerLatch.compareAndExchange(null, latch);
-        if (existing != null) {
+        if (!this.containerLatch.compareAndSet(null, latch)) {
+            CountDownLatch existing = this.containerLatch.get();
+            if (existing == null) {
+                // Rare race: the creating thread already reset the latch (failure path).
+                // Retry on the next upload call rather than proceeding without a container.
+                return;
+            }
             // Another thread is already creating the container — wait for it.
             try {
                 existing.await();

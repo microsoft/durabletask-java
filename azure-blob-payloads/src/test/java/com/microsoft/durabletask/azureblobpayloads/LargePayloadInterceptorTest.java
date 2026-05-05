@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.azureblobpayloads;
 
+import com.azure.storage.blob.models.BlobStorageException;
 import com.google.protobuf.StringValue;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 
@@ -415,9 +416,33 @@ class LargePayloadInterceptorTest {
     }
 
     @Test
-    void isPermanentStorageFailure_payloadStorageException_returnsTrue() {
+    void isPermanentStorageFailure_payloadStorageException_noCause_returnsTrue() {
         assertTrue(LargePayloadInterceptor.isPermanentStorageFailure(
             new PayloadStorageException("test")));
+    }
+
+    @Test
+    void isPermanentStorageFailure_payloadStorageException_wrapping404_returnsTrue() {
+        BlobStorageException blobEx = mock(BlobStorageException.class);
+        when(blobEx.getStatusCode()).thenReturn(404);
+        assertTrue(LargePayloadInterceptor.isPermanentStorageFailure(
+            new PayloadStorageException("not found", blobEx)));
+    }
+
+    @Test
+    void isPermanentStorageFailure_payloadStorageException_wrapping503_returnsFalse() {
+        BlobStorageException blobEx = mock(BlobStorageException.class);
+        when(blobEx.getStatusCode()).thenReturn(503);
+        assertFalse(LargePayloadInterceptor.isPermanentStorageFailure(
+            new PayloadStorageException("transient", blobEx)));
+    }
+
+    @Test
+    void isPermanentStorageFailure_payloadStorageException_wrapping429_returnsFalse() {
+        BlobStorageException blobEx = mock(BlobStorageException.class);
+        when(blobEx.getStatusCode()).thenReturn(429);
+        assertFalse(LargePayloadInterceptor.isPermanentStorageFailure(
+            new PayloadStorageException("throttled", blobEx)));
     }
 
     @Test
