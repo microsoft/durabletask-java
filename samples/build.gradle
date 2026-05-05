@@ -83,6 +83,12 @@ task runTypedEntityProxySample(type: JavaExec) {
     environment dtsEnv
 }
 
+task runParentInstanceSample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.ParentInstanceSample'
+    environment dtsEnv
+}
+
 task printClasspath {
     doLast {
         println sourceSets.main.runtimeClasspath.asPath

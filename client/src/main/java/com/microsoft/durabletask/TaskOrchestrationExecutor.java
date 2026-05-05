@@ -146,6 +146,7 @@ final class TaskOrchestrationExecutor {
         private boolean preserveUnprocessedEvents;
         private Object customStatus;
         private TraceContext parentTraceContext;
+        private ParentOrchestrationInstance parentInstance;
 
         // Entity integration state (Phase 4)
         private String executionId;
@@ -205,6 +206,12 @@ final class TaskOrchestrationExecutor {
         public String getInstanceId() {
             // TODO: Throw if instance ID is null
             return this.instanceId;
+        }
+
+        @Override
+        @Nullable
+        public ParentOrchestrationInstance getParent() {
+            return this.parentInstance;
         }
 
         private void setInstanceId(String instanceId) {
@@ -1704,6 +1711,14 @@ final class TaskOrchestrationExecutor {
                             this.parentTraceContext = startedEvent.getParentTraceContext();
                         } else {
                             this.parentTraceContext = null;
+                        }
+                        if (startedEvent.hasParentInstance()) {
+                            ParentInstanceInfo parentInfo = startedEvent.getParentInstance();
+                            this.parentInstance = new ParentOrchestrationInstance(
+                                parentInfo.getName().getValue(),
+                                parentInfo.getOrchestrationInstance().getInstanceId());
+                        } else {
+                            this.parentInstance = null;
                         }
                         TaskOrchestrationFactory factory = TaskOrchestrationExecutor.this.orchestrationFactories.get(name);
                         if (factory == null) {

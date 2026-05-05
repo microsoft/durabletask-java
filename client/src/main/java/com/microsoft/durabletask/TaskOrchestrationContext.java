@@ -795,6 +795,17 @@ public interface TaskOrchestrationContext {
     void clearCustomStatus();
 
     /**
+     * Gets the parent orchestration instance, or {@code null} if this orchestration
+     * was not started as a sub-orchestration.
+     *
+     * @return the parent orchestration instance, or {@code null}
+     */
+    @Nullable
+    default ParentOrchestrationInstance getParent() {
+        return null;
+    }
+
+    /**
      * Makes a durable HTTP request using the specified {@link DurableHttpRequest} and returns a {@link Task}
      * that completes when the HTTP call completes.
      * <p>
