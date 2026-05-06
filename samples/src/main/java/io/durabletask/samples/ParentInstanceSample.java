@@ -32,10 +32,14 @@ final class ParentInstanceSample {
             @Override
             public TaskOrchestration create() {
                 return ctx -> {
-                    System.out.println("  [Parent] Starting child sub-orchestration...");
+                    if (!ctx.getIsReplaying()) {
+                        System.out.println("  [Parent] Starting child sub-orchestration...");
+                    }
                     String childResult = ctx.callSubOrchestrator(
                             "ChildOrchestrator", null, String.class).await();
-                    System.out.println("  [Parent] Child returned: " + childResult);
+                    if (!ctx.getIsReplaying()) {
+                        System.out.println("  [Parent] Child returned: " + childResult);
+                    }
                     ctx.complete(childResult);
                 };
             }
@@ -54,10 +58,14 @@ final class ParentInstanceSample {
                     if (parent != null) {
                         result = String.format("I was called by '%s' (instance: %s)",
                                 parent.getName(), parent.getInstanceId());
-                        System.out.println("  [Child] " + result);
+                        if (!ctx.getIsReplaying()) {
+                            System.out.println("  [Child] " + result);
+                        }
                     } else {
                         result = "No parent — I was started standalone";
-                        System.out.println("  [Child] " + result);
+                        if (!ctx.getIsReplaying()) {
+                            System.out.println("  [Child] " + result);
+                        }
                     }
                     ctx.complete(result);
                 };
