@@ -89,6 +89,14 @@ public class DefaultExportHistoryClient extends ExportHistoryClient {
                 if (query != null && query.getStatus() != null && state.getStatus() != query.getStatus()) {
                     continue;
                 }
+                if (query != null && query.getCreatedFrom() != null
+                        && (state.getCreatedAt() == null || state.getCreatedAt().isBefore(query.getCreatedFrom()))) {
+                    continue;
+                }
+                if (query != null && query.getCreatedTo() != null
+                        && (state.getCreatedAt() == null || state.getCreatedAt().isAfter(query.getCreatedTo()))) {
+                    continue;
+                }
                 ExportJobDescription desc = new ExportJobDescription();
                 desc.setJobId(metadata.getEntityInstanceId().getKey());
                 desc.setStatus(state.getStatus());

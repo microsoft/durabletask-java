@@ -8,8 +8,10 @@ import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.HistoryEvent;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -99,8 +101,13 @@ final class OrchestrationHistoryEventMapper {
             Descriptors.FieldDescriptor field = entry.getKey();
             Object value = entry.getValue();
 
-            // Convert proto types to simple Java types
-            data.put(field.getJsonName(), convertProtoValue(value));
+            // Proto map fields appear as repeated MapEntry messages in reflection;
+            // convert them to plain Java Maps using the field descriptor.
+            if (field.isMapField()) {
+                data.put(field.getJsonName(), convertProtoMapField(field, value));
+            } else {
+                data.put(field.getJsonName(), convertProtoValue(value));
+            }
         }
 
         return data;
@@ -140,6 +147,22 @@ final class OrchestrationHistoryEventMapper {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> convertProtoMapField(Descriptors.FieldDescriptor field, Object value) {
+        // Proto map fields are represented as List<MapEntry> in reflection.
+        // Each MapEntry is a Message with "key" and "value" fields.
+        List<Message> entries = (List<Message>) value;
+        Map<String, Object> result = new LinkedHashMap<>();
+        Descriptors.FieldDescriptor keyField = field.getMessageType().findFieldByName("key");
+        Descriptors.FieldDescriptor valueField = field.getMessageType().findFieldByName("value");
+        for (Message entry : entries) {
+            String key = String.valueOf(entry.getField(keyField));
+            Object val = convertProtoValue(entry.getField(valueField));
+            result.put(key, val);
+        }
+        return result;
+    }
+
     private static Object convertProtoValue(Object value) {
         if (value instanceof Timestamp) {
             Timestamp ts = (Timestamp) value;
@@ -153,6 +176,15 @@ final class OrchestrationHistoryEventMapper {
         }
         if (value instanceof com.google.protobuf.ProtocolMessageEnum) {
             return ((com.google.protobuf.ProtocolMessageEnum) value).getValueDescriptor().getName();
+        }
+        if (value instanceof List) {
+            // Repeated fields come through as List<Object> from proto reflection
+            List<?> protoList = (List<?>) value;
+            List<Object> converted = new ArrayList<>(protoList.size());
+            for (Object item : protoList) {
+                converted.add(convertProtoValue(item));
+            }
+            return converted;
         }
         if (value instanceof Message) {
             // Recursively flatten nested messages

@@ -109,9 +109,15 @@ public class ExportInstanceHistoryActivity implements TaskActivity {
             logger.info("Successfully exported instance " + instanceId + " to " + blobPath);
             return new ExportResult(instanceId, true, null);
 
+        } catch (RuntimeException ex) {
+            // Let transient failures (blob upload, serialization, network) propagate
+            // so the activity-level retry policy in the orchestrator can apply.
+            logger.log(Level.SEVERE, "Failed to export instance " + instanceId, ex);
+            throw ex;
         } catch (Exception ex) {
             logger.log(Level.SEVERE, "Failed to export instance " + instanceId, ex);
-            return new ExportResult(instanceId, false, ex.getMessage());
+            throw new RuntimeException(
+                    "Export failed for instance " + instanceId + ": " + ex.getMessage(), ex);
         }
     }
 

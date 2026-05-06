@@ -178,37 +178,47 @@ public class ExportJobOrchestrator implements TaskOrchestration {
         return new BatchExportResult(false, 0, null);
     }
 
-    private List<ExportResult> exportBatch(
+    // Package-private for unit testing of chunking behavior.
+    List<ExportResult> exportBatch(
             TaskOrchestrationContext ctx,
             List<String> instanceIds,
             ExportJobConfiguration config) {
 
         TaskOptions activityOptions = new TaskOptions(EXPORT_ACTIVITY_RETRY_POLICY);
-        List<Task<ExportResult>> exportTasks = new ArrayList<>();
-
-        for (String instanceId : instanceIds) {
-            ExportRequest exportRequest = new ExportRequest(
-                    instanceId,
-                    config.getDestination(),
-                    config.getFormat());
-
-            exportTasks.add(ctx.callActivity(
-                    "ExportInstanceHistoryActivity",
-                    exportRequest,
-                    activityOptions,
-                    ExportResult.class));
-        }
-
-        // Wait for all exports in the batch
+        int maxParallel = config.getMaxParallelExports();
         List<ExportResult> results = new ArrayList<>();
-        for (int i = 0; i < exportTasks.size(); i++) {
-            try {
-                results.add(exportTasks.get(i).await());
-            } catch (Exception ex) {
-                // Activity failure after all retries — preserve the instance ID for diagnostics
-                results.add(new ExportResult(instanceIds.get(i), false, ex.getMessage()));
+
+        // Process in chunks of maxParallelExports to avoid unbounded fan-out
+        for (int chunkStart = 0; chunkStart < instanceIds.size(); chunkStart += maxParallel) {
+            int chunkEnd = Math.min(chunkStart + maxParallel, instanceIds.size());
+            // Note: subList returns a view backed by instanceIds; safe here because we don't mutate it.
+            List<String> chunk = instanceIds.subList(chunkStart, chunkEnd);
+
+            List<Task<ExportResult>> exportTasks = new ArrayList<>();
+            for (String instanceId : chunk) {
+                ExportRequest exportRequest = new ExportRequest(
+                        instanceId,
+                        config.getDestination(),
+                        config.getFormat());
+
+                exportTasks.add(ctx.callActivity(
+                        "ExportInstanceHistoryActivity",
+                        exportRequest,
+                        activityOptions,
+                        ExportResult.class));
+            }
+
+            // Wait for all exports in this chunk before scheduling the next
+            for (int i = 0; i < exportTasks.size(); i++) {
+                try {
+                    results.add(exportTasks.get(i).await());
+                } catch (Exception ex) {
+                    // Activity failure after all retries — preserve the instance ID for diagnostics
+                    results.add(new ExportResult(chunk.get(i), false, ex.getMessage()));
+                }
             }
         }
+
         return results;
     }
 

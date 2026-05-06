@@ -7,6 +7,9 @@ import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -151,5 +154,114 @@ class OrchestrationHistoryEventMapperTest {
 
         assertEquals(1704067200, event.getTimestamp().getEpochSecond());
         assertEquals(500000000, event.getTimestamp().getNano());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void fromProto_taskScheduledWithTags_mapsTagsAsMap() {
+        HistoryEvent proto = HistoryEvent.newBuilder()
+                .setEventId(10)
+                .setTimestamp(Timestamp.newBuilder().setSeconds(1704067200).build())
+                .setTaskScheduled(TaskScheduledEvent.newBuilder()
+                        .setName("MyActivity")
+                        .putTags("env", "production")
+                        .putTags("region", "westus2")
+                        .build())
+                .build();
+
+        OrchestrationHistoryEvent event = OrchestrationHistoryEventMapper.fromProto(proto);
+
+        assertEquals("TaskScheduled", event.getEventType());
+        Object tags = event.getData().get("tags");
+        assertNotNull(tags, "tags should be present in data");
+        assertInstanceOf(Map.class, tags, "tags should be a Map");
+        Map<String, Object> tagsMap = (Map<String, Object>) tags;
+        assertEquals("production", tagsMap.get("env"));
+        assertEquals("westus2", tagsMap.get("region"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void fromProto_entityLockRequested_mapsLockSetAsList() {
+        HistoryEvent proto = HistoryEvent.newBuilder()
+                .setEventId(11)
+                .setTimestamp(Timestamp.newBuilder().setSeconds(1704067200).build())
+                .setEntityLockRequested(EntityLockRequestedEvent.newBuilder()
+                        .setCriticalSectionId("cs-1")
+                        .addLockSet("entity1")
+                        .addLockSet("entity2")
+                        .addLockSet("entity3")
+                        .build())
+                .build();
+
+        OrchestrationHistoryEvent event = OrchestrationHistoryEventMapper.fromProto(proto);
+
+        assertEquals("EntityLockRequested", event.getEventType());
+        Object lockSet = event.getData().get("lockSet");
+        assertNotNull(lockSet, "lockSet should be present in data");
+        assertInstanceOf(List.class, lockSet, "lockSet should be a List");
+        List<Object> lockList = (List<Object>) lockSet;
+        assertEquals(3, lockList.size());
+        assertEquals("entity1", lockList.get(0));
+        assertEquals("entity2", lockList.get(1));
+        assertEquals("entity3", lockList.get(2));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void fromProto_executionStartedWithTags_mapsTagsAsMap() {
+        HistoryEvent proto = HistoryEvent.newBuilder()
+                .setEventId(12)
+                .setTimestamp(Timestamp.newBuilder().setSeconds(1704067200).build())
+                .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                        .setName("MyOrch")
+                        .putTags("owner", "team-a")
+                        .build())
+                .build();
+
+        OrchestrationHistoryEvent event = OrchestrationHistoryEventMapper.fromProto(proto);
+
+        assertEquals("ExecutionStarted", event.getEventType());
+        Object tags = event.getData().get("tags");
+        assertNotNull(tags, "tags should be present");
+        assertInstanceOf(Map.class, tags);
+        Map<String, Object> tagsMap = (Map<String, Object>) tags;
+        assertEquals("team-a", tagsMap.get("owner"));
+    }
+
+    @Test
+    void fromProto_emptyRepeatedField_notIncludedInData() {
+        // Proto repeated fields with no elements are not included in getAllFields()
+        HistoryEvent proto = HistoryEvent.newBuilder()
+                .setEventId(13)
+                .setTimestamp(Timestamp.newBuilder().setSeconds(1704067200).build())
+                .setEntityLockRequested(EntityLockRequestedEvent.newBuilder()
+                        .setCriticalSectionId("cs-empty")
+                        .build())
+                .build();
+
+        OrchestrationHistoryEvent event = OrchestrationHistoryEventMapper.fromProto(proto);
+
+        // lockSet should not be present since it's empty (proto omits default-valued fields)
+        assertFalse(event.getData().containsKey("lockSet"),
+                "Empty repeated field should not appear in data");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void fromProto_emptyMapField_notIncludedInData() {
+        // Proto map fields with no entries are not included in getAllFields()
+        HistoryEvent proto = HistoryEvent.newBuilder()
+                .setEventId(14)
+                .setTimestamp(Timestamp.newBuilder().setSeconds(1704067200).build())
+                .setTaskScheduled(TaskScheduledEvent.newBuilder()
+                        .setName("NoTagsActivity")
+                        .build())
+                .build();
+
+        OrchestrationHistoryEvent event = OrchestrationHistoryEventMapper.fromProto(proto);
+
+        assertFalse(event.getData().containsKey("tags"),
+                "Empty map field should not appear in data");
     }
 }

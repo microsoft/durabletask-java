@@ -6,8 +6,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.OrchestrationHistoryEvent;
+import com.microsoft.durabletask.OrchestrationMetadata;
+import com.microsoft.durabletask.TaskActivityContext;
+import com.microsoft.durabletask.exporthistory.models.ExportDestination;
+import com.microsoft.durabletask.exporthistory.models.ExportFormat;
 import com.microsoft.durabletask.exporthistory.models.ExportFormatKind;
+import com.microsoft.durabletask.exporthistory.models.ExportRequest;
+import com.microsoft.durabletask.exporthistory.models.ExportResult;
+import com.microsoft.durabletask.exporthistory.options.ExportHistoryStorageOptions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -20,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for blob naming and serialization logic used by {@link ExportInstanceHistoryActivity}.
@@ -126,6 +137,103 @@ class ExportInstanceHistoryActivityTest {
     void serializeEvents_emptyList_jsonl_producesEmptyString() {
         String jsonl = serializeEvents(Collections.emptyList(), ExportFormatKind.JSONL);
         assertEquals("", jsonl);
+    }
+
+    // endregion
+
+    // region Activity run() — non-retryable conditions return ExportResult(false)
+
+    private DurableTaskClient mockClient;
+    private TaskActivityContext mockCtx;
+    private ExportInstanceHistoryActivity activity;
+
+    @BeforeEach
+    void setUpActivity() {
+        mockClient = mock(DurableTaskClient.class);
+        mockCtx = mock(TaskActivityContext.class);
+        ExportHistoryStorageOptions storageOptions = ExportHistoryStorageOptions.newBuilder()
+                .connectionString("DefaultEndpointsProtocol=https;AccountName=test")
+                .containerName("test-container")
+                .build();
+        activity = new ExportInstanceHistoryActivity(mockClient, storageOptions);
+    }
+
+    private static ExportRequest requestFor(String instanceId) {
+        return new ExportRequest(instanceId,
+                new ExportDestination("container", null), ExportFormat.DEFAULT);
+    }
+
+    @Test
+    void run_instanceNotFound_returnsFailureResult() {
+        OrchestrationMetadata mockMetadata = mock(OrchestrationMetadata.class);
+        when(mockMetadata.isInstanceFound()).thenReturn(false);
+        when(mockClient.getInstanceMetadata(eq("missing-instance"), anyBoolean())).thenReturn(mockMetadata);
+        when(mockCtx.getInput(ExportRequest.class)).thenReturn(requestFor("missing-instance"));
+
+        Object result = activity.run(mockCtx);
+
+        assertInstanceOf(ExportResult.class, result);
+        ExportResult exportResult = (ExportResult) result;
+        assertFalse(exportResult.isSuccess());
+        assertEquals("missing-instance", exportResult.getInstanceId());
+        assertNotNull(exportResult.getError());
+    }
+
+    @Test
+    void run_instanceNotCompleted_returnsFailureResult() {
+        OrchestrationMetadata mockMetadata = mock(OrchestrationMetadata.class);
+        when(mockMetadata.isInstanceFound()).thenReturn(true);
+        when(mockMetadata.isCompleted()).thenReturn(false);
+        when(mockClient.getInstanceMetadata(eq("running-instance"), anyBoolean())).thenReturn(mockMetadata);
+        when(mockCtx.getInput(ExportRequest.class)).thenReturn(requestFor("running-instance"));
+
+        Object result = activity.run(mockCtx);
+
+        assertInstanceOf(ExportResult.class, result);
+        ExportResult exportResult = (ExportResult) result;
+        assertFalse(exportResult.isSuccess());
+        assertEquals("running-instance", exportResult.getInstanceId());
+    }
+
+    // endregion
+
+    // region Activity run() — transient failures throw (for retry policy)
+
+    @Test
+    void run_getInstanceMetadataThrows_propagatesRuntimeException() {
+        when(mockClient.getInstanceMetadata(anyString(), anyBoolean()))
+                .thenThrow(new RuntimeException("Transient gRPC error"));
+        when(mockCtx.getInput(ExportRequest.class)).thenReturn(requestFor("test-instance"));
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> activity.run(mockCtx));
+        assertTrue(thrown.getMessage().contains("Transient gRPC error"));
+    }
+
+    @Test
+    void run_getOrchestrationHistoryThrows_propagatesException() {
+        OrchestrationMetadata mockMetadata = mock(OrchestrationMetadata.class);
+        when(mockMetadata.isInstanceFound()).thenReturn(true);
+        when(mockMetadata.isCompleted()).thenReturn(true);
+        when(mockMetadata.getLastUpdatedAt()).thenReturn(Instant.parse("2026-01-01T00:00:00Z"));
+        when(mockClient.getInstanceMetadata(anyString(), anyBoolean())).thenReturn(mockMetadata);
+        when(mockClient.getOrchestrationHistory("test-instance"))
+                .thenThrow(new RuntimeException("History fetch failed"));
+        when(mockCtx.getInput(ExportRequest.class)).thenReturn(requestFor("test-instance"));
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> activity.run(mockCtx));
+        assertTrue(thrown.getMessage().contains("History fetch failed"));
+    }
+
+    @Test
+    void run_nullInput_throwsIllegalArgument() {
+        when(mockCtx.getInput(ExportRequest.class)).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> activity.run(mockCtx));
+    }
+
+    @Test
+    void run_emptyInstanceId_throwsIllegalArgument() {
+        when(mockCtx.getInput(ExportRequest.class)).thenReturn(requestFor(""));
+        assertThrows(IllegalArgumentException.class, () -> activity.run(mockCtx));
     }
 
     // endregion

@@ -7,6 +7,17 @@ import java.time.Instant;
 
 /**
  * Query filter for listing export jobs.
+ * <p>
+ * Filtering semantics:
+ * <ul>
+ *   <li>{@code status} and {@code createdFrom}/{@code createdTo} are applied <em>after</em>
+ *       the underlying entity query, so a single page may contain fewer than {@link #getPageSize()}
+ *       results even when more matching jobs exist on subsequent pages. Continue paginating
+ *       using the returned continuation token to retrieve all matches.</li>
+ *   <li>The time window is inclusive on both ends: a job whose {@code createdAt} equals
+ *       {@code createdFrom} or {@code createdTo} <em>is</em> included.</li>
+ *   <li>Jobs with a {@code null} {@code createdAt} are excluded when either time filter is set.</li>
+ * </ul>
  */
 public final class ExportJobQuery {
 
