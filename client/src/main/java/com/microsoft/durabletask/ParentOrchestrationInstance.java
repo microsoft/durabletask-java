@@ -3,7 +3,7 @@
 package com.microsoft.durabletask;
 
 import java.util.Objects;
-import javax.annotation.Nullable;
+import javax.annotation.Nonnull;
 
 /**
  * Represents the parent orchestration of a sub-orchestration.
@@ -20,9 +20,9 @@ public final class ParentOrchestrationInstance {
      * @param name       the name of the parent orchestration
      * @param instanceId the instance ID of the parent orchestration
      */
-    public ParentOrchestrationInstance(String name, String instanceId) {
-        this.name = name;
-        this.instanceId = instanceId;
+    public ParentOrchestrationInstance(@Nonnull String name, @Nonnull String instanceId) {
+        this.name = Objects.requireNonNull(name, "name");
+        this.instanceId = Objects.requireNonNull(instanceId, "instanceId");
     }
 
     /**
@@ -30,7 +30,7 @@ public final class ParentOrchestrationInstance {
      *
      * @return the parent orchestration name
      */
-    @Nullable
+    @Nonnull
     public String getName() {
         return this.name;
     }
@@ -40,7 +40,7 @@ public final class ParentOrchestrationInstance {
      *
      * @return the parent orchestration instance ID
      */
-    @Nullable
+    @Nonnull
     public String getInstanceId() {
         return this.instanceId;
     }
