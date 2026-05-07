@@ -1,4 +1,5 @@
 ## Unreleased
+* Add replay-safe logging: `createReplaySafeLogger(String)`, `createReplaySafeLogger(Class<?>)`, `getReplaySafeLoggerFactory()`, and `getLoggerFactory()` on `TaskOrchestrationContext`. Wraps SLF4J loggers to suppress log output during orchestration replay. Requires `slf4j-api >= 2.0.0` (new transitive dependency).
 
 ## v1.9.0
 * Fix entity locking deserialization and add Jackson support for EntityInstanceId/EntityMetadata ([#281](https://github.com/microsoft/durabletask-java/pull/281))

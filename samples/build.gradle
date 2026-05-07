@@ -111,4 +111,7 @@ dependencies {
     // install lombok
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
     compileOnly 'org.projectlombok:lombok:1.18.42'
+
+    // SLF4J binding for replay-safe logger sample output
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.16'
 }
