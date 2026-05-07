@@ -26,6 +26,7 @@ import org.slf4j.spi.NOPLoggingEventBuilder;
  * the apparent overlap. This wrapper delegates each overload to the identical overload on the inner
  * logger.
  */
+@SuppressWarnings("java:S2177") // Required SLF4J Logger overload set; cannot be changed in this adapter.
 final class ReplaySafeLogger implements Logger {
 
     private final TaskOrchestrationContext context;
