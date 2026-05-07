@@ -31,6 +31,7 @@ final class ReplaySafeLoggerFactory implements ILoggerFactory {
 
     @Override
     public Logger getLogger(String name) {
+        Helpers.throwIfArgumentNullOrWhiteSpace(name, "name");
         return new ReplaySafeLogger(context, ReplaySafeLoggers.unwrap(context).getLogger(name));
     }
 }

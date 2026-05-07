@@ -33,6 +33,11 @@ final class ReplaySafeLoggers {
     static ILoggerFactory unwrap(TaskOrchestrationContext context) {
         Helpers.throwIfArgumentNull(context, "context");
         ILoggerFactory factory = context.getLoggerFactory();
+        if (factory == null) {
+            throw new IllegalStateException(
+                "getLoggerFactory() returned null. Ensure the context's getLoggerFactory() " +
+                "implementation returns a non-null ILoggerFactory.");
+        }
         int depth = 0;
         while (factory instanceof ReplaySafeLoggerFactory) {
             if (++depth > MAX_UNWRAP_DEPTH) {

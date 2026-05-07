@@ -18,6 +18,13 @@ import org.slf4j.spi.NOPLoggingEventBuilder;
  *
  * <p>This mirrors the {@code ReplaySafeLogger} nested class in the modern .NET
  * {@code TaskOrchestrationContext}.
+ *
+ * <p><b>Note on overloads:</b> The {@code (String, Object, Object)} and {@code (String, Object...)}
+ * overloads at each log level are both defined by the {@link Logger} interface. SLF4J provides the
+ * explicit 2-arg overload to avoid varargs array allocation in the common case. Java's overload
+ * resolution (JLS §15.12.2) always prefers the non-varargs form, so dispatch is unambiguous despite
+ * the apparent overlap. This wrapper delegates each overload to the identical overload on the inner
+ * logger.
  */
 final class ReplaySafeLogger implements Logger {
 

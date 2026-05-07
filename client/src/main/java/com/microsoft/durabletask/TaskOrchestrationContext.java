@@ -892,6 +892,7 @@ public interface TaskOrchestrationContext {
      * @return a replay-safe SLF4J {@code Logger}
      */
     default Logger createReplaySafeLogger(String name) {
+        Helpers.throwIfArgumentNullOrWhiteSpace(name, "name");
         return new ReplaySafeLogger(this, ReplaySafeLoggers.unwrap(this).getLogger(name));
     }
 
@@ -899,11 +900,12 @@ public interface TaskOrchestrationContext {
      * Returns an SLF4J {@link Logger} that is replay-safe, using the fully-qualified class name
      * as the logger category.
      *
-     * @param clazz the class whose name to use as the logger category
+     * @param class the class whose name to use as the logger category
      * @return a replay-safe SLF4J {@code Logger}
      * @see #createReplaySafeLogger(String)
      */
-    default Logger createReplaySafeLogger(Class<?> clazz) {
+    default Logger createReplaySafeLogger(Class<?> class) {
+        Helpers.throwIfArgumentNull(class, "class");
         return new ReplaySafeLogger(this, ReplaySafeLoggers.unwrap(this).getLogger(clazz.getName()));
     }
 
