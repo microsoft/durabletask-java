@@ -14,6 +14,8 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 import com.microsoft.durabletask.util.UUIDGenerator;
 
+import org.slf4j.ILoggerFactory;
+
 import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
@@ -130,6 +132,9 @@ final class TaskOrchestrationExecutor {
         private String version;
         private String defaultVersion;
 
+        // Replay-safe logger factory cache (matches .NET ReplaySafeLoggerFactory caching)
+        private ReplaySafeLoggerFactory cachedReplaySafeLoggerFactory;
+
         // LinkedHashMap to maintain insertion order when returning the list of pending actions
         private final LinkedHashMap<Integer, OrchestratorAction> pendingActions = new LinkedHashMap<>();
         private final HashMap<Integer, TaskRecord<?>> openTasks = new HashMap<>();
@@ -245,6 +250,14 @@ final class TaskOrchestrationExecutor {
 
         private void setDoneReplaying() {
             this.isReplaying = false;
+        }
+
+        @Override
+        public ILoggerFactory getReplaySafeLoggerFactory() {
+            if (this.cachedReplaySafeLoggerFactory == null) {
+                this.cachedReplaySafeLoggerFactory = new ReplaySafeLoggerFactory(this);
+            }
+            return this.cachedReplaySafeLoggerFactory;
         }
 
         @Override

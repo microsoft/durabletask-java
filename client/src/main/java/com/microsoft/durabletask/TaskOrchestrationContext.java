@@ -13,6 +13,10 @@ import java.util.Map;
 import java.util.UUID;
 import javax.annotation.Nonnull;
 
+import org.slf4j.ILoggerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Used by orchestrators to perform actions such as scheduling tasks, durable timers, waiting for external events,
  * and for getting basic information about the current orchestration.
@@ -854,5 +858,67 @@ public interface TaskOrchestrationContext {
                                                @Nullable Map<String, String> headers,
                                                @Nullable String content) {
         return DurableHttp.callHttp(this, method, uri, headers, content);
+    }
+
+    /**
+     * Returns the {@link ILoggerFactory} used by this context to resolve loggers.
+     *
+     * <p>By default this returns the SLF4J global {@link LoggerFactory#getILoggerFactory()}.
+     * Wrapper contexts can override this method to substitute a custom factory &mdash;
+     * for example, a wrapper context that wants its own logging to also be replay-safe should
+     * return the inner context's {@link #getReplaySafeLoggerFactory()}.
+     *
+     * <p>This method is the extension point that allows {@code createReplaySafeLogger(...)} and
+     * {@link #getReplaySafeLoggerFactory()} to delegate logger creation. To prevent
+     * double-wrapping, the SDK unwraps any nested factory returned from this method that is
+     * itself a replay-safe wrapper.
+     *
+     * @return the {@code ILoggerFactory} backing logger creation for this context
+     */
+    default ILoggerFactory getLoggerFactory() {
+        return LoggerFactory.getILoggerFactory();
+    }
+
+    /**
+     * Returns an SLF4J {@link Logger} that is replay-safe: logging methods are no-ops while the
+     * orchestrator is replaying history, and forward to the underlying logger otherwise.
+     * {@code isXxxEnabled()} always passes through unchanged.
+     *
+     * <p>The underlying logger is resolved via {@link #getLoggerFactory()}.
+     *
+     * <p>Requires {@code slf4j-api} version 2.0.0 or later on the classpath.
+     *
+     * @param name the SLF4J logger name (category)
+     * @return a replay-safe SLF4J {@code Logger}
+     */
+    default Logger createReplaySafeLogger(String name) {
+        return new ReplaySafeLogger(this, ReplaySafeLoggers.unwrap(this).getLogger(name));
+    }
+
+    /**
+     * Returns an SLF4J {@link Logger} that is replay-safe, using the fully-qualified class name
+     * as the logger category.
+     *
+     * @param clazz the class whose name to use as the logger category
+     * @return a replay-safe SLF4J {@code Logger}
+     * @see #createReplaySafeLogger(String)
+     */
+    default Logger createReplaySafeLogger(Class<?> clazz) {
+        return new ReplaySafeLogger(this, ReplaySafeLoggers.unwrap(this).getLogger(clazz.getName()));
+    }
+
+    /**
+     * Returns an {@link ILoggerFactory} that produces replay-safe loggers backed by
+     * {@link #getLoggerFactory()}. Mirrors the {@code ReplaySafeLoggerFactory} property in the
+     * modern .NET SDK.
+     *
+     * <p>Implementations are expected to cache the returned factory for the lifetime of the
+     * context. The default implementation allocates on every call; the concrete runtime
+     * implementation overrides this to cache.
+     *
+     * @return an {@code ILoggerFactory} wrapping each created logger with replay-safe semantics
+     */
+    default ILoggerFactory getReplaySafeLoggerFactory() {
+        return new ReplaySafeLoggerFactory(this);
     }
 }
