@@ -26,6 +26,8 @@ import java.util.logging.Logger;
  */
 public final class DurableTaskGrpcClient extends DurableTaskClient {
     private static final int DEFAULT_PORT = 4001;
+    private static final int MIN_LIST_PAGE_SIZE = 1;
+    private static final int MAX_LIST_PAGE_SIZE = 1000;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcClient.class.getPackage().getName());
 
     private final DataConverter dataConverter;
@@ -453,6 +455,19 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             @Nullable Instant completedTimeTo,
             int pageSize,
             @Nullable String lastInstanceKey) {
+
+        // Validate defensively before making a remote call: the sidecar would otherwise have to
+        // reject malformed requests (or worse, accept Integer.MAX_VALUE and try to allocate a
+        // page of that size). Range matches the export-history limits.
+        if (pageSize < MIN_LIST_PAGE_SIZE || pageSize > MAX_LIST_PAGE_SIZE) {
+            throw new IllegalArgumentException(
+                    "pageSize must be between " + MIN_LIST_PAGE_SIZE +
+                    " and " + MAX_LIST_PAGE_SIZE + ". Got: " + pageSize);
+        }
+        if (completedTimeFrom != null && completedTimeTo != null
+                && !completedTimeTo.isAfter(completedTimeFrom)) {
+            throw new IllegalArgumentException("completedTimeTo must be after completedTimeFrom.");
+        }
 
         ListInstanceIdsRequest.Builder builder = ListInstanceIdsRequest.newBuilder()
                 .setPageSize(pageSize);

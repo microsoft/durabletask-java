@@ -523,9 +523,12 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @param runtimeStatus   optional set of runtime statuses to filter by; if {@code null}, all statuses are included
      * @param completedTimeFrom inclusive lower bound of the orchestration completed time filter
      * @param completedTimeTo   inclusive upper bound of the orchestration completed time filter
-     * @param pageSize          maximum number of instance IDs to return in a single page
+     * @param pageSize          maximum number of instance IDs to return in a single page; must be between 1 and 1000
      * @param lastInstanceKey   continuation key from the previous page; {@code null} to start from the beginning
      * @return a page of orchestration instance IDs along with a continuation token
+     * @throws IllegalArgumentException      if {@code pageSize} is outside the supported range, or if both
+     *                                       {@code completedTimeFrom} and {@code completedTimeTo} are supplied and
+     *                                       {@code completedTimeTo} is not strictly after {@code completedTimeFrom}
      * @throws UnsupportedOperationException if this client implementation does not support instance ID listing
      */
     public InstanceIdPage listInstanceIds(
