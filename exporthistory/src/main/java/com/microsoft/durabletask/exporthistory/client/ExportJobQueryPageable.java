@@ -37,13 +37,14 @@ public class ExportJobQueryPageable implements Iterable<ExportJobDescription> {
 
             @Override
             public boolean hasNext() {
-                if (this.currentPage.hasNext()) {
-                    return true;
+                // Loop across pages because the backend page may filter down to
+                // empty (e.g. status / createdFrom / createdTo filters in
+                // DefaultExportHistoryClient.listJobs) while still returning a
+                // continuation token. Stopping after a single empty page would
+                // skip matching jobs on later backend pages.
+                while (!this.currentPage.hasNext() && this.hasMorePages) {
+                    fetchNextPage();
                 }
-                if (!this.hasMorePages) {
-                    return false;
-                }
-                fetchNextPage();
                 return this.currentPage.hasNext();
             }
 

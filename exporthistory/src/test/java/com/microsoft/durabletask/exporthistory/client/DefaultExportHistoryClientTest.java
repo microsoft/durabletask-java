@@ -196,6 +196,46 @@ class DefaultExportHistoryClientTest {
         assertEquals(2, results.size());
     }
 
+    @Test
+    void listJobs_filteredPageEmptyButContinuationTokenSet_followsToNextPage() {
+        // Page 1: two ACTIVE jobs that filter to empty for COMPLETED, with continuation token.
+        ExportJobState active1 = createState(ExportJobStatus.ACTIVE,
+                Instant.parse("2026-03-01T00:00:00Z"));
+        ExportJobState active2 = createState(ExportJobStatus.ACTIVE,
+                Instant.parse("2026-03-02T00:00:00Z"));
+        EntityMetadata activeMeta1 = createMockMetadata("active-1", active1);
+        EntityMetadata activeMeta2 = createMockMetadata("active-2", active2);
+        List<EntityMetadata> page1Entities = Arrays.asList(activeMeta1, activeMeta2);
+        EntityQueryResult page1 = mock(EntityQueryResult.class);
+        when(page1.getEntities()).thenReturn(page1Entities);
+        when(page1.getContinuationToken()).thenReturn("token-page-2");
+
+        // Page 2: two COMPLETED jobs that match the filter, no further pages.
+        ExportJobState completed1 = createState(ExportJobStatus.COMPLETED,
+                Instant.parse("2026-03-03T00:00:00Z"));
+        ExportJobState completed2 = createState(ExportJobStatus.COMPLETED,
+                Instant.parse("2026-03-04T00:00:00Z"));
+        EntityMetadata completedMeta1 = createMockMetadata("completed-1", completed1);
+        EntityMetadata completedMeta2 = createMockMetadata("completed-2", completed2);
+        List<EntityMetadata> page2Entities = Arrays.asList(completedMeta1, completedMeta2);
+        EntityQueryResult page2 = mock(EntityQueryResult.class);
+        when(page2.getEntities()).thenReturn(page2Entities);
+        when(page2.getContinuationToken()).thenReturn(null);
+
+        when(durableEntityClient.queryEntities(any(EntityQuery.class)))
+                .thenReturn(page1, page2);
+
+        ExportJobQuery query = new ExportJobQuery();
+        query.setStatus(ExportJobStatus.COMPLETED);
+        query.setPageSize(2);
+
+        List<ExportJobDescription> results = collectResults(client.listJobs(query));
+
+        assertEquals(2, results.size());
+        assertEquals("completed-1", results.get(0).getJobId());
+        assertEquals("completed-2", results.get(1).getJobId());
+    }
+
     // region Helpers
 
     private ExportJobState createState(ExportJobStatus status, Instant createdAt) {
