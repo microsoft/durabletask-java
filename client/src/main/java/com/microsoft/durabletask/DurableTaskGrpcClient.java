@@ -9,6 +9,7 @@ import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGr
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
 
 import io.grpc.*;
+import io.grpc.ClientInterceptors;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.context.Scope;
@@ -56,6 +57,11 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
                     .usePlaintext()
                     .build();
             sidecarGrpcChannel = this.managedSidecarChannel;
+        }
+
+        // Apply any registered interceptors (e.g., large payload externalization)
+        if (!builder.interceptors.isEmpty()) {
+            sidecarGrpcChannel = ClientInterceptors.intercept(sidecarGrpcChannel, builder.interceptors);
         }
 
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
