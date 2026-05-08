@@ -1,0 +1,174 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'com.github.spotbugs' version '6.4.8'
+}
+
+group 'com.microsoft'
+version = '1.8.0'
+archivesBaseName = 'durabletask-azure-blob-payloads'
+
+def grpcVersion = '1.78.0'
+def azureCoreVersion = '1.57.1'
+def azureStorageBlobVersion = '12.29.1'
+
+// Java 11 is used to compile and run all tests. Set the JDK_11 env var to your
+// local JDK 11 home directory, e.g. C:/Program Files/Java/openjdk-11.0.12_7/
+// If unset, falls back to the current JDK running Gradle.
+def rawJdkPath = System.env.JDK_11 ?: System.getProperty("java.home")
+def PATH_TO_TEST_JAVA_RUNTIME = rawJdkPath
+if (rawJdkPath != null) {
+    def f = new File(rawJdkPath)
+    if (f.isFile()) {
+        PATH_TO_TEST_JAVA_RUNTIME = f.parentFile.parentFile.absolutePath
+    }
+}
+def isWindows = System.getProperty("os.name").toLowerCase().contains("win")
+def exeSuffix = isWindows ? ".exe" : ""
+
+dependencies {
+    api project(':client')
+
+    // Azure Storage Blobs
+    implementation "com.azure:azure-storage-blob:${azureStorageBlobVersion}"
+
+    // TokenCredential abstraction (from azure-core) — 'api' because
+    // LargePayloadStorageOptions exposes TokenCredential in its public API.
+    api "com.azure:azure-core:${azureCoreVersion}"
+
+    // gRPC interceptor API
+    implementation "io.grpc:grpc-api:${grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+
+    // NOTE: azure-identity is NOT included here. Users who need
+    // DefaultAzureCredential should add it to their own project.
+
+    testImplementation 'org.mockito:mockito-core:5.21.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
+    testImplementation project(':azuremanaged')
+}
+
+compileJava {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+compileTestJava {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    options.fork = true
+    options.forkOptions.executable = "${PATH_TO_TEST_JAVA_RUNTIME}/bin/javac${exeSuffix}"
+}
+
+tasks.withType(Test) {
+    executable = new File("${PATH_TO_TEST_JAVA_RUNTIME}", "bin/java${exeSuffix}")
+}
+
+test {
+    useJUnitPlatform {
+        // Skip tests tagged as "integration" since those require
+        // external dependencies (DTS emulator + Azurite).
+        excludeTags "integration"
+    }
+}
+
+// Integration tests require DTS emulator (default localhost:4001) and Azurite on localhost:10000.
+task integrationTest(type: Test) {
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    dependsOn build
+    shouldRunAfter test
+    testLogging.showStandardStreams = true
+    ignoreFailures = false
+}
+
+spotbugs {
+    toolVersion = '4.9.8'
+    effort = com.github.spotbugs.snom.Effort.valueOf('MAX')
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf('HIGH')
+    ignoreFailures = true
+    excludeFilter = file('spotbugs-exclude.xml')
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+        }
+    }
+}
+
+spotbugsTest {
+    reports {
+        html {
+            required = true
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+        }
+    }
+}
+
+publishing {
+    repositories {
+        maven {
+            url "file://$project.rootDir/repo"
+        }
+    }
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = archivesBaseName
+            pom {
+                name = 'Durable Task Azure Blob Payloads for Java'
+                description = 'This package provides externalized payload storage using Azure Blob Storage for the Durable Task Java SDK.'
+                url = "https://github.com/microsoft/durabletask-java/tree/main/azure-blob-payloads"
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url = "https://opensource.org/licenses/MIT"
+                        distribution = "repo"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "Microsoft"
+                        name = "Microsoft Corporation"
+                    }
+                }
+                scm {
+                    connection = "scm:git:https://github.com/microsoft/durabletask-java"
+                    developerConnection = "scm:git:git@github.com:microsoft/durabletask-java"
+                    url = "https://github.com/microsoft/durabletask-java/tree/main/azure-blob-payloads"
+                }
+                withXml {
+                    project.configurations.compileOnly.allDependencies.each { dependency ->
+                        asNode().dependencies[0].appendNode("dependency").with {
+                            it.appendNode("groupId", dependency.group)
+                            it.appendNode("artifactId", dependency.name)
+                            it.appendNode("version", dependency.version)
+                            it.appendNode("scope", "provided")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+signing {
+    required = !project.hasProperty("skipSigning")
+    sign publishing.publications.mavenJava
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
