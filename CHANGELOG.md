@@ -1,4 +1,5 @@
 ## Unreleased
+* Add `getParent()` API to `TaskOrchestrationContext` for discovering parent orchestration info ([#284](https://github.com/microsoft/durabletask-java/pull/284))
 
 ## v1.9.0
 * Fix entity locking deserialization and add Jackson support for EntityInstanceId/EntityMetadata ([#281](https://github.com/microsoft/durabletask-java/pull/281))
