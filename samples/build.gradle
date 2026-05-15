@@ -88,6 +88,12 @@ task runTypedEntityProxySample(type: JavaExec) {
     environment dtsEnv
 }
 
+task runExportHistorySample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.ExportHistorySample'
+    environment dtsEnv
+}
+
 task printClasspath {
     doLast {
         println sourceSets.main.runtimeClasspath.asPath
@@ -97,8 +103,8 @@ task printClasspath {
 dependencies {
     implementation project(':client')
     implementation project(':azuremanaged')
+    implementation project(':exporthistory')
     implementation project(':azure-blob-payloads')
-
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation platform("org.springframework.boot:spring-boot-dependencies:2.7.18")
     implementation 'org.springframework.boot:spring-boot-starter'

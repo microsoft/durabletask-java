@@ -27,6 +27,8 @@ import java.util.logging.Logger;
  */
 public final class DurableTaskGrpcClient extends DurableTaskClient {
     private static final int DEFAULT_PORT = 4001;
+    private static final int MIN_LIST_PAGE_SIZE = 1;
+    private static final int MAX_LIST_PAGE_SIZE = 1000;
     private static final Logger logger = Logger.getLogger(DurableTaskGrpcClient.class.getPackage().getName());
 
     private final DataConverter dataConverter;
@@ -414,6 +416,94 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
     @Override
     public DurableEntityClient getEntities() {
         return this.entityClient;
+    }
+
+    // endregion
+
+    // region History and Instance Listing APIs
+
+    @Override
+    public List<OrchestrationHistoryEvent> getOrchestrationHistory(String instanceId) {
+        Helpers.throwIfArgumentNull(instanceId, "instanceId");
+
+        StreamInstanceHistoryRequest request = StreamInstanceHistoryRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .setForWorkItemProcessing(false)
+                .build();
+
+        try {
+            Iterator<HistoryChunk> chunks = this.sidecarClient.streamInstanceHistory(request);
+            List<OrchestrationHistoryEvent> events = new ArrayList<>();
+            while (chunks.hasNext()) {
+                HistoryChunk chunk = chunks.next();
+                for (HistoryEvent protoEvent : chunk.getEventsList()) {
+                    events.add(OrchestrationHistoryEventMapper.fromProto(protoEvent));
+                }
+            }
+            return events;
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
+                throw new IllegalArgumentException(
+                        "An orchestration with instanceId '" + instanceId + "' was not found.", e);
+            }
+            if (e.getStatus().getCode() == Status.Code.CANCELLED) {
+                throw new IllegalStateException(
+                        "The getOrchestrationHistory operation was canceled.", e);
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public InstanceIdPage listInstanceIds(
+            @Nullable Collection<OrchestrationRuntimeStatus> runtimeStatus,
+            @Nullable Instant completedTimeFrom,
+            @Nullable Instant completedTimeTo,
+            int pageSize,
+            @Nullable String lastInstanceKey) {
+
+        // Validate defensively before making a remote call: the sidecar would otherwise have to
+        // reject malformed requests (or worse, accept Integer.MAX_VALUE and try to allocate a
+        // page of that size). Range matches the export-history limits.
+        if (pageSize < MIN_LIST_PAGE_SIZE || pageSize > MAX_LIST_PAGE_SIZE) {
+            throw new IllegalArgumentException(
+                    "pageSize must be between " + MIN_LIST_PAGE_SIZE +
+                    " and " + MAX_LIST_PAGE_SIZE + ". Got: " + pageSize);
+        }
+        if (completedTimeFrom != null && completedTimeTo != null
+                && !completedTimeTo.isAfter(completedTimeFrom)) {
+            throw new IllegalArgumentException("completedTimeTo must be after completedTimeFrom.");
+        }
+
+        ListInstanceIdsRequest.Builder builder = ListInstanceIdsRequest.newBuilder()
+                .setPageSize(pageSize);
+
+        if (runtimeStatus != null) {
+            for (OrchestrationRuntimeStatus status : runtimeStatus) {
+                builder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status));
+            }
+        }
+        if (completedTimeFrom != null) {
+            builder.setCompletedTimeFrom(Timestamp.newBuilder()
+                    .setSeconds(completedTimeFrom.getEpochSecond())
+                    .setNanos(completedTimeFrom.getNano())
+                    .build());
+        }
+        if (completedTimeTo != null) {
+            builder.setCompletedTimeTo(Timestamp.newBuilder()
+                    .setSeconds(completedTimeTo.getEpochSecond())
+                    .setNanos(completedTimeTo.getNano())
+                    .build());
+        }
+        if (lastInstanceKey != null) {
+            builder.setLastInstanceKey(StringValue.of(lastInstanceKey));
+        }
+
+        ListInstanceIdsResponse response = this.sidecarClient.listInstanceIds(builder.build());
+        String nextKey = response.hasLastInstanceKey()
+                ? response.getLastInstanceKey().getValue()
+                : null;
+        return new InstanceIdPage(response.getInstanceIdsList(), nextKey);
     }
 
     // endregion

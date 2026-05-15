@@ -1,0 +1,126 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'com.github.spotbugs' version '6.4.8'
+}
+
+group 'com.microsoft'
+version = '1.9.0'
+archivesBaseName = 'durabletask-exporthistory'
+
+ext {
+    azureStorageBlobVersion = '12.29.1'
+    jacksonVersion = '2.18.3'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+dependencies {
+    implementation project(':client')
+    implementation "com.azure:azure-storage-blob:${azureStorageBlobVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
+    compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation 'org.mockito:mockito-core:5.21.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    repositories {
+        maven {
+            url "file://$project.rootDir/repo"
+        }
+    }
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = archivesBaseName
+            pom {
+                name = 'Durable Task Export History for Java'
+                description = 'This package provides orchestration history export capabilities for the Durable Task Java SDK.'
+                url = "https://github.com/microsoft/durabletask-java/tree/main/exporthistory"
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url = "https://opensource.org/licenses/MIT"
+                        distribution = "repo"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "Microsoft"
+                        name = "Microsoft Corporation"
+                    }
+                }
+                scm {
+                    connection = "scm:git:https://github.com/microsoft/durabletask-java"
+                    developerConnection = "scm:git:git@github.com:microsoft/durabletask-java"
+                    url = "https://github.com/microsoft/durabletask-java/tree/main/exporthistory"
+                }
+                // Include compile-only dependencies in generated POM
+                withXml {
+                    project.configurations.compileOnly.allDependencies.each { dependency ->
+                        asNode().dependencies[0].appendNode("dependency").with {
+                            it.appendNode("groupId", dependency.group)
+                            it.appendNode("artifactId", dependency.name)
+                            it.appendNode("version", dependency.version)
+                            it.appendNode("scope", "provided")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+signing {
+    required = !project.hasProperty("skipSigning")
+    sign publishing.publications.mavenJava
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+spotbugs {
+    toolVersion = '4.9.8'
+    effort = com.github.spotbugs.snom.Effort.valueOf('MAX')
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf('HIGH')
+    ignoreFailures = true
+    excludeFilter = file('spotbugs-exclude.xml')
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+        }
+    }
+}
+
+spotbugsTest {
+    reports {
+        html {
+            required = true
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+        }
+    }
+}
