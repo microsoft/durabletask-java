@@ -177,6 +177,12 @@ public class ExportJob implements TaskEntity {
         String jobId = operation.getContext().getId().getKey();
         String errorMessage = operation.getInput(String.class);
 
+        // Idempotent: a duplicate MARK_AS_FAILED (e.g. from replay) is a no-op rather than an error.
+        if (state.getStatus() == ExportJobStatus.FAILED) {
+            logger.fine("Export job already in FAILED state; ignoring duplicate MarkAsFailed: " + jobId);
+            return null;
+        }
+
         if (!ExportJobTransitions.isValidTransition(ExportJobOperationNames.MARK_AS_FAILED, state.getStatus(), ExportJobStatus.FAILED)) {
             throw new ExportJobInvalidTransitionException(
                     jobId, state.getStatus(), ExportJobStatus.FAILED, ExportJobOperationNames.MARK_AS_FAILED);

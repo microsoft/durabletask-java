@@ -7,6 +7,8 @@ import com.microsoft.durabletask.TaskOptions;
 import com.microsoft.durabletask.TaskOrchestration;
 import com.microsoft.durabletask.TaskOrchestrationContext;
 import com.microsoft.durabletask.RetryPolicy;
+import com.microsoft.durabletask.interruption.ContinueAsNewInterruption;
+import com.microsoft.durabletask.interruption.OrchestratorBlockedException;
 import com.microsoft.durabletask.exporthistory.constants.ExportJobOperationNames;
 import com.microsoft.durabletask.exporthistory.models.*;
 
@@ -125,6 +127,9 @@ public class ExportJobOrchestrator implements TaskOrchestration {
             // Mark completed
             ctx.callEntity(input.getJobEntityId(), ExportJobOperationNames.MARK_AS_COMPLETED).await();
 
+        } catch (OrchestratorBlockedException | ContinueAsNewInterruption controlFlow) {
+            // SDK control-flow signals — must propagate so the runtime can suspend/continue.
+            throw controlFlow;
         } catch (Exception ex) {
             // Mark as failed
             try {
