@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.microsoft'
-version = '1.8.0'
+version = '1.0.0'
 archivesBaseName = 'durabletask-azure-blob-payloads'
 
 def grpcVersion = '1.78.0'
