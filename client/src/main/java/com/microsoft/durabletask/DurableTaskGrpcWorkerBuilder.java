@@ -3,6 +3,7 @@
 package com.microsoft.durabletask;
 
 import io.grpc.Channel;
+import io.grpc.ClientInterceptor;
 
 import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
@@ -29,6 +30,27 @@ public final class DurableTaskGrpcWorkerBuilder {
     int maxWorkItemThreads;
     private WorkItemFilter workItemFilter;
     private boolean autoGenerateWorkItemFilters;
+    final List<ClientInterceptor> interceptors = new ArrayList<>();
+    boolean supportsLargePayloads;
+
+    /**
+     * Default maximum chunk size in bytes for orchestrator responses, matching the .NET
+     * SDK's {@code DurableTaskClientOptions.MaxChunkSizeBytes} default (3.9 MB).
+     * <p>
+     * This value is the <b>serialized protobuf size only</b>. gRPC adds a 5-byte length
+     * prefix per message and HTTP/2 adds additional framing, so the on-the-wire size
+     * can exceed this by ~100 bytes. The sidecar must therefore be configured with
+     * {@code maxInboundMessageSize >= 4 MiB} (4,194,304 bytes, gRPC's standard default).
+     */
+    // Maintainer note: if you change this default, update the .NET SDK's
+    // DurableTaskClientOptions.MaxChunkSizeBytes to keep both implementations in sync.
+    public static final int DEFAULT_MAX_CHUNK_SIZE_BYTES = 4_089_446;
+
+    int maxChunkSizeBytes = DEFAULT_MAX_CHUNK_SIZE_BYTES;
+    // Default threshold matches LargePayloadStorageOptions default (900_000 bytes).
+    // Used by the worker to estimate post-externalization action sizes during
+    // pre-send validation when supportsLargePayloads=true.
+    int largePayloadThresholdBytes = 900_000;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -344,6 +366,89 @@ public final class DurableTaskGrpcWorkerBuilder {
     public DurableTaskGrpcWorkerBuilder useWorkItemFilters() {
         this.autoGenerateWorkItemFilters = true;
         this.workItemFilter = null;
+        return this;
+    }
+
+    /**
+     * Adds a gRPC {@link ClientInterceptor} that will be applied to the channel used by the constructed worker.
+     * <p>
+     * Interceptors are applied in the order they are added. This is the extension point used by features
+     * such as large payload externalization to transparently transform gRPC messages.
+     *
+     * @param interceptor the interceptor to add
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder addInterceptor(ClientInterceptor interceptor) {
+        if (interceptor == null) {
+            throw new IllegalArgumentException("interceptor must not be null.");
+        }
+        this.interceptors.add(interceptor);
+        return this;
+    }
+
+    /**
+     * Indicates that this worker supports large payload externalization.
+     * <p>
+     * When enabled, the worker announces the {@code WORKER_CAPABILITY_LARGE_PAYLOADS} capability
+     * to the sidecar. Pre-send action size validation still runs but uses an estimated
+     * post-externalization size that accounts for payload fields the gRPC interceptor will
+     * replace with small blob-reference tokens. Use
+     * {@link #setLargePayloadThresholdBytes(int)} to align the estimation threshold with
+     * the interceptor's externalization threshold.
+     *
+     * @param enabled whether large payload support is enabled
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder setSupportsLargePayloads(boolean enabled) {
+        this.supportsLargePayloads = enabled;
+        return this;
+    }
+
+    /**
+     * Sets the externalization threshold in bytes used by the worker when estimating
+     * post-externalization action sizes during pre-send validation.
+     * <p>
+     * This should match the {@code thresholdBytes} configured on the large-payload
+     * interceptor. The default is 900,000 bytes. Fields whose UTF-8 byte length meets
+     * or exceeds this threshold are assumed to be replaced with a small blob-token
+     * reference by the interceptor.
+     *
+     * @param thresholdBytes the threshold in bytes; must be non-negative
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder setLargePayloadThresholdBytes(int thresholdBytes) {
+        if (thresholdBytes < 0) {
+            throw new IllegalArgumentException("thresholdBytes must be non-negative.");
+        }
+        this.largePayloadThresholdBytes = thresholdBytes;
+        return this;
+    }
+
+    /**
+     * Sets the maximum size in bytes for each chunk when sending orchestrator responses.
+     * <p>
+     * If an orchestrator response exceeds this size, it will be automatically split into
+     * multiple chunks. The default is {@value #DEFAULT_MAX_CHUNK_SIZE_BYTES} bytes (3.9 MB),
+     * matching the .NET SDK. Must be between 1 MB and 3.9 MB inclusive.
+     * <p>
+     * <b>gRPC framing:</b> this value is the serialized protobuf size only. gRPC adds a
+     * 5-byte length prefix and HTTP/2 adds frame headers, so the on-the-wire size can
+     * exceed this by ~100 bytes. The sidecar must therefore be configured with
+     * {@code maxInboundMessageSize >= 4 MiB} (4,194,304 bytes, gRPC's standard default);
+     * smaller inbound limits will cause {@code RESOURCE_EXHAUSTED} errors on large
+     * orchestrator responses near this limit.
+     *
+     * @param maxChunkSizeBytes the maximum chunk size in bytes
+     * @return this builder object
+     * @throws IllegalArgumentException if the value is outside the allowed range
+     */
+    public DurableTaskGrpcWorkerBuilder setMaxChunkSizeBytes(int maxChunkSizeBytes) {
+        if (maxChunkSizeBytes < 1_048_576 || maxChunkSizeBytes > DEFAULT_MAX_CHUNK_SIZE_BYTES) {
+            throw new IllegalArgumentException(
+                "maxChunkSizeBytes must be between 1 MB (1048576) and 3.9 MB ("
+                    + DEFAULT_MAX_CHUNK_SIZE_BYTES + "), inclusive.");
+        }
+        this.maxChunkSizeBytes = maxChunkSizeBytes;
         return this;
     }
 
