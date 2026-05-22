@@ -797,13 +797,15 @@ public interface TaskOrchestrationContext {
     /**
      * Gets the parent orchestration instance, or {@code null} if this orchestration
      * was not started as a sub-orchestration.
+     * <p>
+     * Implementers that wrap or decorate another {@link TaskOrchestrationContext}
+     * must delegate to the wrapped instance. Returning {@code null} unconditionally
+     * will incorrectly report sub-orchestrations as standalone.
      *
      * @return the parent orchestration instance, or {@code null}
      */
     @Nullable
-    default ParentOrchestrationInstance getParent() {
-        return null;
-    }
+    ParentOrchestrationInstance getParentInstance();
 
     /**
      * Makes a durable HTTP request using the specified {@link DurableHttpRequest} and returns a {@link Task}

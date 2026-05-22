@@ -7,7 +7,7 @@ import javax.annotation.Nonnull;
 
 /**
  * Represents the parent orchestration of a sub-orchestration.
- * This is available via {@link TaskOrchestrationContext#getParent()} when the
+ * This is available via {@link TaskOrchestrationContext#getParentInstance()} when the
  * current orchestration was started as a sub-orchestration.
  */
 public final class ParentOrchestrationInstance {

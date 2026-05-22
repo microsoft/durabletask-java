@@ -291,8 +291,8 @@ public class TaskOrchestrationExecutorTest {
     // region Parent Instance Tests
 
     @Test
-    void execute_withParentInstance_getParentReturnsParent() {
-        // Arrange: orchestration that captures getParent()
+    void execute_withParentInstance_getParentInstanceReturnsParent() {
+        // Arrange: orchestration that captures getParentInstance()
         String orchName = "ChildOrch";
         ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
 
@@ -303,7 +303,7 @@ public class TaskOrchestrationExecutorTest {
             @Override
             public TaskOrchestration create() {
                 return ctx -> {
-                    captured[0] = ctx.getParent();
+                    captured[0] = ctx.getParentInstance();
                     ctx.complete("done");
                 };
             }
@@ -347,13 +347,13 @@ public class TaskOrchestrationExecutorTest {
         executor.execute(Collections.emptyList(), newEvents, null);
 
         // Assert
-        assertNotNull(captured[0], "getParent() should not be null for a sub-orchestration");
+        assertNotNull(captured[0], "getParentInstance() should not be null for a sub-orchestration");
         assertEquals("ParentOrch", captured[0].getName());
         assertEquals("parent-123", captured[0].getInstanceId());
     }
 
     @Test
-    void execute_withoutParentInstance_getParentReturnsNull() {
+    void execute_withoutParentInstance_getParentInstanceReturnsNull() {
         // Arrange: orchestration without parent instance
         String orchName = "StandaloneOrch";
         ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
@@ -366,7 +366,7 @@ public class TaskOrchestrationExecutorTest {
             @Override
             public TaskOrchestration create() {
                 return ctx -> {
-                    captured[0] = ctx.getParent();
+                    captured[0] = ctx.getParentInstance();
                     wasCalled[0] = true;
                     ctx.complete("done");
                 };
@@ -406,7 +406,7 @@ public class TaskOrchestrationExecutorTest {
 
         // Assert
         assertTrue(wasCalled[0], "Orchestrator should have been called");
-        assertNull(captured[0], "getParent() should be null for a standalone orchestration");
+        assertNull(captured[0], "getParentInstance() should be null for a standalone orchestration");
     }
 
     @Test
@@ -424,7 +424,7 @@ public class TaskOrchestrationExecutorTest {
             @Override
             public TaskOrchestration create() {
                 return ctx -> {
-                    captured[0] = ctx.getParent();
+                    captured[0] = ctx.getParentInstance();
                     ctx.complete("done");
                 };
             }
@@ -486,7 +486,7 @@ public class TaskOrchestrationExecutorTest {
             @Override
             public TaskOrchestration create() {
                 return ctx -> {
-                    captured[0] = ctx.getParent();
+                    captured[0] = ctx.getParentInstance();
                     ctx.complete("done");
                 };
             }
@@ -530,45 +530,69 @@ public class TaskOrchestrationExecutorTest {
         executor.execute(Collections.emptyList(), newEvents, null);
 
         // Assert: permissive — empty values accepted as-is, matching .NET behavior
-        assertNotNull(captured[0], "getParent() should not be null when parentInstance is present");
+        assertNotNull(captured[0], "getParentInstance() should not be null when parentInstance is present");
         assertEquals("", captured[0].getName());
         assertEquals("", captured[0].getInstanceId());
     }
 
     @Test
-    void taskOrchestrationContext_defaultGetParent_returnsNull() {
-        // Minimal implementation that does NOT override getParent().
-        // All abstract methods are stubbed to satisfy the interface contract.
-        TaskOrchestrationContext minimalContext = new TaskOrchestrationContext() {
-            @Override public String getName() { return "test"; }
-            @Override public <V> V getInput(Class<V> t) { return null; }
-            @Override public String getInstanceId() { return "id"; }
-            @Override public Instant getCurrentInstant() { return Instant.now(); }
-            @Override public boolean getIsReplaying() { return false; }
-            @Override public String getVersion() { return ""; }
-            @Override public <V> Task<List<V>> allOf(List<Task<V>> tasks) { return null; }
-            @Override public Task<Task<?>> anyOf(List<Task<?>> tasks) { return null; }
-            @Override public <V> Task<V> callActivity(String name, Object input, TaskOptions options, Class<V> returnType) { return null; }
-            @Override public <V> Task<V> callSubOrchestrator(String name, Object input, String instanceId, TaskOptions options, Class<V> returnType) { return null; }
-            @Override public Task<Void> createTimer(Duration delay) { return null; }
-            @Override public Task<Void> createTimer(ZonedDateTime zonedDateTime) { return null; }
-            @Override public <V> Task<V> waitForExternalEvent(String name, Duration timeout, Class<V> dataType) { return null; }
-            @Override public void continueAsNew(Object input, boolean preserveUnprocessedEvents) {}
-            @Override public void sendEvent(String instanceId, String eventName, Object eventData) {}
-            @Override public void complete(Object output) {}
-            @Override public UUID newUUID() { return UUID.randomUUID(); }
-            @Override public void signalEntity(EntityInstanceId entityId, String operationName, Object input, SignalEntityOptions options) {}
-            @Override public <V> Task<V> callEntity(EntityInstanceId entityId, String operationName, Object input, Class<V> returnType) { return null; }
-            @Override public <V> Task<V> callEntity(EntityInstanceId entityId, String operationName, Object input, Class<V> returnType, CallEntityOptions options) { return null; }
-            @Override public Task<AutoCloseable> lockEntities(List<EntityInstanceId> entityIds) { return null; }
-            @Override public boolean isInCriticalSection() { return false; }
-            @Override public List<EntityInstanceId> getLockedEntities() { return Collections.emptyList(); }
-            @Override public void setCustomStatus(Object customStatus) {}
-            @Override public void clearCustomStatus() {}
-        };
+    void execute_withParentInstance_unsetProtoFields_defaultsToEmpty() {
+        // Arrange: ParentInstanceInfo is present, but its inner fields
+        // (name StringValue and OrchestrationInstance) are unset.
+        // The executor must not NPE — it should default to empty strings.
+        String orchName = "ChildOrch";
+        ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
 
-        // Assert: default method returns null
-        assertNull(minimalContext.getParent(), "Default getParent() should return null");
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return orchName; }
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    captured[0] = ctx.getParentInstance();
+                    ctx.complete("done");
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+
+        List<HistoryEvent> newEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                                .setName(orchName)
+                                .setVersion(StringValue.of(""))
+                                .setInput(StringValue.of("\"test\""))
+                                .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId("child-instance")
+                                        .build())
+                                // ParentInstanceInfo present but inner fields unset (no setName, no setOrchestrationInstance)
+                                .setParentInstance(ParentInstanceInfo.getDefaultInstance())
+                                .build())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // Act — must not throw NPE
+        executor.execute(Collections.emptyList(), newEvents, null);
+
+        // Assert: parent is non-null, fields default to empty
+        assertNotNull(captured[0], "getParentInstance() should not be null when ParentInstanceInfo is present");
+        assertEquals("", captured[0].getName());
+        assertEquals("", captured[0].getInstanceId());
     }
 
     @Test
@@ -585,7 +609,7 @@ public class TaskOrchestrationExecutorTest {
             @Override
             public TaskOrchestration create() {
                 return ctx -> {
-                    captured[0] = ctx.getParent();
+                    captured[0] = ctx.getParentInstance();
                     ctx.complete("done");
                 };
             }
@@ -644,7 +668,7 @@ public class TaskOrchestrationExecutorTest {
         executor.execute(pastEvents, newEvents, null);
 
         // Assert: parent is still available and unchanged during replay
-        assertNotNull(captured[0], "getParent() should not be null during replay");
+        assertNotNull(captured[0], "getParentInstance() should not be null during replay");
         assertEquals("ParentOrch", captured[0].getName());
         assertEquals("parent-456", captured[0].getInstanceId());
     }

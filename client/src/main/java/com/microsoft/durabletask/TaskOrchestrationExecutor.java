@@ -210,7 +210,7 @@ final class TaskOrchestrationExecutor {
 
         @Override
         @Nullable
-        public ParentOrchestrationInstance getParent() {
+        public ParentOrchestrationInstance getParentInstance() {
             return this.parentInstance;
         }
 
@@ -1714,9 +1714,11 @@ final class TaskOrchestrationExecutor {
                         }
                         if (startedEvent.hasParentInstance()) {
                             ParentInstanceInfo parentInfo = startedEvent.getParentInstance();
-                            this.parentInstance = new ParentOrchestrationInstance(
-                                parentInfo.getName().getValue(),
-                                parentInfo.getOrchestrationInstance().getInstanceId());
+                            String parentName = parentInfo.hasName() ? parentInfo.getName().getValue() : "";
+                            String parentInstanceId = parentInfo.hasOrchestrationInstance()
+                                ? parentInfo.getOrchestrationInstance().getInstanceId()
+                                : "";
+                            this.parentInstance = new ParentOrchestrationInstance(parentName, parentInstanceId);
                         } else {
                             this.parentInstance = null;
                         }
