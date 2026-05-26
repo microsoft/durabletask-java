@@ -23,7 +23,12 @@ if ($NoSetup -eq $false) {
 	docker pull "mcr.microsoft.com/azure-storage/azurite:${AzuriteVersion}"
 
 	Write-Host "Starting Azurite storage emulator using default ports..." -ForegroundColor Yellow
-	docker run --name 'azurite' -p 10000:10000 -p 10001:10001 -p 10002:10002 -d "mcr.microsoft.com/azure-storage/azurite:${AzuriteVersion}"
+	# --skipApiVersionCheck: the Functions host's Durable extension is updated to use newer
+	# Azure Storage REST API versions faster than Azurite releases support them. Without this
+	# flag, Azurite rejects the request with "The API version <date> is not supported by Azurite",
+	# the extension fails to create its task hub, and every /api/* call returns HTTP 500.
+	docker run --name 'azurite' -p 10000:10000 -p 10001:10001 -p 10002:10002 -d "mcr.microsoft.com/azure-storage/azurite:${AzuriteVersion}" `
+		azurite -l /workspace -d /workspace/debug.log --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
 
 	# Finally, start up the smoke test container, which will connect to the Azurite container
 	docker run --name $ContainerName -p 8080:80 -it --add-host=host.docker.internal:host-gateway -d `
