@@ -155,7 +155,11 @@ jobs:
   functions-e2e-tests:
 
     needs: build
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-22.04 as a diagnostic: ubuntu-24.04 runner image bumped from
+    # 20260513.135 (last green CI on 5/19) to 20260518.149 (first red on 5/22)
+    # with no code change in between. If this job goes green on 22.04, the regression
+    # is in the new 24.04 runner image (Docker-Buildx 0.34 / Node 20 removal / kernel).
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v2
@@ -180,6 +184,18 @@ jobs:
         run: endtoendtests/e2e-test-setup.ps1 -DockerfilePath endtoendtests/Dockerfile
         shell: pwsh
 
+      - name: Diagnose host readiness (always run)
+        if: always()
+        run: |
+          echo '--- docker ps ---'
+          docker ps -a
+          echo '--- curl /admin/host/ping ---'
+          curl -sv -X POST http://localhost:8080/admin/host/ping || true
+          echo '--- curl /api/StartOrchestration ---'
+          curl -sv -X POST http://localhost:8080/api/StartOrchestration || true
+          echo '--- docker logs app (tail) ---'
+          docker logs app 2>&1 | tail -200 || true
+
       - name: End to End Tests with Gradle
         uses: gradle/gradle-build-action@v2
         with:
@@ -194,7 +210,8 @@ jobs:
   functions-sample-tests:
 
     needs: build
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-22.04; see comment on functions-e2e-tests.
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v2
