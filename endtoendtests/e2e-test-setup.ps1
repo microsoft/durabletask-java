@@ -23,9 +23,11 @@ if ($NoSetup -eq $false) {
 	docker pull "mcr.microsoft.com/azure-storage/azurite:${AzuriteVersion}"
 
 	Write-Host "Starting Azurite storage emulator using default ports..." -ForegroundColor Yellow
-	# --skipApiVersionCheck: client sends an x-ms-version newer than this pinned Azurite image
-	# recognizes; without this flag Azurite returns "The API version <date> is not supported by
-	# Azurite", the task hub fails to initialize, and every /api/* call returns HTTP 500.
+	# --skipApiVersionCheck: the Durable extension's Azure Storage client can request a
+	# newer REST API version than the pinned Azurite image supports (e.g. 2026-02-06 vs
+	# Azurite 3.34.0's max 2025-05-05). Without this flag, Azurite rejects the request
+	# with "The API version <date> is not supported by Azurite", the extension fails to
+	# create its task hub, and every /api/* call returns HTTP 500.
 	docker run --name 'azurite' -p 10000:10000 -p 10001:10001 -p 10002:10002 -d "mcr.microsoft.com/azure-storage/azurite:${AzuriteVersion}" `
 		azurite -l /workspace -d /workspace/debug.log --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
 
