@@ -86,7 +86,7 @@ public class ParallelFunctions {
         List<Task<?>> tasks = new ArrayList<>();
         tasks.add(ctx.callActivity("AppendHappy", "AnyOf1", taskOptions, String.class));
         tasks.add(ctx.callActivity("AppendHappy", "AnyOf2", String.class));
-        tasks.add(ctx.callActivity("AppendHappy", 1, Integer.class));
+        tasks.add(ctx.callActivity("AppendInt", 1, Integer.class));
         return ctx.anyOf(tasks).await().await();
     }
 
@@ -125,6 +125,14 @@ public class ParallelFunctions {
             }
         }
         return null;
+    }
+
+    @FunctionName("AppendInt")
+    public int appendInt(
+        @DurableActivityTrigger(name = "value") int value,
+        final ExecutionContext context) {
+        context.getLogger().info("AppendInt: " + value);
+        return value + 1;
     }
 
     @FunctionName("AlwaysException")

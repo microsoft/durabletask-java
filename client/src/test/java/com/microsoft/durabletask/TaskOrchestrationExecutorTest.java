@@ -9,6 +9,8 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -285,4 +287,404 @@ public class TaskOrchestrationExecutorTest {
         assertFalse(scheduleAction.getScheduleTask().hasParentTraceContext(),
                 "ScheduleTaskAction should not have parentTraceContext when none was provided");
     }
+
+    // region Parent Instance Tests
+
+    @Test
+    void execute_withParentInstance_getParentInstanceReturnsParent() {
+        // Arrange: orchestration that captures getParentInstance()
+        String orchName = "ChildOrch";
+        ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
+
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return orchName; }
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    captured[0] = ctx.getParentInstance();
+                    ctx.complete("done");
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+
+        List<HistoryEvent> newEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                                .setName(orchName)
+                                .setVersion(StringValue.of(""))
+                                .setInput(StringValue.of("\"test\""))
+                                .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId("child-instance")
+                                        .build())
+                                .setParentInstance(ParentInstanceInfo.newBuilder()
+                                        .setName(StringValue.of("ParentOrch"))
+                                        .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                                .setInstanceId("parent-123")
+                                                .build())
+                                        .build())
+                                .build())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // Act
+        executor.execute(Collections.emptyList(), newEvents, null);
+
+        // Assert
+        assertNotNull(captured[0], "getParentInstance() should not be null for a sub-orchestration");
+        assertEquals("ParentOrch", captured[0].getName());
+        assertEquals("parent-123", captured[0].getInstanceId());
+    }
+
+    @Test
+    void execute_withoutParentInstance_getParentInstanceReturnsNull() {
+        // Arrange: orchestration without parent instance
+        String orchName = "StandaloneOrch";
+        ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
+        boolean[] wasCalled = {false};
+
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return orchName; }
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    captured[0] = ctx.getParentInstance();
+                    wasCalled[0] = true;
+                    ctx.complete("done");
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+
+        List<HistoryEvent> newEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                                .setName(orchName)
+                                .setVersion(StringValue.of(""))
+                                .setInput(StringValue.of("\"test\""))
+                                .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId("standalone-instance")
+                                        .build())
+                                .build())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // Act
+        executor.execute(Collections.emptyList(), newEvents, null);
+
+        // Assert
+        assertTrue(wasCalled[0], "Orchestrator should have been called");
+        assertNull(captured[0], "getParentInstance() should be null for a standalone orchestration");
+    }
+
+    @Test
+    void execute_withParentInstance_preservesExactValues() {
+        // Arrange: use mixed casing and special characters
+        String orchName = "ChildOrch";
+        String parentName = "Parent.Orch-V2";
+        String parentInstanceId = "abc-DEF-123_special!@#";
+        ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
+
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return orchName; }
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    captured[0] = ctx.getParentInstance();
+                    ctx.complete("done");
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+
+        List<HistoryEvent> newEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                                .setName(orchName)
+                                .setVersion(StringValue.of(""))
+                                .setInput(StringValue.of("\"test\""))
+                                .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId("child-instance")
+                                        .build())
+                                .setParentInstance(ParentInstanceInfo.newBuilder()
+                                        .setName(StringValue.of(parentName))
+                                        .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                                .setInstanceId(parentInstanceId)
+                                                .build())
+                                        .build())
+                                .build())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // Act
+        executor.execute(Collections.emptyList(), newEvents, null);
+
+        // Assert: values must match exactly, no normalization
+        assertNotNull(captured[0]);
+        assertEquals(parentName, captured[0].getName());
+        assertEquals(parentInstanceId, captured[0].getInstanceId());
+    }
+
+    @Test
+    void execute_withParentInstance_emptyFields_acceptsValues() {
+        // Arrange: parent instance with empty/default StringValue fields
+        String orchName = "ChildOrch";
+        ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
+
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return orchName; }
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    captured[0] = ctx.getParentInstance();
+                    ctx.complete("done");
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+
+        List<HistoryEvent> newEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                                .setName(orchName)
+                                .setVersion(StringValue.of(""))
+                                .setInput(StringValue.of("\"test\""))
+                                .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId("child-instance")
+                                        .build())
+                                .setParentInstance(ParentInstanceInfo.newBuilder()
+                                        .setName(StringValue.of(""))
+                                        .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                                .setInstanceId("")
+                                                .build())
+                                        .build())
+                                .build())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // Act
+        executor.execute(Collections.emptyList(), newEvents, null);
+
+        // Assert: permissive — empty values accepted as-is, matching .NET behavior
+        assertNotNull(captured[0], "getParentInstance() should not be null when parentInstance is present");
+        assertEquals("", captured[0].getName());
+        assertEquals("", captured[0].getInstanceId());
+    }
+
+    @Test
+    void execute_withParentInstance_unsetProtoFields_defaultsToEmpty() {
+        // Arrange: ParentInstanceInfo is present, but its inner fields
+        // (name StringValue and OrchestrationInstance) are unset.
+        // The executor must not NPE — it should default to empty strings.
+        String orchName = "ChildOrch";
+        ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
+
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return orchName; }
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    captured[0] = ctx.getParentInstance();
+                    ctx.complete("done");
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+
+        List<HistoryEvent> newEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                                .setName(orchName)
+                                .setVersion(StringValue.of(""))
+                                .setInput(StringValue.of("\"test\""))
+                                .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId("child-instance")
+                                        .build())
+                                // ParentInstanceInfo present but inner fields unset (no setName, no setOrchestrationInstance)
+                                .setParentInstance(ParentInstanceInfo.getDefaultInstance())
+                                .build())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // Act — must not throw NPE
+        executor.execute(Collections.emptyList(), newEvents, null);
+
+        // Assert: parent is non-null, fields default to empty
+        assertNotNull(captured[0], "getParentInstance() should not be null when ParentInstanceInfo is present");
+        assertEquals("", captured[0].getName());
+        assertEquals("", captured[0].getInstanceId());
+    }
+
+    @Test
+    void executorReplay_parentValueStableAcrossReplays() {
+        // Arrange: simulate replay — ExecutionStartedEvent is in pastEvents,
+        // new dispatch has OrchestratorStarted + OrchestratorCompleted.
+        String orchName = "ChildOrch";
+        ParentOrchestrationInstance[] captured = new ParentOrchestrationInstance[1];
+
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return orchName; }
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    captured[0] = ctx.getParentInstance();
+                    ctx.complete("done");
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+
+        // Past events: the initial execution (already processed)
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                                .setName(orchName)
+                                .setVersion(StringValue.of(""))
+                                .setInput(StringValue.of("\"test\""))
+                                .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                        .setInstanceId("child-instance")
+                                        .build())
+                                .setParentInstance(ParentInstanceInfo.newBuilder()
+                                        .setName(StringValue.of("ParentOrch"))
+                                        .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                                .setInstanceId("parent-456")
+                                                .build())
+                                        .build())
+                                .build())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // New events: a new dispatch re-enters the orchestrator
+        List<HistoryEvent> newEvents = Arrays.asList(
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                        .build(),
+                HistoryEvent.newBuilder()
+                        .setEventId(-1)
+                        .setTimestamp(Timestamp.getDefaultInstance())
+                        .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                        .build()
+        );
+
+        // Act: execute with replay history
+        executor.execute(pastEvents, newEvents, null);
+
+        // Assert: parent is still available and unchanged during replay
+        assertNotNull(captured[0], "getParentInstance() should not be null during replay");
+        assertEquals("ParentOrch", captured[0].getName());
+        assertEquals("parent-456", captured[0].getInstanceId());
+    }
+
+    @Test
+    void parentOrchestrationInstance_equalsAndHashCode() {
+        ParentOrchestrationInstance a = new ParentOrchestrationInstance("Orch", "id-1");
+        ParentOrchestrationInstance b = new ParentOrchestrationInstance("Orch", "id-1");
+        ParentOrchestrationInstance c = new ParentOrchestrationInstance("Other", "id-1");
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+        assertNotEquals(a, c);
+        assertNotEquals(a, null);
+        assertEquals("ParentOrchestrationInstance{name='Orch', instanceId='id-1'}", a.toString());
+    }
+
+    // endregion
 }

@@ -129,6 +129,9 @@ public class EntityProxyTest {
         public String getInstanceId() { return "test-instance"; }
 
         @Override
+        public ParentOrchestrationInstance getParentInstance() { return null; }
+
+        @Override
         public Instant getCurrentInstant() { return Instant.now(); }
 
         @Override
