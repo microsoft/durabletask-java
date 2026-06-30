@@ -32,6 +32,11 @@ task runLargePayloadSample(type: JavaExec) {
     mainClass = 'io.durabletask.samples.LargePayloadSample'
 }
 
+task runHistoryExportSample(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.durabletask.samples.HistoryExportSample'
+}
+
 // --- Entity samples (require a Durable Task sidecar / DTS emulator on localhost:4001) ---
 // When ENDPOINT is set (or the default applies), these tasks connect to a Durable Task
 // Scheduler such as the DTS emulator. Override by setting ENDPOINT/TASKHUB env vars.
@@ -104,6 +109,7 @@ dependencies {
     implementation project(':client')
     implementation project(':azuremanaged')
     implementation project(':azure-blob-payloads')
+    implementation project(':exporthistory')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation platform("org.springframework.boot:spring-boot-dependencies:2.7.18")
