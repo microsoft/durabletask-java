@@ -2,8 +2,11 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.microsoft.durabletask.history.HistoryEvent;
+
 import javax.annotation.Nullable;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -225,6 +228,31 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @return the result of the query operation, including instance metadata and possibly a continuation token
      */
     public abstract OrchestrationStatusQueryResult queryInstances(OrchestrationStatusQuery query);
+
+    /**
+     * Lists the IDs of terminal orchestration instances that completed within a time window.
+     * <p>
+     * Unlike {@link #queryInstances(OrchestrationStatusQuery)}, which filters by creation time and returns full
+     * metadata, this method filters by <em>completion</em> time and returns only instance IDs, making it efficient
+     * for bulk enumeration such as archival/export. Results are paged; pass
+     * {@link ListInstanceIdsResult#getContinuationToken()} back via
+     * {@link ListInstanceIdsQuery#setContinuationToken(String)} to fetch subsequent pages.
+     *
+     * @param query filter criteria: completion-time window, terminal runtime statuses, page size, and pagination cursor
+     * @return a page of matching instance IDs and a cursor for the next page
+     */
+    public abstract ListInstanceIdsResult listInstanceIds(ListInstanceIdsQuery query);
+
+    /**
+     * Gets the full history of an orchestration instance as an ordered list of {@link HistoryEvent} objects.
+     * <p>
+     * The events are returned in execution order. This is useful for archiving or offline analysis of an instance's
+     * execution history. Use {@code instanceof} to inspect each concrete event type.
+     *
+     * @param instanceId the unique ID of the orchestration instance whose history to fetch
+     * @return the instance's history events in order; empty if the instance has no history
+     */
+    public abstract List<HistoryEvent> getOrchestrationHistory(String instanceId);
 
     /**
      * Initializes the target task hub data store.

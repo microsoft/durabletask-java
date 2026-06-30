@@ -14,6 +14,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import com.microsoft.durabletask.history.ExecutionStartedEvent;
+import com.microsoft.durabletask.history.HistoryEvent;
+import com.microsoft.durabletask.history.TaskCompletedEvent;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -1199,6 +1202,73 @@ public class IntegrationTests extends IntegrationTestBase {
         try (worker; client) {
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             assertThrows(TimeoutException.class, () -> client.waitForInstanceCompletion(instanceId, Duration.ofSeconds(2), false));
+        }
+    }
+
+    @Test
+    void listInstanceIdsByCompletionWindow() throws TimeoutException {
+        final String orchestratorName = "ListInstanceIdsExport";
+        final String plusOne = "PlusOne";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOne, value, int.class).await();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOne, ctx -> ctx.getInput(int.class) + 1)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            Instant from = Instant.now().minus(Duration.ofMinutes(1));
+
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+
+            ListInstanceIdsResult result = client.listInstanceIds(new ListInstanceIdsQuery()
+                    .setCompletedTimeFrom(from)
+                    .setRuntimeStatusList(Collections.singletonList(OrchestrationRuntimeStatus.COMPLETED))
+                    .setPageSize(100));
+
+            assertNotNull(result);
+            assertNotNull(result.getInstanceIds());
+            assertTrue(result.getInstanceIds().contains(instanceId),
+                    "Expected listInstanceIds to include the completed instance " + instanceId);
+        }
+    }
+
+    @Test
+    void getOrchestrationHistoryReturnsDomainEvents() throws TimeoutException {
+        final String orchestratorName = "StreamHistoryExport";
+        final String plusOne = "PlusOne";
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+                .addOrchestrator(orchestratorName, ctx -> {
+                    int value = ctx.getInput(int.class);
+                    value = ctx.callActivity(plusOne, value, int.class).await();
+                    ctx.complete(value);
+                })
+                .addActivity(plusOne, ctx -> ctx.getInput(int.class) + 1)
+                .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
+            OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
+
+            List<HistoryEvent> history = client.getOrchestrationHistory(instanceId);
+
+            assertNotNull(history);
+            assertFalse(history.isEmpty(), "Expected a completed instance to have history events");
+            // A completed orchestration's history begins with an ExecutionStartedEvent.
+            assertTrue(history.stream().anyMatch(e -> e instanceof ExecutionStartedEvent),
+                    "Expected history to contain an ExecutionStartedEvent");
+            // And it contains a successful activity completion.
+            assertTrue(history.stream().anyMatch(e -> e instanceof TaskCompletedEvent),
+                    "Expected history to contain a TaskCompletedEvent");
         }
     }
 

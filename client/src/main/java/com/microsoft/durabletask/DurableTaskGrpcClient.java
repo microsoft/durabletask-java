@@ -4,6 +4,8 @@ package com.microsoft.durabletask;
 
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
+import com.microsoft.durabletask.history.HistoryEvent;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.*;
@@ -293,6 +295,35 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
             metadataList.add(new OrchestrationMetadata(state, this.dataConverter, fetchInputsAndOutputs));
         });
         return new OrchestrationStatusQueryResult(metadataList, queryInstancesResponse.getContinuationToken().getValue());
+    }
+
+    @Override
+    public ListInstanceIdsResult listInstanceIds(ListInstanceIdsQuery query) {
+        ListInstanceIdsRequest.Builder builder = ListInstanceIdsRequest.newBuilder();
+        Optional.ofNullable(query.getCompletedTimeFrom()).ifPresent(from -> builder.setCompletedTimeFrom(DataConverter.getTimestampFromInstant(from)));
+        Optional.ofNullable(query.getCompletedTimeTo()).ifPresent(to -> builder.setCompletedTimeTo(DataConverter.getTimestampFromInstant(to)));
+        String requestContinuationToken = query.getContinuationToken() != null ? query.getContinuationToken() : "";
+        builder.setLastInstanceKey(StringValue.of(requestContinuationToken));
+        builder.setPageSize(query.getPageSize());
+        query.getRuntimeStatusList().forEach(runtimeStatus -> Optional.ofNullable(runtimeStatus).ifPresent(status -> builder.addRuntimeStatus(OrchestrationRuntimeStatus.toProtobuf(status))));
+        ListInstanceIdsResponse response = this.sidecarClient.listInstanceIds(builder.build());
+        String continuationToken = response.hasLastInstanceKey() ? response.getLastInstanceKey().getValue() : null;
+        return new ListInstanceIdsResult(new ArrayList<>(response.getInstanceIdsList()), continuationToken);
+    }
+
+    @Override
+    public List<HistoryEvent> getOrchestrationHistory(String instanceId) {
+        StreamInstanceHistoryRequest request = StreamInstanceHistoryRequest.newBuilder()
+                .setInstanceId(instanceId)
+                .build();
+        List<HistoryEvent> historyEvents = new ArrayList<>();
+        Iterator<HistoryChunk> chunks = this.sidecarClient.streamInstanceHistory(request);
+        while (chunks.hasNext()) {
+            for (OrchestratorService.HistoryEvent protoEvent : chunks.next().getEventsList()) {
+                historyEvents.add(HistoryEventConverter.fromProto(protoEvent));
+            }
+        }
+        return historyEvents;
     }
 
     @Override
