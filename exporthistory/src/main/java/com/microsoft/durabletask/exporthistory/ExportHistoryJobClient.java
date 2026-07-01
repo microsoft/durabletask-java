@@ -16,8 +16,6 @@ import java.util.concurrent.TimeoutException;
 /**
  * Client for managing a single export job via entity operations routed through
  * {@link ExecuteExportJobOperationOrchestrator}.
- * <p>
- * Mirrors the .NET {@code ExportHistoryJobClient} / {@code DefaultExportHistoryJobClient}.
  */
 public final class ExportHistoryJobClient {
 

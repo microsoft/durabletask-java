@@ -3,10 +3,8 @@
 package com.microsoft.durabletask.exporthistory;
 
 /**
- * Valid state-transition rules for export jobs.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobTransitions}. The operation-name constants
- * match the {@link ExportJob} entity method names (case-insensitive dispatch).
+ * Valid state-transition rules for export jobs. The operation-name constants match the {@link ExportJob} entity
+ * method names (case-insensitive dispatch).
  */
 public final class ExportJobTransitions {
 

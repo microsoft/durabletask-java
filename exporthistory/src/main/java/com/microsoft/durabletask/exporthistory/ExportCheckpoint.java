@@ -7,8 +7,7 @@ import javax.annotation.Nullable;
 /**
  * Checkpoint information used to resume an export.
  * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportCheckpoint}. The
- * {@code lastInstanceKey} is the pagination cursor returned by the client {@code listInstanceIds} wrapper.
+ * The {@code lastInstanceKey} is the pagination cursor returned by the client {@code listInstanceIds} wrapper.
  */
 public final class ExportCheckpoint {
 

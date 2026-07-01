@@ -6,8 +6,6 @@ import javax.annotation.Nullable;
 
 /**
  * Export destination settings for Azure Blob Storage.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportDestination}.
  */
 public final class ExportDestination {
 

@@ -13,8 +13,6 @@ import java.util.ArrayList;
 /**
  * Activity that lists terminal orchestration instances for a completion-time window using the client
  * {@code listInstanceIds} wrapper, returning a page plus the checkpoint to advance to.
- * <p>
- * Mirrors the .NET {@code ListTerminalInstancesActivity}.
  */
 public final class ListTerminalInstancesActivity implements TaskActivity {
 

@@ -7,8 +7,6 @@ import com.microsoft.durabletask.EntityInstanceId;
 /**
  * Input to the {@link ExportJobOrchestrator} identifying the job entity and the number of processed cycles
  * (used to bound work before {@code continueAsNew}).
- * <p>
- * Mirrors the .NET {@code ExportJobRunRequest} record.
  */
 public final class ExportJobRunRequest {
 

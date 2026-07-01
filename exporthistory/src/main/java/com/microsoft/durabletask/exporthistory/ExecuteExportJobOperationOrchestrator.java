@@ -9,7 +9,7 @@ import com.microsoft.durabletask.TaskOrchestrationContext;
  * Orchestrator that executes a single operation on an export job entity and returns its result.
  * <p>
  * The client schedules this orchestrator (rather than signaling the entity directly) so it can await completion and
- * surface validation errors. Mirrors the .NET {@code ExecuteExportJobOperationOrchestrator}.
+ * surface validation errors.
  */
 public final class ExecuteExportJobOperationOrchestrator implements TaskOrchestration {
 

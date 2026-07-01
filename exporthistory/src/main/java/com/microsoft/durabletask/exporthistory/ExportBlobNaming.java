@@ -6,14 +6,21 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Computes export blob names and paths. The blob name is a SHA-256 hash of
- * {@code "<completedTimestamp ISO-8601>|<instanceId>"} plus the format-specific extension, mirroring the .NET
- * {@code ExportInstanceHistoryActivity} naming scheme.
+ * Computes export blob names and paths. The blob name is a lowercase-hex SHA-256 hash of
+ * {@code "<completedTimestamp>|<instanceId>"} plus the format-specific extension. The timestamp is rendered with a
+ * fixed round-trip format ({@code yyyy-MM-ddTHH:mm:ss.fffffff+00:00}) so blob names are stable and idempotent under
+ * retry.
  */
 final class ExportBlobNaming {
+
+    // Date-time portion of the timestamp format; the fractional seconds and offset are appended manually.
+    private static final DateTimeFormatter TIMESTAMP_DATE_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
     private ExportBlobNaming() {
     }
@@ -27,8 +34,24 @@ final class ExportBlobNaming {
      * @return the blob file name, e.g. {@code "<hex>.jsonl.gz"}
      */
     static String blobFileName(Instant completedTimestamp, String instanceId, ExportFormat format) {
-        String hashInput = DateTimeFormatter.ISO_INSTANT.format(completedTimestamp) + "|" + instanceId;
+        String hashInput = formatTimestamp(completedTimestamp) + "|" + instanceId;
         return sha256Hex(hashInput) + "." + HistoryEventSerializer.fileExtension(format);
+    }
+
+    /**
+     * Formats an instant as {@code yyyy-MM-ddTHH:mm:ss.fffffff+00:00} (seven fractional digits, explicit UTC
+     * offset). The instant is treated as UTC.
+     * <p>
+     * Note: instance timestamps are truncated to milliseconds upstream, so the sub-millisecond fractional digits
+     * are always zero here.
+     *
+     * @param instant the timestamp (treated as UTC)
+     * @return the formatted timestamp string
+     */
+    static String formatTimestamp(Instant instant) {
+        OffsetDateTime utc = instant.atOffset(ZoneOffset.UTC);
+        long ticks = utc.getNano() / 100L;
+        return TIMESTAMP_DATE_TIME.format(utc) + "." + String.format("%07d", ticks) + "+00:00";
     }
 
     /**

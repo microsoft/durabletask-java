@@ -76,19 +76,55 @@ supplied, all three are exported.
 - **Permissions** — the storage credential needs blob write on the container; the DTS credential needs
   orchestration read.
 
+## Export format
+
+Each blob holds the instance's full history, and the **blob body is byte-for-byte identical to the .NET
+`Microsoft.DurableTask.ExportHistory` output** (pinned by a test against golden output captured from
+`Microsoft.Azure.DurableTask.Core`):
+
+- **JSONL** (default, gzipped) is one JSON object per line; **JSON** is a single array.
+- Each event is `{"eventType": "...", <type-specific fields>, "eventId": N, "isPlayed": false, "timestamp": "..."}`.
+- camelCase field names, null fields omitted, empty maps as `{}`, enum values in PascalCase (e.g. `"Completed"`),
+  timestamps as trimmed ISO-8601 ending in `Z`, and the same HTML-safe string escaping (`"` → `\u0022`,
+  `& < > ' +` and all non-ASCII → `\uXXXX`).
+
+Blob **names**: a lowercase-hex SHA-256 of `"<completedTimestamp>|<instanceId>"` plus the format extension.
+
 ## Differences from .NET
 
 1. **Worker registration takes an explicit client** — `useExportHistory(workerBuilder, storage, client)`. Java has
    no dependency injection, so the export activities require a `DurableTaskClient` for the same backend.
-2. **Export format** — history is serialized from the structured `com.microsoft.durabletask.history` domain model
-   (camelCase, null fields omitted, one event per line for JSONL). Byte-level parity with .NET's
-   protobuf-`HistoryEvent`-JSON output is an open item.
+2. **Entity events** — the .NET export folds durable-entity operations into core events via a stateful converter, so
+   it has no distinct JSON for them; Java emits entity events in a Java-native shape instead (a reflective projection
+   with an `eventType` discriminator, e.g. `"EntityLockGranted"` — matching the Python SDK, which also keeps entity
+   events as first-class types). Every **non-entity** event is byte-for-byte identical to .NET, so only orchestrations
+   that call entities differ, and only on those entity-specific lines.
 
 ## Backend requirement
 
 The export feature relies on the `ListInstanceIds` and `StreamInstanceHistory` gRPC operations. Managed DTS serves
 both; the emulator / self-hosted sidecar needs **≥ v0.4.22**. Against an older backend, a raw gRPC `UNIMPLEMENTED`
 surfaces (matching .NET).
+
+## Validating the export
+
+Locally, with the DTS emulator and Azurite:
+
+1. Start the backends:
+   ```
+   docker run --name durabletask-emulator -p 4001:8080 -d mcr.microsoft.com/dts/dts-emulator:latest
+   docker run --name azurite -p 10000:10000 -d mcr.microsoft.com/azure-storage/azurite azurite-blob --blobHost 0.0.0.0
+   ```
+2. Point the app at them: DTS connection `Endpoint=http://localhost:4001;Authentication=None`, storage = the Azurite
+   dev connection string, container `orchestration-history`.
+3. Run an orchestration to a terminal state, then create a `BATCH` export job whose window covers its completion time.
+4. Confirm the job reaches `COMPLETED` and inspect progress:
+   ```java
+   ExportJobDescription d = job.describe();
+   // d.getStatus() == ExportJobStatus.COMPLETED, d.getExportedInstances() >= 1
+   ```
+5. Download the blob from the container (gunzip for JSONL) and inspect it. Every line carries an `eventType`
+   discriminator, `isPlayed:false`, and a trailing `timestamp`.
 
 ## Sample
 

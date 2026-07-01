@@ -10,8 +10,6 @@ import java.util.List;
 
 /**
  * Filter criteria for selecting orchestration instances to export.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportFilter}.
  */
 public final class ExportFilter {
 

@@ -23,8 +23,6 @@ import java.util.stream.Collectors;
  * Orchestrator that performs the export work: it pages terminal instances, fans out per-instance export activities,
  * commits checkpoints to the {@link ExportJob} entity, and handles BATCH vs CONTINUOUS modes with bounded retries
  * and periodic {@code continueAsNew}.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobOrchestrator}.
  */
 public final class ExportJobOrchestrator implements TaskOrchestration {
 

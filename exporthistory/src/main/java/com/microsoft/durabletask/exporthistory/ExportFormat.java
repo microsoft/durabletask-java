@@ -5,10 +5,7 @@ package com.microsoft.durabletask.exporthistory;
 import java.util.Objects;
 
 /**
- * Export format settings.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportFormat} record. The default is
- * {@link ExportFormatKind#JSONL} with schema version {@code "1.0"}.
+ * Export format settings. The default is {@link ExportFormatKind#JSONL} with schema version {@code "1.0"}.
  */
 public final class ExportFormat {
 

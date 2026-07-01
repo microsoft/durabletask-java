@@ -11,7 +11,7 @@ import java.util.Objects;
  * Client-side registration for the export history feature.
  * <p>
  * Builds a {@link DurableTaskClient} from the given builder and returns an {@link ExportHistoryClient} bound to the
- * supplied blob storage destination. Mirrors the .NET client extension.
+ * supplied blob storage destination.
  */
 public final class ExportHistoryClientExtensions {
 

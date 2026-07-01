@@ -18,9 +18,8 @@ import java.util.Objects;
  * {@link ExecuteExportJobOperationOrchestrator} orchestrators, and the {@link ListTerminalInstancesActivity} and
  * {@link ExportInstanceHistoryActivity} activities.
  * <p>
- * Unlike the .NET worker extension (which relies on dependency injection for the {@link DurableTaskClient}), the
- * Java activities require an explicit client to call {@code listInstanceIds} / {@code getOrchestrationHistory}
- * against the same backend the worker targets.
+ * The export activities require an explicit {@link DurableTaskClient} to call {@code listInstanceIds} /
+ * {@code getOrchestrationHistory} against the same backend the worker targets.
  */
 public final class ExportHistoryWorkerExtensions {
 

@@ -10,13 +10,9 @@ import java.net.URI;
 /**
  * Configuration for the Azure Blob Storage destination of an export history job.
  * <p>
- * Supports both connection-string and identity-based ({@link TokenCredential}) authentication, mirroring the
- * {@code azure-blob-payloads} add-on. Either {@link #setConnectionString(String)} or both
- * {@link #setAccountUri(URI)} and {@link #setCredential(TokenCredential)} must be set before use.
- * <p>
- * The .NET source of truth ({@code Microsoft.DurableTask.ExportHistory.ExportHistoryStorageOptions}) currently
- * exposes connection-string auth only; the Java add-on additionally supports identity-based auth for parity with
- * the existing {@code azure-blob-payloads} module.
+ * Supports both connection-string and identity-based ({@link TokenCredential}) authentication. Either
+ * {@link #setConnectionString(String)} or both {@link #setAccountUri(URI)} and
+ * {@link #setCredential(TokenCredential)} must be set before use.
  *
  * <p>Example (connection string):
  * <pre>{@code

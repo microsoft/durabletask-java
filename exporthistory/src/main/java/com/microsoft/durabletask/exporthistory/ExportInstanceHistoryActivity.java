@@ -16,10 +16,9 @@ import java.util.logging.Logger;
 /**
  * Activity that exports a single orchestration instance's history to the configured blob destination.
  * <p>
- * Mirrors the .NET {@code ExportInstanceHistoryActivity}: it reads the instance metadata to confirm a terminal
- * state and obtain the completion timestamp, streams the full history via {@code getOrchestrationHistory},
- * serializes it (gzipped JSONL by default), and uploads it to a blob named from a hash of the completion timestamp
- * and instance ID.
+ * It reads the instance metadata to confirm a terminal state and obtain the completion timestamp, streams the full
+ * history via {@code getOrchestrationHistory}, serializes it (gzipped JSONL by default), and uploads it to a blob
+ * named from a hash of the completion timestamp and instance ID.
  */
 public final class ExportInstanceHistoryActivity implements TaskActivity {
 

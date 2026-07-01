@@ -4,8 +4,6 @@ package com.microsoft.durabletask.exporthistory;
 
 /**
  * Thrown when an export job operation attempts an invalid status transition.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobInvalidTransitionException}.
  */
 public final class ExportJobInvalidTransitionException extends RuntimeException {
 

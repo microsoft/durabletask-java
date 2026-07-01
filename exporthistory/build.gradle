@@ -12,7 +12,6 @@ archivesBaseName = 'durabletask-exporthistory'
 def grpcVersion = '1.78.0'
 def azureCoreVersion = '1.57.1'
 def azureStorageBlobVersion = '12.29.1'
-def jacksonVersion = '2.18.3'
 
 // Java 11 is used to compile and run all tests. Set the JDK_11 env var to your
 // local JDK 11 home directory, e.g. C:/Program Files/Java/openjdk-11.0.12_7/
@@ -33,10 +32,6 @@ dependencies {
 
     // Azure Storage Blobs — export destination for serialized history.
     implementation "com.azure:azure-storage-blob:${azureStorageBlobVersion}"
-
-    // Jackson — serialize the history domain model to JSONL/JSON for export.
-    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
-    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
 
     // TokenCredential abstraction (from azure-core) — 'api' because
     // ExportHistoryStorageOptions exposes TokenCredential in its public API.

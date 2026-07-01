@@ -6,8 +6,6 @@ import java.time.Instant;
 
 /**
  * Failure of a specific instance export.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportFailure}.
  */
 public final class ExportFailure {
 

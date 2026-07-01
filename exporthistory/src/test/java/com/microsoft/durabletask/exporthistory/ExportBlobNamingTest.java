@@ -4,6 +4,8 @@ package com.microsoft.durabletask.exporthistory;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,5 +54,29 @@ class ExportBlobNamingTest {
         assertEquals("exports/file", ExportBlobNaming.blobPath("exports", "file"));
         assertEquals("exports/file", ExportBlobNaming.blobPath("exports/", "file"));
         assertEquals("exports/file", ExportBlobNaming.blobPath("exports///", "file"));
+    }
+
+    @Test
+    void formatTimestamp_hasSevenFractionalDigitsAndUtcOffset() {
+        assertEquals("2026-06-30T12:00:00.0000000+00:00", ExportBlobNaming.formatTimestamp(TS));
+        assertEquals("2026-06-30T12:00:00.1230000+00:00",
+                ExportBlobNaming.formatTimestamp(Instant.parse("2026-06-30T12:00:00.123Z")));
+    }
+
+    @Test
+    void blobFileName_isSha256OfTimestampAndInstanceId() throws Exception {
+        // Blob name = lowercase-hex SHA-256 of "<timestamp>|<instanceId>" + extension.
+        String expected = sha256Hex("2026-06-30T12:00:00.0000000+00:00|inst-1") + ".jsonl.gz";
+        assertEquals(expected, ExportBlobNaming.blobFileName(TS, "inst-1", JSONL));
+    }
+
+    private static String sha256Hex(String value) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 }

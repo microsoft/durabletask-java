@@ -15,8 +15,7 @@ import java.util.List;
 /**
  * Convenience client for creating, reading, and listing export jobs, backed by entity operations and reads.
  * <p>
- * Obtain an instance via {@link ExportHistoryClientExtensions#useExportHistory}. Mirrors the .NET
- * {@code ExportHistoryClient} / {@code DefaultExportHistoryClient}.
+ * Obtain an instance via {@link ExportHistoryClientExtensions#useExportHistory}.
  */
 public final class ExportHistoryClient {
 

@@ -4,8 +4,6 @@ package com.microsoft.durabletask.exporthistory;
 
 /**
  * Configuration for an export job, persisted in the {@link ExportJobState} entity state.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobConfiguration}.
  */
 public final class ExportJobConfiguration {
 

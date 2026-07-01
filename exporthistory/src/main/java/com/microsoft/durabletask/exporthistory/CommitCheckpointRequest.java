@@ -8,9 +8,8 @@ import java.util.List;
 /**
  * Request to commit a checkpoint with progress updates and optional failures.
  * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.CommitCheckpointRequest}. When
- * {@link #getCheckpoint()} is non-null the cursor moves forward (successful batch); when {@code null} the cursor is
- * retained (failed batch eligible for retry).
+ * When {@link #getCheckpoint()} is non-null the cursor moves forward (successful batch); when {@code null} the
+ * cursor is retained (failed batch eligible for retry).
  */
 public final class CommitCheckpointRequest {
 

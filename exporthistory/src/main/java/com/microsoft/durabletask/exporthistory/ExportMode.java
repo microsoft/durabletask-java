@@ -4,8 +4,6 @@ package com.microsoft.durabletask.exporthistory;
 
 /**
  * Export job modes.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportMode} source of truth.
  */
 public enum ExportMode {
     /** Exports a fixed completion-time window and then completes. */

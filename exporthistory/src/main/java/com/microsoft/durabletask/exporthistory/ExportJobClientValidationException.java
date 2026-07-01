@@ -4,8 +4,6 @@ package com.microsoft.durabletask.exporthistory;
 
 /**
  * Thrown when export job creation options or client arguments fail validation.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobClientValidationException}.
  */
 public final class ExportJobClientValidationException extends RuntimeException {
 

@@ -7,8 +7,6 @@ import java.time.Instant;
 
 /**
  * Query parameters for filtering export history jobs via {@link ExportHistoryClient#listJobs(ExportJobQuery)}.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobQuery}.
  */
 public final class ExportJobQuery {
 

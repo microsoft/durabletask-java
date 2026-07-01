@@ -4,8 +4,6 @@ package com.microsoft.durabletask.exporthistory;
 
 /**
  * Constants used throughout the export history functionality.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportHistoryConstants} source of truth.
  */
 public final class ExportHistoryConstants {
 

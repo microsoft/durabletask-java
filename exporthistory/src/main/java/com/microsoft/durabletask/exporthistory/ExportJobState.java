@@ -7,8 +7,6 @@ import java.time.Instant;
 
 /**
  * Export job state stored in the {@link ExportJob} entity.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobState}.
  */
 public final class ExportJobState {
 

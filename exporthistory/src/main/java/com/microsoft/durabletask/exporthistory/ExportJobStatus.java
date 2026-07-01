@@ -4,8 +4,6 @@ package com.microsoft.durabletask.exporthistory;
 
 /**
  * Represents the current status of an export history job.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobStatus} source of truth.
  */
 public enum ExportJobStatus {
     /** The export history job has been created but is not yet active. */

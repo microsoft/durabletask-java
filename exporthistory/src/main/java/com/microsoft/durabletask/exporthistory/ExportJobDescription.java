@@ -7,8 +7,6 @@ import java.time.Instant;
 
 /**
  * Client-facing description of an export job, projected from the entity {@link ExportJobState}.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobDescription}.
  */
 public final class ExportJobDescription {
 

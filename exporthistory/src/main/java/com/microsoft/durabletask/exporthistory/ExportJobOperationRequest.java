@@ -9,8 +9,6 @@ import javax.annotation.Nullable;
 /**
  * Request to execute a single operation on an export job entity, scheduled by the client through
  * {@link ExecuteExportJobOperationOrchestrator} so the caller can await completion and surface validation errors.
- * <p>
- * Mirrors the .NET {@code ExportJobOperationRequest} record.
  */
 public final class ExportJobOperationRequest {
 

@@ -16,8 +16,7 @@ import java.util.UUID;
 /**
  * Configuration for creating an export job.
  * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobCreationOptions}. Export supports
- * <em>terminal</em> orchestration statuses only ({@link OrchestrationRuntimeStatus#COMPLETED},
+ * Export supports <em>terminal</em> orchestration statuses only ({@link OrchestrationRuntimeStatus#COMPLETED},
  * {@link OrchestrationRuntimeStatus#FAILED}, {@link OrchestrationRuntimeStatus#TERMINATED}); when no status filter
  * is supplied, all three are exported.
  *
@@ -214,7 +213,7 @@ public final class ExportJobCreationOptions {
     }
 
     /**
-     * Validates mode-specific completion-window rules, mirroring the .NET constructor checks. Intended to be called
+     * Validates mode-specific completion-window rules. Intended to be called
      * by the client at job-creation time.
      *
      * @throws IllegalArgumentException if the configuration is invalid for the selected mode

@@ -4,8 +4,6 @@ package com.microsoft.durabletask.exporthistory;
 
 /**
  * Thrown when an export job cannot be found.
- * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJobNotFoundException}.
  */
 public final class ExportJobNotFoundException extends RuntimeException {
 

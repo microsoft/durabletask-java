@@ -23,7 +23,7 @@ import java.util.zip.GZIPOutputStream;
  * <p>
  * Built once from {@link ExportHistoryStorageOptions} (connection-string or identity auth) and reused across export
  * activities. The target container is taken from each {@link ExportDestination}; the container is created on first
- * use. Mirrors the upload behavior of the .NET {@code ExportInstanceHistoryActivity}.
+ * use.
  */
 final class BlobExportWriter {
 

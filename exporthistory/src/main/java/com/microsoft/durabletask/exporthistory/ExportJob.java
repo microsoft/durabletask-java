@@ -16,9 +16,8 @@ import java.util.stream.Collectors;
 /**
  * Durable entity that manages a history export job: lifecycle, configuration, checkpoint, and progress.
  * <p>
- * Mirrors the .NET {@code Microsoft.DurableTask.ExportHistory.ExportJob} entity. Operations are dispatched by method
- * name (case-insensitive): {@code Create}, {@code Get}, {@code Run}, {@code CommitCheckpoint},
- * {@code MarkAsCompleted}, {@code MarkAsFailed}, {@code Delete}.
+ * Operations are dispatched by method name (case-insensitive): {@code Create}, {@code Get}, {@code Run},
+ * {@code CommitCheckpoint}, {@code MarkAsCompleted}, {@code MarkAsFailed}, {@code Delete}.
  */
 public final class ExportJob extends AbstractTaskEntity<ExportJobState> {
 
