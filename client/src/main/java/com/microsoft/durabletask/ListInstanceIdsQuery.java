@@ -36,7 +36,7 @@ public final class ListInstanceIdsQuery {
      * @return this query object
      */
     public ListInstanceIdsQuery setRuntimeStatusList(@Nullable List<OrchestrationRuntimeStatus> runtimeStatusList) {
-        this.runtimeStatusList = runtimeStatusList;
+        this.runtimeStatusList = runtimeStatusList != null ? new ArrayList<>(runtimeStatusList) : new ArrayList<>();
         return this;
     }
 
