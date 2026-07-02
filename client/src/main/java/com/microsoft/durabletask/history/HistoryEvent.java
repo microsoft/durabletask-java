@@ -7,7 +7,7 @@ import java.time.Instant;
 /**
  * Base class for the events that make up an orchestration instance's execution history.
  * <p>
- * Instances are obtained from {@link com.microsoft.durabletask.DurableTaskClient#streamInstanceHistory(String)}. Each
+ * Instances are obtained from {@link com.microsoft.durabletask.DurableTaskClient#getOrchestrationHistory(String)}. Each
  * concrete subclass (for example {@link ExecutionStartedEvent} or {@link TaskCompletedEvent}) exposes the data specific
  * to that event type. Use {@code instanceof} to inspect the concrete event type.
  */

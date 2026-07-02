@@ -14,7 +14,7 @@ import javax.annotation.Nullable;
  * and provides a typed {@code State} property. In Java, the state is eagerly deserialized and accessible
  * via {@link #getState()}.
  *
- * <h3>Example:</h3>
+ * <h2>Example:</h2>
  * <pre>{@code
  * TypedEntityMetadata<Integer> metadata = client.getEntities()
  *     .getEntityMetadata(entityId, Integer.class);

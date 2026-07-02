@@ -17,7 +17,7 @@ import java.util.function.Function;
  * <p>
  * Use {@link DurableEntityClient#getAllEntities(EntityQuery)} to obtain an instance of this class.
  *
- * <h3>Example: iterate over all entities</h3>
+ * <h2>Example: iterate over all entities</h2>
  * <pre>{@code
  * EntityQuery query = new EntityQuery()
  *     .setInstanceIdStartsWith("counter")
@@ -28,7 +28,7 @@ import java.util.function.Function;
  * }
  * }</pre>
  *
- * <h3>Example: iterate page by page</h3>
+ * <h2>Example: iterate page by page</h2>
  * <pre>{@code
  * for (EntityQueryResult page : client.getEntities().getAllEntities(query).byPage()) {
  *     System.out.println("Got " + page.getEntities().size() + " entities");
