@@ -59,6 +59,9 @@ public final class ExportHistoryJobClient {
         String container = options.getDestination() == null || options.getDestination().getContainer() == null
                 ? this.storageOptions.getContainerName()
                 : options.getDestination().getContainer();
+        if (container == null || container.isEmpty()) {
+            throw new ExportJobClientValidationException("Blob container name must not be null or empty.");
+        }
 
         ExportDestination destination = new ExportDestination(container);
         destination.setPrefix(prefix);

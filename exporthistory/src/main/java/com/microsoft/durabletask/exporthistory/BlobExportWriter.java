@@ -88,6 +88,12 @@ final class BlobExportWriter {
      * @param instanceId    the instance ID, recorded as blob metadata
      */
     void upload(String containerName, String blobPath, String content, ExportFormat format, String instanceId) {
+        if (containerName == null || containerName.isEmpty()) {
+            throw new IllegalArgumentException("Blob container name must not be null or empty.");
+        }
+        if (blobPath == null || blobPath.isEmpty()) {
+            throw new IllegalArgumentException("Blob path must not be null or empty.");
+        }
         BlobContainerClient containerClient = this.serviceClient.getBlobContainerClient(containerName);
         containerClient.createIfNotExists();
 

@@ -47,7 +47,7 @@ public final class ExportInstanceHistoryActivity implements TaskActivity {
         String instanceId = input.getInstanceId();
 
         try {
-            OrchestrationMetadata metadata = this.client.getInstanceMetadata(instanceId, true);
+            OrchestrationMetadata metadata = this.client.getInstanceMetadata(instanceId, false);
             if (metadata == null || !metadata.isInstanceFound()) {
                 return ExportResult.failure(instanceId, "Instance " + instanceId + " not found");
             }
