@@ -8,6 +8,7 @@ import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 import javax.annotation.Nullable;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -83,7 +84,7 @@ public final class OrchestrationState {
         this.failureDetails = failureDetails;
         this.executionId = executionId;
         this.parentInstanceId = parentInstanceId;
-        this.tags = tags == null ? null : Collections.unmodifiableMap(tags);
+        this.tags = tags == null ? null : Collections.unmodifiableMap(new HashMap<>(tags));
     }
 
     /** @return the orchestration instance ID. */
