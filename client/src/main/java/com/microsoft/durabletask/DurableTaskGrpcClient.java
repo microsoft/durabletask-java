@@ -299,6 +299,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
 
     @Override
     public ListInstanceIdsResult listInstanceIds(ListInstanceIdsQuery query) {
+        Helpers.throwIfArgumentNull(query, "query");
         ListInstanceIdsRequest.Builder builder = ListInstanceIdsRequest.newBuilder();
         Optional.ofNullable(query.getCompletedTimeFrom()).ifPresent(from -> builder.setCompletedTimeFrom(DataConverter.getTimestampFromInstant(from)));
         Optional.ofNullable(query.getCompletedTimeTo()).ifPresent(to -> builder.setCompletedTimeTo(DataConverter.getTimestampFromInstant(to)));
@@ -313,6 +314,7 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
 
     @Override
     public List<HistoryEvent> getOrchestrationHistory(String instanceId) {
+        Helpers.throwIfArgumentNull(instanceId, "instanceId");
         StreamInstanceHistoryRequest request = StreamInstanceHistoryRequest.newBuilder()
                 .setInstanceId(instanceId)
                 .build();
