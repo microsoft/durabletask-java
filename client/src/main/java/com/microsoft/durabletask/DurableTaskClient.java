@@ -240,8 +240,12 @@ public abstract class DurableTaskClient implements AutoCloseable {
      *
      * @param query filter criteria: completion-time window, terminal runtime statuses, page size, and pagination cursor
      * @return a page of matching instance IDs and a cursor for the next page
+     * @throws UnsupportedOperationException if the current client implementation does not support listing instance IDs
      */
-    public abstract ListInstanceIdsResult listInstanceIds(ListInstanceIdsQuery query);
+    public ListInstanceIdsResult listInstanceIds(ListInstanceIdsQuery query) {
+        throw new UnsupportedOperationException(
+                "Listing instance IDs is not supported by this client implementation.");
+    }
 
     /**
      * Gets the full history of an orchestration instance as an ordered list of {@link HistoryEvent} objects.
@@ -251,8 +255,12 @@ public abstract class DurableTaskClient implements AutoCloseable {
      *
      * @param instanceId the unique ID of the orchestration instance whose history to fetch
      * @return the instance's history events in order; empty if the instance has no history
+     * @throws UnsupportedOperationException if the current client implementation does not support history retrieval
      */
-    public abstract List<HistoryEvent> getOrchestrationHistory(String instanceId);
+    public List<HistoryEvent> getOrchestrationHistory(String instanceId) {
+        throw new UnsupportedOperationException(
+                "Retrieving orchestration history is not supported by this client implementation.");
+    }
 
     /**
      * Initializes the target task hub data store.

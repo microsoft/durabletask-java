@@ -68,10 +68,14 @@ public final class ListInstanceIdsQuery {
      * A page may contain fewer IDs than the page size even when more results exist; always use
      * {@link ListInstanceIdsResult#getContinuationToken()} to determine whether to continue paging.
      *
-     * @param pageSize the maximum number of instance IDs to return per page
+     * @param pageSize the maximum number of instance IDs to return per page; must be greater than zero
      * @return this query object
+     * @throws IllegalArgumentException if {@code pageSize} is less than 1
      */
     public ListInstanceIdsQuery setPageSize(int pageSize) {
+        if (pageSize < 1) {
+            throw new IllegalArgumentException("pageSize must be at least 1.");
+        }
         this.pageSize = pageSize;
         return this;
     }

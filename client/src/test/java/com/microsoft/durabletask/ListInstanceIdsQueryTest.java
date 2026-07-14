@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,5 +41,18 @@ public class ListInstanceIdsQueryTest {
         source.add(OrchestrationRuntimeStatus.FAILED);
 
         assertEquals(Arrays.asList(OrchestrationRuntimeStatus.COMPLETED), query.getRuntimeStatusList());
+    }
+
+    @Test
+    void setPageSize_positiveValue_updatesPageSize() {
+        ListInstanceIdsQuery query = new ListInstanceIdsQuery().setPageSize(25);
+
+        assertEquals(25, query.getPageSize());
+    }
+
+    @Test
+    void setPageSize_zeroOrNegative_throws() {
+        assertThrows(IllegalArgumentException.class, () -> new ListInstanceIdsQuery().setPageSize(0));
+        assertThrows(IllegalArgumentException.class, () -> new ListInstanceIdsQuery().setPageSize(-1));
     }
 }
