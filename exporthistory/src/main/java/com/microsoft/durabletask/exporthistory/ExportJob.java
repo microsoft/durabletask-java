@@ -63,8 +63,17 @@ public final class ExportJob extends AbstractTaskEntity<ExportJobState> {
                 creationOptions.getRuntimeStatus() == null
                         ? null
                         : new ArrayList<>(creationOptions.getRuntimeStatus());
+
+        // Resolve the completion-time lower bound to the job creation instant when the caller omitted it. This
+        // mirrors the .NET SDK (completedTimeFrom ?? UtcNow) so a CONTINUOUS job tails only completions that occur
+        // after the job is created, instead of re-exporting every historical instance in the task hub. BATCH always
+        // supplies an explicit lower bound (enforced by ExportJobCreationOptions.validateForCreate()).
+        Instant now = Instant.now();
+        Instant completedTimeFrom = creationOptions.getCompletedTimeFrom() != null
+                ? creationOptions.getCompletedTimeFrom()
+                : now;
         ExportFilter filter = new ExportFilter(
-                creationOptions.getCompletedTimeFrom(),
+                completedTimeFrom,
                 creationOptions.getCompletedTimeTo(),
                 statuses);
         ExportJobConfiguration config = new ExportJobConfiguration(
@@ -74,7 +83,6 @@ public final class ExportJob extends AbstractTaskEntity<ExportJobState> {
                 creationOptions.getFormat(),
                 creationOptions.getMaxInstancesPerBatch());
 
-        Instant now = Instant.now();
         this.state.setConfig(config);
         this.state.setStatus(ExportJobStatus.ACTIVE);
         this.state.setCreatedAt(now);
