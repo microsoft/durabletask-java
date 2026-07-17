@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +21,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -65,21 +67,48 @@ public class ActivityMiddlewareTest {
         return context;
     }
 
+    // --- Reflection bridges to ActivityMiddleware's private test seams ---
+    // The seams are private (they are not part of the middleware's API), so tests reach them via
+    // reflection rather than widening visibility.
+
+    private static void setProviderSupplier(Supplier<ExceptionPropertiesProvider> supplier) {
+        invokeStatic("setProviderSupplierForTesting", new Class<?>[] {Supplier.class}, supplier);
+    }
+
+    private static void resetProviderCache() {
+        invokeStatic("resetProviderCacheForTesting", new Class<?>[] {});
+    }
+
+    private static ExceptionPropertiesProvider discoverProvider(ClassLoader[] candidates) {
+        return (ExceptionPropertiesProvider) invokeStatic(
+                "discoverProvider", new Class<?>[] {ClassLoader[].class}, (Object) candidates);
+    }
+
+    private static Object invokeStatic(String name, Class<?>[] paramTypes, Object... args) {
+        try {
+            Method method = ActivityMiddleware.class.getDeclaredMethod(name, paramTypes);
+            method.setAccessible(true);
+            return method.invoke(null, args);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to invoke ActivityMiddleware." + name, e);
+        }
+    }
+
     @BeforeEach
     void resetBefore() {
-        ActivityMiddleware.resetProviderCacheForTesting();
+        resetProviderCache();
     }
 
     @AfterEach
     void resetAfter() {
-        ActivityMiddleware.resetProviderCacheForTesting();
+        resetProviderCache();
     }
 
     @Test
     @DisplayName("Reshapes a failing activity into structured TaskFailureDetails JSON when the "
             + "provider yields properties")
     void reshapesFailureWhenProviderYieldsProperties() {
-        ActivityMiddleware.setProviderSupplierForTesting(() -> exception -> {
+        setProviderSupplier(() -> exception -> {
             Map<String, Object> properties = new LinkedHashMap<>();
             properties.put("code", "E123");
             properties.put("count", 7);
@@ -107,7 +136,7 @@ public class ActivityMiddlewareTest {
     @Test
     @DisplayName("Rethrows the original exception unchanged when the provider returns no properties")
     void rethrowsOriginalWhenProviderReturnsEmpty() {
-        ActivityMiddleware.setProviderSupplierForTesting(
+        setProviderSupplier(
                 () -> exception -> Collections.emptyMap());
 
         BusinessException original = new BusinessException("boom");
@@ -122,7 +151,7 @@ public class ActivityMiddlewareTest {
     @Test
     @DisplayName("Rethrows the original exception unchanged when the provider returns null")
     void rethrowsOriginalWhenProviderReturnsNull() {
-        ActivityMiddleware.setProviderSupplierForTesting(() -> exception -> null);
+        setProviderSupplier(() -> exception -> null);
 
         BusinessException original = new BusinessException("boom");
         ActivityMiddleware middleware = new ActivityMiddleware();
@@ -136,7 +165,7 @@ public class ActivityMiddlewareTest {
     @Test
     @DisplayName("Rethrows the original exception unchanged when no provider is registered")
     void rethrowsOriginalWhenNoProvider() {
-        ActivityMiddleware.setProviderSupplierForTesting(() -> null);
+        setProviderSupplier(() -> null);
 
         BusinessException original = new BusinessException("boom");
         ActivityMiddleware middleware = new ActivityMiddleware();
@@ -150,7 +179,7 @@ public class ActivityMiddlewareTest {
     @Test
     @DisplayName("Rethrows the original exception unchanged when the provider itself throws")
     void rethrowsOriginalWhenProviderThrows() {
-        ActivityMiddleware.setProviderSupplierForTesting(() -> exception -> {
+        setProviderSupplier(() -> exception -> {
             throw new IllegalStateException("provider is broken");
         });
 
@@ -167,7 +196,7 @@ public class ActivityMiddlewareTest {
     @DisplayName("Does not invoke the provider for non-activity triggers")
     void passesThroughNonActivityTrigger() throws Exception {
         AtomicInteger providerCalls = new AtomicInteger();
-        ActivityMiddleware.setProviderSupplierForTesting(() -> exception -> {
+        setProviderSupplier(() -> exception -> {
             providerCalls.incrementAndGet();
             return Collections.singletonMap("k", "v");
         });
@@ -186,7 +215,7 @@ public class ActivityMiddlewareTest {
     @Test
     @DisplayName("Reshapes nested causes into a nested innerFailure payload")
     void reshapesNestedCauses() {
-        ActivityMiddleware.setProviderSupplierForTesting(() -> exception -> {
+        setProviderSupplier(() -> exception -> {
             // Attach a property only to the outer exception so we can assert nesting shape.
             if ("outer".equals(exception.getMessage())) {
                 return Collections.singletonMap("layer", "outer");
@@ -215,7 +244,7 @@ public class ActivityMiddlewareTest {
     @DisplayName("discoverProvider returns null when no candidate class loader exposes the SPI file")
     void discoverProviderReturnsNullWhenNoServiceFileVisible() {
         ClassLoader blind = getClass().getClassLoader();
-        assertNull(ActivityMiddleware.discoverProvider(new ClassLoader[] {blind}));
+        assertNull(discoverProvider(new ClassLoader[] {blind}));
     }
 
     @Test
@@ -229,7 +258,7 @@ public class ActivityMiddlewareTest {
             // class loader, which cannot see the app's META-INF/services registration. Discovery
             // must not stop there; it must fall back to the class loader that does.
             ExceptionPropertiesProvider provider =
-                    ActivityMiddleware.discoverProvider(new ClassLoader[] {blind, appLike});
+                    discoverProvider(new ClassLoader[] {blind, appLike});
 
             assertNotNull(provider, "provider should be discovered via the fallback class loader");
             assertInstanceOf(ExceptionPropertiesProvider.class, provider);
@@ -246,7 +275,7 @@ public class ActivityMiddlewareTest {
         ClassLoader blind = getClass().getClassLoader();
         URLClassLoader appLike = newClassLoaderExposingProvider(blind);
         try {
-            ExceptionPropertiesProvider provider = ActivityMiddleware.discoverProvider(
+            ExceptionPropertiesProvider provider = discoverProvider(
                     new ClassLoader[] {null, blind, blind, appLike, appLike});
             assertNotNull(provider);
             assertEquals(TestExceptionPropertiesProvider.class.getName(),

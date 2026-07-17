@@ -47,10 +47,15 @@ public class ActivityMiddleware implements Middleware {
     private static volatile boolean providerLoaded = false;
     private static ExceptionPropertiesProvider cachedProvider;
 
-    // Visible for testing only. When non-null, this supplier replaces SPI discovery so unit tests
-    // can exercise the reshaping and pass-through behavior without registering a real provider.
+    // Test-only override. When non-null, this supplier replaces SPI discovery so tests can inject a
+    // provider (or {@code null}) without registering a real one. Set/cleared via reflection.
     private static Supplier<ExceptionPropertiesProvider> providerSupplierOverride;
 
+    /**
+     * Runs the activity and, if it fails and a provider supplies custom properties, replaces the
+     * failure with a structured {@code TaskFailureDetails} JSON payload; otherwise the original
+     * exception is rethrown unchanged. Non-activity invocations pass straight through.
+     */
     @Override
     public void invoke(MiddlewareContext context, MiddlewareChain chain) throws Exception {
         String parameterName = context.getParameterName(ACTIVITY_TRIGGER);
@@ -78,6 +83,11 @@ public class ActivityMiddleware implements Middleware {
         }
     }
 
+    /**
+     * Lazily resolves and caches the {@link ExceptionPropertiesProvider}, using the test override
+     * when present and otherwise discovering it via SPI. The result (including {@code null}) is
+     * cached for the lifetime of the worker.
+     */
     private static ExceptionPropertiesProvider getProvider() {
         if (!providerLoaded) {
             synchronized (PROVIDER_LOCK) {
@@ -92,14 +102,12 @@ public class ActivityMiddleware implements Middleware {
         return cachedProvider;
     }
 
+    /**
+     * Discovers the app-registered {@link ExceptionPropertiesProvider} via SPI, trying the thread
+     * context, middleware, and interface class loaders in turn (the worker thread's context loader
+     * may not see the app's {@code META-INF/services} registration).
+     */
     private static ExceptionPropertiesProvider discoverProvider() {
-        // The provider is registered via SPI in the function app's jar. Depending on how the
-        // Azure Functions Java worker dispatches invocations, the thread context class loader may
-        // be the worker's class loader (which cannot see the app's META-INF/services registration)
-        // rather than the app class loader. Try several candidate class loaders and use the first
-        // one that yields a provider. The class loader that loaded this middleware is bundled with
-        // the app (durabletask-azure-functions is an app dependency), so it can see the app's SPI
-        // registration and is the most reliable fallback.
         return discoverProvider(new ClassLoader[] {
                 Thread.currentThread().getContextClassLoader(),
                 ActivityMiddleware.class.getClassLoader(),
@@ -107,11 +115,12 @@ public class ActivityMiddleware implements Middleware {
         });
     }
 
-    // Visible for testing. Iterates the candidate class loaders in order and returns the first
-    // provider discovered via SPI, skipping nulls and duplicates. This is the seam that guards
-    // against the worker-thread class loader regression: discovery must not stop at the (possibly
-    // provider-blind) thread context class loader.
-    static ExceptionPropertiesProvider discoverProvider(ClassLoader[] candidates) {
+    /**
+     * Returns the first {@link ExceptionPropertiesProvider} found by {@link ServiceLoader} across
+     * the given class loaders (nulls and duplicates skipped), or {@code null} if none is found.
+     * This is the seam that guards against the worker-thread class loader regression.
+     */
+    private static ExceptionPropertiesProvider discoverProvider(ClassLoader[] candidates) {
         ClassLoader previous = null;
         for (ClassLoader classLoader : candidates) {
             if (classLoader == null || classLoader == previous) {
@@ -134,9 +143,11 @@ public class ActivityMiddleware implements Middleware {
         return null;
     }
 
-    // Visible for testing. Overrides SPI discovery with the given supplier (may be {@code null} to
-    // simulate "no provider registered") and clears the cached provider so the next lookup re-runs.
-    static void setProviderSupplierForTesting(Supplier<ExceptionPropertiesProvider> supplier) {
+    /**
+     * Test-only. Overrides SPI discovery with the given supplier ({@code null} simulates "no
+     * provider registered") and clears the cache so the next lookup re-runs. Invoked via reflection.
+     */
+    private static void setProviderSupplierForTesting(Supplier<ExceptionPropertiesProvider> supplier) {
         synchronized (PROVIDER_LOCK) {
             providerSupplierOverride = supplier;
             providerLoaded = false;
@@ -144,9 +155,11 @@ public class ActivityMiddleware implements Middleware {
         }
     }
 
-    // Visible for testing. Restores real SPI discovery and clears any cached provider so tests do
-    // not leak state into one another (the provider is cached in a static field).
-    static void resetProviderCacheForTesting() {
+    /**
+     * Test-only. Restores real SPI discovery and clears the cached provider so tests do not leak
+     * state into one another (the provider is cached in a static field). Invoked via reflection.
+     */
+    private static void resetProviderCacheForTesting() {
         synchronized (PROVIDER_LOCK) {
             providerSupplierOverride = null;
             providerLoaded = false;
@@ -154,6 +167,10 @@ public class ActivityMiddleware implements Middleware {
         }
     }
 
+    /**
+     * Unwraps reflective {@link InvocationTargetException} layers to reach the user exception that
+     * actually caused the activity to fail.
+     */
     private static Throwable unwrap(Throwable e) {
         Throwable current = e;
         while (current instanceof InvocationTargetException && current.getCause() != null) {
@@ -162,6 +179,11 @@ public class ActivityMiddleware implements Middleware {
         return current;
     }
 
+    /**
+     * Invokes the provider defensively, returning {@code null} if the failure is not an
+     * {@link Exception} or the provider itself throws, so a misbehaving provider never masks the
+     * original failure.
+     */
     private static Map<String, Object> safeGetProperties(
             ExceptionPropertiesProvider provider,
             Throwable exception) {
@@ -177,14 +199,20 @@ public class ActivityMiddleware implements Middleware {
         }
     }
 
-    // Builds the single-line JSON payload that mirrors the protobuf TaskFailureDetails shape
-    // consumed by the Durable Task host extension.
+    /**
+     * Builds the single-line JSON payload that mirrors the protobuf {@code TaskFailureDetails} shape
+     * consumed by the Durable Task host extension.
+     */
     private static String buildFailureDetailsJson(Throwable exception, ExceptionPropertiesProvider provider) {
         StringBuilder sb = new StringBuilder(256);
         appendFailure(sb, exception, provider, 0);
         return sb.toString();
     }
 
+    /**
+     * Recursively appends one failure level (error type/message/stack trace, any custom properties,
+     * and the cause as a nested {@code innerFailure}) to the JSON buffer.
+     */
     private static void appendFailure(
             StringBuilder sb,
             Throwable exception,
@@ -214,6 +242,11 @@ public class ActivityMiddleware implements Middleware {
         sb.append('}');
     }
 
+    /**
+     * Serializes a single property value as JSON, handling strings, booleans, numbers (non-finite
+     * doubles fall back to strings), maps, iterables, and arrays; anything else is written as its
+     * {@code toString()}.
+     */
     @SuppressWarnings("unchecked")
     private static void appendValue(StringBuilder sb, Object value) {
         if (value == null) {
@@ -270,6 +303,7 @@ public class ActivityMiddleware implements Middleware {
         }
     }
 
+    /** Appends {@code value} as a JSON string literal, escaping quotes, backslashes, and control characters. */
     private static void appendString(StringBuilder sb, String value) {
         sb.append('"');
         for (int i = 0; i < value.length(); i++) {
@@ -308,6 +342,7 @@ public class ActivityMiddleware implements Middleware {
         sb.append('"');
     }
 
+    /** Formats the throwable's stack trace as newline-separated {@code \tat ...} frames. */
     private static String getFullStackTrace(Throwable e) {
         StackTraceElement[] elements = e.getStackTrace();
         StringBuilder sb = new StringBuilder(elements.length * 64);
