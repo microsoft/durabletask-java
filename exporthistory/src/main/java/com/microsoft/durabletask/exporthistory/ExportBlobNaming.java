@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * Computes export blob names and paths. The blob name is a lowercase-hex SHA-256 hash of
@@ -51,7 +52,7 @@ final class ExportBlobNaming {
     static String formatTimestamp(Instant instant) {
         OffsetDateTime utc = instant.atOffset(ZoneOffset.UTC);
         long ticks = utc.getNano() / 100L;
-        return TIMESTAMP_DATE_TIME.format(utc) + "." + String.format("%07d", ticks) + "+00:00";
+        return TIMESTAMP_DATE_TIME.format(utc) + "." + String.format(Locale.ROOT, "%07d", ticks) + "+00:00";
     }
 
     /**

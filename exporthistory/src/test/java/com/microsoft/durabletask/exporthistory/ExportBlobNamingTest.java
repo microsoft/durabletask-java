@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,6 +62,18 @@ class ExportBlobNamingTest {
         assertEquals("2026-06-30T12:00:00.0000000+00:00", ExportBlobNaming.formatTimestamp(TS));
         assertEquals("2026-06-30T12:00:00.1230000+00:00",
                 ExportBlobNaming.formatTimestamp(Instant.parse("2026-06-30T12:00:00.123Z")));
+    }
+
+    @Test
+    void formatTimestamp_isLocaleInvariant() {
+        Locale original = Locale.getDefault(Locale.Category.FORMAT);
+        try {
+            Locale.setDefault(Locale.Category.FORMAT, Locale.forLanguageTag("ar-EG"));
+            assertEquals("2026-06-30T12:00:00.1230000+00:00",
+                    ExportBlobNaming.formatTimestamp(Instant.parse("2026-06-30T12:00:00.123Z")));
+        } finally {
+            Locale.setDefault(Locale.Category.FORMAT, original);
+        }
     }
 
     @Test

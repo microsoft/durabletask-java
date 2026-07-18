@@ -7,7 +7,7 @@ import java.time.Instant;
 /**
  * Failure of a specific instance export.
  */
-public final class ExportFailure {
+final class ExportFailure {
 
     private String instanceId;
     private String reason;

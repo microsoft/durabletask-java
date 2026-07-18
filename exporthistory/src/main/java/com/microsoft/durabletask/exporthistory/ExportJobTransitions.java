@@ -6,7 +6,7 @@ package com.microsoft.durabletask.exporthistory;
  * Valid state-transition rules for export jobs. The operation-name constants match the {@link ExportJob} entity
  * method names (case-insensitive dispatch).
  */
-public final class ExportJobTransitions {
+final class ExportJobTransitions {
 
     /** The {@code Create} operation name. */
     public static final String OP_CREATE = "Create";

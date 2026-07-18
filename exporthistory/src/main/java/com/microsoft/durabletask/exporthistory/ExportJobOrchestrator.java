@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
  * commits checkpoints to the {@link ExportJob} entity, and handles BATCH vs CONTINUOUS modes with bounded retries
  * and periodic {@code continueAsNew}.
  */
-public final class ExportJobOrchestrator implements TaskOrchestration {
+final class ExportJobOrchestrator implements TaskOrchestration {
 
     /** The registered orchestration name. */
     public static final String NAME = "ExportJobOrchestrator";
@@ -277,5 +277,58 @@ public final class ExportJobOrchestrator implements TaskOrchestration {
         static BatchExportResult failed(int exportedCount, List<ExportFailure> failures) {
             return new BatchExportResult(false, exportedCount, failures);
         }
+    }
+}
+
+/**
+ * Input to the {@link ExportJobOrchestrator} identifying the job entity and the number of processed cycles
+ * (used to bound work before {@code continueAsNew}).
+ */
+final class ExportJobRunRequest {
+
+    private EntityInstanceId jobEntityId;
+    private int processedCycles;
+
+    /** Creates an empty {@code ExportJobRunRequest} (for deserialization). */
+    public ExportJobRunRequest() {
+    }
+
+    /**
+     * Creates an {@code ExportJobRunRequest}.
+     *
+     * @param jobEntityId     the export job entity ID
+     * @param processedCycles the number of cycles already processed in this orchestration generation
+     */
+    public ExportJobRunRequest(EntityInstanceId jobEntityId, int processedCycles) {
+        this.jobEntityId = jobEntityId;
+        this.processedCycles = processedCycles;
+    }
+
+    /** @return the export job entity ID. */
+    public EntityInstanceId getJobEntityId() {
+        return this.jobEntityId;
+    }
+
+    /**
+     * Sets the export job entity ID.
+     *
+     * @param jobEntityId the entity ID
+     */
+    public void setJobEntityId(EntityInstanceId jobEntityId) {
+        this.jobEntityId = jobEntityId;
+    }
+
+    /** @return the number of cycles already processed in this orchestration generation. */
+    public int getProcessedCycles() {
+        return this.processedCycles;
+    }
+
+    /**
+     * Sets the number of cycles already processed.
+     *
+     * @param processedCycles the processed cycle count
+     */
+    public void setProcessedCycles(int processedCycles) {
+        this.processedCycles = processedCycles;
     }
 }

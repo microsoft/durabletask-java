@@ -8,7 +8,7 @@ import java.time.Instant;
 /**
  * Export job state stored in the {@link ExportJob} entity.
  */
-public final class ExportJobState {
+final class ExportJobState {
 
     private ExportJobStatus status;
     private ExportJobConfiguration config;

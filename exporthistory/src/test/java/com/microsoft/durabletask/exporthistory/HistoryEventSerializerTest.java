@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,5 +79,20 @@ class HistoryEventSerializerTest {
                 HistoryEventSerializer.contentType(new ExportFormat(ExportFormatKind.JSONL, "1.0")));
         assertEquals("application/json",
                 HistoryEventSerializer.contentType(new ExportFormat(ExportFormatKind.JSON, "1.0")));
+    }
+
+    @Test
+    void timestampSerialization_isLocaleInvariant() throws JsonProcessingException {
+        Locale original = Locale.getDefault(Locale.Category.FORMAT);
+        try {
+            Locale.setDefault(Locale.Category.FORMAT, Locale.forLanguageTag("ar-EG"));
+            String result = HistoryEventSerializer.serialize(
+                    Arrays.asList((HistoryEvent) new GenericEvent(
+                            1, Instant.parse("2026-06-30T12:00:00.123Z"), "payload")),
+                    new ExportFormat(ExportFormatKind.JSONL, "1.0"));
+            assertTrue(result.contains("\"timestamp\":\"2026-06-30T12:00:00.123Z\""));
+        } finally {
+            Locale.setDefault(Locale.Category.FORMAT, original);
+        }
     }
 }

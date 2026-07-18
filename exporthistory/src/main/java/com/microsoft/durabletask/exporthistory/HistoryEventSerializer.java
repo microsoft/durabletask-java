@@ -52,6 +52,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -356,7 +357,7 @@ final class HistoryEventSerializer {
         int nanos = utc.getNano();
         if (nanos != 0) {
             // Up to seven fractional digits (100-ns ticks), trailing zeros trimmed.
-            String frac = String.format("%09d", nanos).substring(0, 7);
+            String frac = String.format(Locale.ROOT, "%09d", nanos).substring(0, 7);
             int end = frac.length();
             while (end > 0 && frac.charAt(end - 1) == '0') {
                 end--;

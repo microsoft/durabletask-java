@@ -12,6 +12,8 @@ import com.microsoft.durabletask.TypedEntityMetadata;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Client for managing a single export job via entity operations routed through
@@ -20,6 +22,7 @@ import java.util.concurrent.TimeoutException;
 public final class ExportHistoryJobClient {
 
     private static final Duration OPERATION_TIMEOUT = Duration.ofSeconds(60);
+    private static final Logger LOGGER = Logger.getLogger(ExportHistoryJobClient.class.getName());
 
     private final DurableTaskClient durableTaskClient;
     private final String jobId;
@@ -96,14 +99,32 @@ public final class ExportHistoryJobClient {
         return ExportJobDescription.fromState(this.jobId, metadata.getState());
     }
 
-    /**
-     * Deletes the export job entity. The export orchestrator self-exits on its next cycle once it observes the job
-     * is gone.
-     */
+    /** Deletes the export job entity, then terminates and purges its linked export orchestrator. */
     public void delete() {
         ExportJobOperationRequest request = new ExportJobOperationRequest(
                 this.entityId, ExportJobTransitions.OP_DELETE, null);
-        scheduleAndWait(request);
+        OrchestrationMetadata result = scheduleAndWait(request);
+        if (result.getRuntimeStatus() != OrchestrationRuntimeStatus.COMPLETED) {
+            FailureDetails failure = result.getFailureDetails();
+            String detail = failure == null ? "" : failure.getErrorMessage();
+            throw new ExportJobClientValidationException(
+                    "Failed to delete export job '" + this.jobId + "': " + detail);
+        }
+
+        terminateAndPurgeOrchestrator();
+    }
+
+    private void terminateAndPurgeOrchestrator() {
+        String orchestratorInstanceId = ExportHistoryConstants.getOrchestratorInstanceId(this.jobId);
+        try {
+            this.durableTaskClient.terminate(orchestratorInstanceId, "Export job deleted");
+            this.durableTaskClient.waitForInstanceCompletion(
+                    orchestratorInstanceId, OPERATION_TIMEOUT, false);
+            this.durableTaskClient.purgeInstance(orchestratorInstanceId);
+        } catch (RuntimeException | TimeoutException ex) {
+            LOGGER.log(Level.WARNING,
+                    "Failed to terminate or purge export orchestrator '" + orchestratorInstanceId + "'.", ex);
+        }
     }
 
     private OrchestrationMetadata scheduleAndWait(ExportJobOperationRequest request) {

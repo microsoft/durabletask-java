@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 
 /**
- * Unit tests for the {@link ExportJob} entity's {@code create} operation.
+ * Unit tests for the {@link ExportJob} entity's {@code create} operation.s
  */
 class ExportJobTest {
 

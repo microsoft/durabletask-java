@@ -37,7 +37,6 @@ public final class ExportHistoryStorageOptions {
     private TokenCredential credential;
     private String containerName = "";
     private String prefix;
-    private ExportFormat format = ExportFormat.getDefault();
 
     /**
      * Gets the Azure Storage connection string.
@@ -143,26 +142,6 @@ public final class ExportHistoryStorageOptions {
      */
     public ExportHistoryStorageOptions setPrefix(@Nullable String prefix) {
         this.prefix = prefix;
-        return this;
-    }
-
-    /**
-     * Gets the export format. Defaults to {@link ExportFormat#getDefault()} (JSONL + gzip).
-     *
-     * @return the export format
-     */
-    public ExportFormat getFormat() {
-        return this.format;
-    }
-
-    /**
-     * Sets the export format.
-     *
-     * @param format the export format
-     * @return this options object
-     */
-    public ExportHistoryStorageOptions setFormat(ExportFormat format) {
-        this.format = format;
         return this;
     }
 }

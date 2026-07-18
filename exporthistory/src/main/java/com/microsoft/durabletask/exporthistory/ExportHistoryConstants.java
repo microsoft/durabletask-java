@@ -5,7 +5,7 @@ package com.microsoft.durabletask.exporthistory;
 /**
  * Constants used throughout the export history functionality.
  */
-public final class ExportHistoryConstants {
+final class ExportHistoryConstants {
 
     /**
      * The prefix used for generating export job orchestrator instance IDs.

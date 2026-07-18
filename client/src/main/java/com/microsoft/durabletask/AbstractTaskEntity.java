@@ -329,6 +329,7 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
         }
 
         try {
+            makeDeclaringClassAccessible(method);
             return method.invoke(target, args);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getTargetException();
@@ -421,6 +422,7 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
         }
 
         try {
+            makeDeclaringClassAccessible(method);
             return method.invoke(target, args);
         } catch (InvocationTargetException e) {
             // Unwrap the target exception
@@ -429,6 +431,12 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
                 throw (Exception) cause;
             }
             throw new RuntimeException(cause);
+        }
+    }
+
+    private static void makeDeclaringClassAccessible(Method method) {
+        if (!Modifier.isPublic(method.getDeclaringClass().getModifiers())) {
+            method.setAccessible(true);
         }
     }
 }

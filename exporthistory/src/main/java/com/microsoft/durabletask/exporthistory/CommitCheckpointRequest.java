@@ -11,7 +11,7 @@ import java.util.List;
  * When {@link #getCheckpoint()} is non-null the cursor moves forward (successful batch); when {@code null} the
  * cursor is retained (failed batch eligible for retry).
  */
-public final class CommitCheckpointRequest {
+final class CommitCheckpointRequest {
 
     private long scannedInstances;
     private long exportedInstances;

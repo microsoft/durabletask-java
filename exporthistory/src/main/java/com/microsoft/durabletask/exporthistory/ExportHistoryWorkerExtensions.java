@@ -44,7 +44,7 @@ public final class ExportHistoryWorkerExtensions {
 
         BlobExportWriter writer = new BlobExportWriter(storage);
 
-        builder.addEntity(ExportJob.NAME, ExportJob.class);
+        builder.addEntity(ExportJob.NAME, ExportJob::new);
 
         builder.addOrchestration(orchestrationFactory(
                 ExportJobOrchestrator.NAME, ExportJobOrchestrator::new));
