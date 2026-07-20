@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -44,6 +45,10 @@ import static org.mockito.Mockito.when;
 public class ActivityMiddlewareTest {
 
     private static final String ACTIVITY_TRIGGER = "DurableActivityTrigger";
+
+    /** Auto-cleaned temp directory root for SPI class loader fixtures. */
+    @TempDir
+    Path tempDir;
 
     /** A MiddlewareChain whose {@code doNext} throws the supplied exception. */
     private static MiddlewareChain throwingChain(Exception toThrow) {
@@ -292,17 +297,13 @@ public class ActivityMiddlewareTest {
      * is served from this loader's own URL root — mirroring how an app jar carries its SPI file.
      */
     private URLClassLoader newClassLoaderExposingProvider(ClassLoader parent) throws IOException {
-        Path root = Files.createTempDirectory("amw-spi-");
-        root.toFile().deleteOnExit();
+        Path root = Files.createTempDirectory(tempDir, "amw-spi-");
         Path servicesDir = root.resolve("META-INF").resolve("services");
         Files.createDirectories(servicesDir);
         Path serviceFile = servicesDir.resolve(ExceptionPropertiesProvider.class.getName());
         Files.write(serviceFile,
                 (TestExceptionPropertiesProvider.class.getName() + System.lineSeparator())
                         .getBytes(StandardCharsets.UTF_8));
-        serviceFile.toFile().deleteOnExit();
-        servicesDir.toFile().deleteOnExit();
-        root.resolve("META-INF").toFile().deleteOnExit();
 
         URL rootUrl = root.toUri().toURL();
         return new URLClassLoader(new URL[] {rootUrl}, parent);

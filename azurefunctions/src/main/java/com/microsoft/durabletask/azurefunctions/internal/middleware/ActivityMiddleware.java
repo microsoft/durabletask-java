@@ -16,6 +16,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.function.Supplier;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -79,7 +80,7 @@ public class ActivityMiddleware implements Middleware {
                 throw e;
             }
 
-            throw new StructuredActivityFailure(buildFailureDetailsJson(userException, provider));
+            throw new StructuredActivityFailure(buildFailureDetailsJson(userException, properties, provider));
         }
     }
 
@@ -136,8 +137,9 @@ public class ActivityMiddleware implements Middleware {
                 }
             } catch (Throwable t) {
                 // Discovery failures must not break activity execution; the feature is opt-in.
-                LOGGER.warning("Failed to load ExceptionPropertiesProvider via ServiceLoader using "
-                        + classLoader + ": " + t);
+                LOGGER.log(Level.WARNING,
+                        "Failed to load ExceptionPropertiesProvider via ServiceLoader using " + classLoader,
+                        t);
             }
         }
         return null;
@@ -194,7 +196,9 @@ public class ActivityMiddleware implements Middleware {
             return provider.getExceptionProperties((Exception) exception);
         } catch (Exception providerException) {
             // Don't let a misbehaving provider mask the original failure.
-            LOGGER.warning("ExceptionPropertiesProvider threw while extracting properties: " + providerException);
+            LOGGER.log(Level.WARNING,
+                    "ExceptionPropertiesProvider threw while extracting properties; ignoring provider output.",
+                    providerException);
             return null;
         }
     }
@@ -203,9 +207,12 @@ public class ActivityMiddleware implements Middleware {
      * Builds the single-line JSON payload that mirrors the protobuf {@code TaskFailureDetails} shape
      * consumed by the Durable Task host extension.
      */
-    private static String buildFailureDetailsJson(Throwable exception, ExceptionPropertiesProvider provider) {
+    private static String buildFailureDetailsJson(
+            Throwable exception,
+            Map<String, Object> properties,
+            ExceptionPropertiesProvider provider) {
         StringBuilder sb = new StringBuilder(256);
-        appendFailure(sb, exception, provider, 0);
+        appendFailure(sb, exception, properties, provider, 0);
         return sb.toString();
     }
 
@@ -216,6 +223,7 @@ public class ActivityMiddleware implements Middleware {
     private static void appendFailure(
             StringBuilder sb,
             Throwable exception,
+            Map<String, Object> properties,
             ExceptionPropertiesProvider provider,
             int depth) {
         sb.append('{');
@@ -227,7 +235,6 @@ public class ActivityMiddleware implements Middleware {
         appendString(sb, getFullStackTrace(exception));
         sb.append(",\"isNonRetriable\":false");
 
-        Map<String, Object> properties = safeGetProperties(provider, exception);
         if (properties != null && !properties.isEmpty()) {
             sb.append(",\"properties\":");
             appendValue(sb, properties);
@@ -236,7 +243,7 @@ public class ActivityMiddleware implements Middleware {
         Throwable cause = exception.getCause();
         if (cause != null && cause != exception && depth < MAX_INNER_FAILURE_DEPTH) {
             sb.append(",\"innerFailure\":");
-            appendFailure(sb, cause, provider, depth + 1);
+            appendFailure(sb, cause, safeGetProperties(provider, cause), provider, depth + 1);
         }
 
         sb.append('}');
