@@ -12,6 +12,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -671,6 +673,107 @@ public class TaskOrchestrationExecutorTest {
         assertNotNull(captured[0], "getParentInstance() should not be null during replay");
         assertEquals("ParentOrch", captured[0].getName());
         assertEquals("parent-456", captured[0].getInstanceId());
+    }
+
+    @Test
+    void execute_replaySafeLogger_suppressesReplayAndLogsLiveSegments() {
+        String orchestrationName = "LoggingOrchestration";
+        String activityName = "LoggingActivity";
+        List<String> messages = new ArrayList<>();
+        Logger delegate = Logger.getAnonymousLogger();
+        delegate.setUseParentHandlers(false);
+        delegate.addHandler(new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                messages.add(record.getMessage());
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        });
+
+        HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
+        factories.put(orchestrationName, new TaskOrchestrationFactory() {
+            @Override
+            public String getName() {
+                return orchestrationName;
+            }
+
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    NullPointerException exception = assertThrows(
+                            NullPointerException.class,
+                            () -> ctx.createReplaySafeLogger(null));
+                    assertEquals("logger", exception.getMessage());
+
+                    Logger logger = ctx.createReplaySafeLogger(delegate);
+                    logger.info("before activity");
+                    String result = ctx.callActivity(activityName, null, String.class).await();
+                    logger.info("after activity: " + result);
+                    ctx.complete(result);
+                };
+            }
+        });
+
+        TaskOrchestrationExecutor executor = new TaskOrchestrationExecutor(
+                factories, new JacksonDataConverter(), Duration.ofDays(3), logger, null);
+        HistoryEvent orchestratorStarted = HistoryEvent.newBuilder()
+                .setEventId(-1)
+                .setTimestamp(Timestamp.getDefaultInstance())
+                .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance())
+                .build();
+        HistoryEvent executionStarted = HistoryEvent.newBuilder()
+                .setEventId(-1)
+                .setTimestamp(Timestamp.getDefaultInstance())
+                .setExecutionStarted(ExecutionStartedEvent.newBuilder()
+                        .setName(orchestrationName)
+                        .setVersion(StringValue.of(""))
+                        .setInput(StringValue.of(""))
+                        .setOrchestrationInstance(OrchestrationInstance.newBuilder()
+                                .setInstanceId("logging-instance")
+                                .build())
+                        .build())
+                .build();
+        HistoryEvent orchestratorCompleted = HistoryEvent.newBuilder()
+                .setEventId(-1)
+                .setTimestamp(Timestamp.getDefaultInstance())
+                .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance())
+                .build();
+
+        executor.execute(
+                Collections.emptyList(),
+                Arrays.asList(orchestratorStarted, executionStarted, orchestratorCompleted),
+                null);
+        assertEquals(Collections.singletonList("before activity"), messages);
+
+        HistoryEvent taskScheduled = HistoryEvent.newBuilder()
+                .setEventId(0)
+                .setTimestamp(Timestamp.getDefaultInstance())
+                .setTaskScheduled(TaskScheduledEvent.newBuilder()
+                        .setName(activityName)
+                        .build())
+                .build();
+        HistoryEvent taskCompleted = HistoryEvent.newBuilder()
+                .setEventId(1)
+                .setTimestamp(Timestamp.getDefaultInstance())
+                .setTaskCompleted(TaskCompletedEvent.newBuilder()
+                        .setTaskScheduledId(0)
+                        .setResult(StringValue.of("\"done\""))
+                        .build())
+                .build();
+
+        executor.execute(
+                Arrays.asList(orchestratorStarted, executionStarted, taskScheduled, orchestratorCompleted),
+                Arrays.asList(orchestratorStarted, taskCompleted, orchestratorCompleted),
+                null);
+
+        assertEquals(Arrays.asList("before activity", "after activity: done"), messages);
     }
 
     @Test

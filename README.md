@@ -16,6 +16,30 @@ result += ctx.callActivity("SayHello", "Seattle", String.class).await();
 return result;
 ```
 
+### Replay-safe orchestration logging
+
+Orchestrator code re-executes while rebuilding state from history. Wrap an existing
+`java.util.logging.Logger` to suppress log output during those replay segments:
+
+```java
+Logger logger = ctx.createReplaySafeLogger(
+    Logger.getLogger(MyOrchestration.class.getName()));
+
+logger.info("Starting orchestration " + ctx.getInstanceId());
+String result = ctx.callActivity("ProcessItem", input, String.class).await();
+logger.info(() -> "Activity returned: " + result);
+```
+
+In Azure Functions, pass `ExecutionContext.getLogger()` instead of creating a named
+logger so the output retains its invocation ID and normal host routing:
+
+```java
+Logger logger = ctx.createReplaySafeLogger(executionContext.getLogger());
+```
+
+Replay-safe logging suppresses calls made while replaying; it does not guarantee
+exactly-once log delivery across failed or retried live orchestration turns.
+
 ### Reliable fan-out / fan-in orchestration pattern
 
 ```java

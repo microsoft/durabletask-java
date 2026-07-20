@@ -1,4 +1,5 @@
 ## Unreleased
+* Add `createReplaySafeLogger` to suppress orchestration log output during replay.
 * Add `getParentInstance()` API to `TaskOrchestrationContext` for discovering parent orchestration info ([#284](https://github.com/microsoft/durabletask-java/pull/284))
 
 ## v1.9.0
