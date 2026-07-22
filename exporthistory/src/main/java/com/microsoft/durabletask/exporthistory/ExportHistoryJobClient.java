@@ -93,10 +93,11 @@ public final class ExportHistoryJobClient {
     public ExportJobDescription describe() {
         TypedEntityMetadata<ExportJobState> metadata =
                 this.durableTaskClient.getEntities().getEntityMetadata(this.entityId, ExportJobState.class);
-        if (metadata == null) {
+        ExportJobState state = metadata == null ? null : metadata.getState();
+        if (state == null) {
             throw new ExportJobNotFoundException(this.jobId);
         }
-        return ExportJobDescription.fromState(this.jobId, metadata.getState());
+        return ExportJobDescription.fromState(this.jobId, state);
     }
 
     /** Deletes the export job entity, then terminates and purges its linked export orchestrator. */

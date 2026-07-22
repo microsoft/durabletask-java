@@ -186,6 +186,9 @@ public final class ExportJobCreationOptions {
      * @return this options object
      */
     public ExportJobCreationOptions setFormat(ExportFormat format) {
+        if (format == null) {
+            throw new IllegalArgumentException("format must not be null.");
+        }
         this.format = format;
         return this;
     }

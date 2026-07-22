@@ -57,26 +57,26 @@ class ExportHistoryJobClientTest {
         calls.verify(durableTaskClient).purgeInstance(exportOrchestratorInstanceId);
     }
 
-        @Test
-        void delete_failedEntityOperationIsSurfacedWithoutCleaningUpRunner() throws TimeoutException {
-                DurableTaskClient durableTaskClient = mock(DurableTaskClient.class);
-                OrchestrationMetadata deleteOperation = mock(OrchestrationMetadata.class);
-                String operationInstanceId = "delete-operation";
-                String exportOrchestratorInstanceId = ExportHistoryConstants.getOrchestratorInstanceId("job-1");
+    @Test
+    void delete_failedEntityOperationIsSurfacedWithoutCleaningUpRunner() throws TimeoutException {
+        DurableTaskClient durableTaskClient = mock(DurableTaskClient.class);
+        OrchestrationMetadata deleteOperation = mock(OrchestrationMetadata.class);
+        String operationInstanceId = "delete-operation";
+        String exportOrchestratorInstanceId = ExportHistoryConstants.getOrchestratorInstanceId("job-1");
 
-                when(durableTaskClient.scheduleNewOrchestrationInstance(
-                                eq(ExecuteExportJobOperationOrchestrator.NAME), any(ExportJobOperationRequest.class)))
-                                .thenReturn(operationInstanceId);
-                when(durableTaskClient.waitForInstanceCompletion(
-                                eq(operationInstanceId), any(Duration.class), eq(true)))
-                                .thenReturn(deleteOperation);
-                when(deleteOperation.getRuntimeStatus()).thenReturn(OrchestrationRuntimeStatus.FAILED);
+        when(durableTaskClient.scheduleNewOrchestrationInstance(
+                eq(ExecuteExportJobOperationOrchestrator.NAME), any(ExportJobOperationRequest.class)))
+                .thenReturn(operationInstanceId);
+        when(durableTaskClient.waitForInstanceCompletion(
+                eq(operationInstanceId), any(Duration.class), eq(true)))
+                .thenReturn(deleteOperation);
+        when(deleteOperation.getRuntimeStatus()).thenReturn(OrchestrationRuntimeStatus.FAILED);
 
-                ExportHistoryJobClient client = new ExportHistoryJobClient(
-                                durableTaskClient, "job-1", new ExportHistoryStorageOptions());
+        ExportHistoryJobClient client = new ExportHistoryJobClient(
+                durableTaskClient, "job-1", new ExportHistoryStorageOptions());
 
-                assertThrows(ExportJobClientValidationException.class, client::delete);
-                verify(durableTaskClient, never()).terminate(eq(exportOrchestratorInstanceId), any());
-                verify(durableTaskClient, never()).purgeInstance(exportOrchestratorInstanceId);
-        }
+        assertThrows(ExportJobClientValidationException.class, client::delete);
+        verify(durableTaskClient, never()).terminate(eq(exportOrchestratorInstanceId), any());
+        verify(durableTaskClient, never()).purgeInstance(exportOrchestratorInstanceId);
+    }
 }

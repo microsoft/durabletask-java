@@ -61,13 +61,13 @@ import java.util.Map;
  * Each event is written as a single JSON object with a leading {@code eventType} discriminator, the type-specific
  * fields, and a trailing {@code eventId}/{@code isPlayed}/{@code timestamp}: camelCase field names, null fields
  * omitted, empty maps rendered as {@code {}}, enum values in PascalCase, timestamps as trimmed ISO-8601 with a
- * {@code Z} suffix, and strings escaped by {@link HtmlSafeJsonEscapes}.
+ * {@code Z} suffix, and (for non-entity events) strings escaped by {@link HtmlSafeJsonEscapes}.
  * <p>
  * {@link ExportFormatKind#JSONL} emits one object per line (gzip applied by the blob writer);
  * {@link ExportFormatKind#JSON} emits a single JSON array.
  * <p>
  * Entity events have no dedicated representation in this wire format, so they fall back to a Java-native shape: a
- * reflective projection of the event with an added {@code eventType} discriminator.
+ * reflective projection of the event with an added {@code eventType} discriminator (serialized with Jackson defaults).
  */
 final class HistoryEventSerializer {
 

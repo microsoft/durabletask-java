@@ -46,9 +46,21 @@ final class ListTerminalInstancesActivity implements TaskActivity {
                 .setContinuationToken(input.getLastInstanceKey());
 
         ListInstanceIdsResult result = this.client.listInstanceIds(query);
+        List<String> instanceIds = new ArrayList<>(result.getInstanceIds());
+
+        // The continuation token is an instance-key cursor. When the service returns null on a
+        // non-empty page, advance the checkpoint to the last instance ID so the next request resumes
+        // after it and can return an empty page to terminate paging. Committing a null checkpoint here
+        // would restart paging from the beginning (BATCH jobs would never complete, causing duplicate
+        // exports).
+        String nextKey = result.getContinuationToken();
+        if (nextKey == null && !instanceIds.isEmpty()) {
+            nextKey = instanceIds.get(instanceIds.size() - 1);
+        }
+
         return new InstancePage(
-                new ArrayList<>(result.getInstanceIds()),
-                new ExportCheckpoint(result.getContinuationToken()));
+                instanceIds,
+                nextKey == null ? null : new ExportCheckpoint(nextKey));
     }
 }
 
