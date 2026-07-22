@@ -681,8 +681,9 @@ public class TaskOrchestrationExecutorTest {
         String activityName = "LoggingActivity";
         List<String> messages = new ArrayList<>();
         Logger delegate = Logger.getAnonymousLogger();
+        delegate.setLevel(java.util.logging.Level.ALL);
         delegate.setUseParentHandlers(false);
-        delegate.addHandler(new Handler() {
+        Handler handler = new Handler() {
             @Override
             public void publish(LogRecord record) {
                 messages.add(record.getMessage());
@@ -695,7 +696,9 @@ public class TaskOrchestrationExecutorTest {
             @Override
             public void close() {
             }
-        });
+        };
+        handler.setLevel(java.util.logging.Level.ALL);
+        delegate.addHandler(handler);
 
         HashMap<String, TaskOrchestrationFactory> factories = new HashMap<>();
         factories.put(orchestrationName, new TaskOrchestrationFactory() {

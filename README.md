@@ -25,7 +25,7 @@ Orchestrator code re-executes while rebuilding state from history. Wrap an exist
 Logger logger = ctx.createReplaySafeLogger(
     Logger.getLogger(MyOrchestration.class.getName()));
 
-logger.info("Starting orchestration " + ctx.getInstanceId());
+logger.info(() -> "Starting orchestration " + ctx.getInstanceId());
 String result = ctx.callActivity("ProcessItem", input, String.class).await();
 logger.info(() -> "Activity returned: " + result);
 ```
