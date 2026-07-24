@@ -248,13 +248,15 @@ public abstract class DurableTaskClient implements AutoCloseable {
     }
 
     /**
-     * Gets the full history of an orchestration instance as an ordered list of {@link HistoryEvent} objects.
+     * Retrieves the history of the specified orchestration instance as a list of {@link HistoryEvent} objects.
      * <p>
      * The events are returned in execution order. This is useful for archiving or offline analysis of an instance's
      * execution history. Use {@code instanceof} to inspect each concrete event type.
      *
-     * @param instanceId the unique ID of the orchestration instance whose history to fetch
-     * @return the instance's history events in order; empty if the instance has no history
+     * @param instanceId the instance ID of the orchestration
+     * @return the list of {@link HistoryEvent} objects representing the orchestration's history, in execution order;
+     *         empty if the instance has no history
+     * @throws IllegalArgumentException if {@code instanceId} is null
      * @throws UnsupportedOperationException if the current client implementation does not support history retrieval
      */
     public List<HistoryEvent> getOrchestrationHistory(String instanceId) {
