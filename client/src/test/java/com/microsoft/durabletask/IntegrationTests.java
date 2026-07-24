@@ -5,11 +5,16 @@ package com.microsoft.durabletask;
 import java.io.IOException;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -410,6 +415,100 @@ public class IntegrationTests extends IntegrationTestBase {
             assertNotNull(instance);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
             assertEquals(15, instance.readOutputAs(int.class));
+        }
+    }
+
+    @Test
+    void replaySafeLogger_parentSubOrchestrationAndActivity_logEachLiveSegmentOnce() throws TimeoutException {
+        final String parentOrchestratorName = "ReplaySafeLoggerParent";
+        final String childOrchestratorName = "ReplaySafeLoggerChild";
+        final String activityName = "ReplaySafeLoggerActivity";
+        final String parentBefore = "parent before child";
+        final String parentAfter = "parent after child";
+        final String childBefore = "child before activity";
+        final String childAfter = "child after activity";
+        final String activityMessage = "activity executed";
+        final List<String> expectedMessages = Arrays.asList(
+                parentBefore,
+                parentAfter,
+                childBefore,
+                childAfter,
+                activityMessage);
+        final Map<String, AtomicInteger> logCounts = new ConcurrentHashMap<>();
+        final AtomicInteger parentExecutions = new AtomicInteger();
+        final AtomicInteger childExecutions = new AtomicInteger();
+        final AtomicInteger activityExecutions = new AtomicInteger();
+        final Logger delegate = Logger.getAnonymousLogger();
+        delegate.setLevel(Level.ALL);
+        delegate.setUseParentHandlers(false);
+        Handler handler = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                logCounts.computeIfAbsent(record.getMessage(), ignored -> new AtomicInteger()).incrementAndGet();
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        delegate.addHandler(handler);
+
+        DurableTaskGrpcWorker worker = this.createWorkerBuilder()
+            .addOrchestrator(parentOrchestratorName, ctx -> {
+                parentExecutions.incrementAndGet();
+                Logger logger = ctx.createReplaySafeLogger(delegate);
+                logger.info(parentBefore);
+                String result = ctx.callSubOrchestrator(
+                        childOrchestratorName,
+                        null,
+                        String.class).await();
+                logger.info(parentAfter);
+                ctx.complete(result);
+            })
+            .addOrchestrator(childOrchestratorName, ctx -> {
+                childExecutions.incrementAndGet();
+                Logger logger = ctx.createReplaySafeLogger(delegate);
+                logger.info(childBefore);
+                String result = ctx.callActivity(activityName, null, String.class).await();
+                logger.info(childAfter);
+                ctx.complete(result);
+            })
+            .addActivity(activityName, ctx -> {
+                activityExecutions.incrementAndGet();
+                delegate.info(activityMessage);
+                return "done";
+            })
+            .buildAndStart();
+
+        DurableTaskClient client = this.createClientBuilder().build();
+        try (worker; client) {
+            String instanceId = client.scheduleNewOrchestrationInstance(parentOrchestratorName);
+            OrchestrationMetadata instance = client.waitForInstanceCompletion(
+                    instanceId,
+                    defaultTimeout,
+                    true);
+
+            assertNotNull(instance);
+            assertEquals(OrchestrationRuntimeStatus.COMPLETED, instance.getRuntimeStatus());
+            assertEquals("done", instance.readOutputAs(String.class));
+            assertTrue(parentExecutions.get() >= 2, "Parent orchestrator should replay after the child completes.");
+            assertTrue(childExecutions.get() >= 2, "Child orchestrator should replay after the activity completes.");
+            assertEquals(1, activityExecutions.get());
+            for (String expectedMessage : expectedMessages) {
+                assertEquals(
+                        1,
+                        logCounts.getOrDefault(expectedMessage, new AtomicInteger()).get(),
+                        expectedMessage);
+            }
+            assertEquals(
+                    expectedMessages.size(),
+                    logCounts.values().stream().mapToInt(AtomicInteger::get).sum());
+        } finally {
+            delegate.removeHandler(handler);
         }
     }
 
