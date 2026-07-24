@@ -10,7 +10,9 @@ import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 
 /**
@@ -61,6 +63,28 @@ public interface TaskOrchestrationContext {
      * @return {@code true} if the orchestrator is replaying, otherwise {@code false}
      */
     boolean getIsReplaying();
+
+    /**
+     * Creates a logger that suppresses output while this orchestration is replaying.
+     * <p>
+     * The returned logger does not own {@code logger} or any of its handlers. Replay-safe logging suppresses replay
+     * output but does not guarantee exactly-once delivery across failed or retried live orchestration turns.
+     * <p>
+     * {@link Logger#isLoggable} continues to report the supplied logger's level state during replay. Use
+     * supplier-based logging methods to avoid expensive message construction while replaying.
+     * <p>
+     * Automatic source-class and source-method inference is not preserved by all JUL convenience methods. Use
+     * {@link Logger#logp} when explicit source metadata is required.
+     *
+     * @param logger the configured logger to wrap
+     * @return a logger that emits through {@code logger} only when not replaying
+     * @throws NullPointerException if {@code logger} is {@code null}
+     */
+    default Logger createReplaySafeLogger(Logger logger) {
+        return new ReplaySafeLogger(
+                Objects.requireNonNull(logger, "logger"),
+                this::getIsReplaying);
+    }
 
     /**
      * Gets the version of the orchestration that this context represents.
