@@ -12,6 +12,22 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
+/**
+ * A {@link Logger} wrapper that suppresses log emission while an orchestration is replaying.
+ *
+ * <p>The {@code client} module targets Java 8, but a few of the overrides below wrap
+ * {@link Logger} methods that were introduced in Java 9:
+ * <ul>
+ *   <li>{@link #log(Level, Throwable, Supplier)}</li>
+ *   <li>{@link #logp(Level, String, String, Throwable, Supplier)}</li>
+ *   <li>{@link #logrb(Level, String, String, ResourceBundle, String, Throwable)}</li>
+ * </ul>
+ * These overrides make the wrapper replay-safe when it runs on a Java 9+ runtime. On a Java 8
+ * runtime the class still loads and every Java 8 {@link Logger} method remains replay-safe; the
+ * Java 9+ overrides are simply unreachable, because a Java 8-compiled caller cannot resolve those
+ * signatures through a {@link Logger}-typed reference and the JDK never routes into them
+ * internally.
+ */
 final class ReplaySafeLogger extends Logger {
     private final Logger delegate;
     private final BooleanSupplier isReplaying;
