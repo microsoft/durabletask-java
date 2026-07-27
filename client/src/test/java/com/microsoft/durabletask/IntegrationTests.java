@@ -1320,14 +1320,12 @@ public class IntegrationTests extends IntegrationTestBase {
 
         DurableTaskClient client = this.createClientBuilder().build();
         try (worker; client) {
-            Instant from = Instant.now().minus(Duration.ofMinutes(1));
-
             String instanceId = client.scheduleNewOrchestrationInstance(orchestratorName, 0);
             OrchestrationMetadata metadata = client.waitForInstanceCompletion(instanceId, defaultTimeout, false);
             assertEquals(OrchestrationRuntimeStatus.COMPLETED, metadata.getRuntimeStatus());
 
             ListInstanceIdsResult result = client.listInstanceIds(new ListInstanceIdsQuery()
-                    .setCompletedTimeFrom(from)
+                    .setCompletedTimeFrom(metadata.getCreatedAt())
                     .setRuntimeStatusList(Collections.singletonList(OrchestrationRuntimeStatus.COMPLETED))
                     .setPageSize(100));
 

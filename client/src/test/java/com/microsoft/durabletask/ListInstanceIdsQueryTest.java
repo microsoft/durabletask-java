@@ -4,6 +4,7 @@ package com.microsoft.durabletask;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -41,6 +42,30 @@ public class ListInstanceIdsQueryTest {
         source.add(OrchestrationRuntimeStatus.FAILED);
 
         assertEquals(Arrays.asList(OrchestrationRuntimeStatus.COMPLETED), query.getRuntimeStatusList());
+    }
+
+    @Test
+    void getRuntimeStatusList_returnsUnmodifiableView() {
+        ListInstanceIdsQuery query = new ListInstanceIdsQuery()
+                .setRuntimeStatusList(Arrays.asList(OrchestrationRuntimeStatus.COMPLETED));
+
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> query.getRuntimeStatusList().add(OrchestrationRuntimeStatus.FAILED));
+    }
+
+    @Test
+    void getters_returnConfiguredValues() {
+        Instant completedTimeFrom = Instant.parse("2026-01-01T00:00:00Z");
+        Instant completedTimeTo = Instant.parse("2026-01-02T00:00:00Z");
+        ListInstanceIdsQuery query = new ListInstanceIdsQuery()
+                .setCompletedTimeFrom(completedTimeFrom)
+                .setCompletedTimeTo(completedTimeTo)
+                .setContinuationToken("next-page");
+
+        assertEquals(completedTimeFrom, query.getCompletedTimeFrom());
+        assertEquals(completedTimeTo, query.getCompletedTimeTo());
+        assertEquals("next-page", query.getContinuationToken());
     }
 
     @Test
