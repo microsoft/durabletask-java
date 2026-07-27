@@ -2,8 +2,11 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.microsoft.durabletask.history.HistoryEvent;
+
 import javax.annotation.Nullable;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -225,6 +228,41 @@ public abstract class DurableTaskClient implements AutoCloseable {
      * @return the result of the query operation, including instance metadata and possibly a continuation token
      */
     public abstract OrchestrationStatusQueryResult queryInstances(OrchestrationStatusQuery query);
+
+    /**
+     * Lists the IDs of terminal orchestration instances that completed within a time window.
+     * <p>
+     * Unlike {@link #queryInstances(OrchestrationStatusQuery)}, which filters by creation time and returns full
+     * metadata, this method filters by <em>completion</em> time and returns only instance IDs, making it efficient
+     * for bulk enumeration such as archival/export. Results are paged; pass
+     * {@link ListInstanceIdsResult#getContinuationToken()} back via
+     * {@link ListInstanceIdsQuery#setContinuationToken(String)} to fetch subsequent pages.
+     *
+     * @param query filter criteria: completion-time window, terminal runtime statuses, page size, and pagination cursor
+     * @return a page of matching instance IDs and a cursor for the next page
+     * @throws UnsupportedOperationException if the current client implementation does not support listing instance IDs
+     */
+    public ListInstanceIdsResult listInstanceIds(ListInstanceIdsQuery query) {
+        throw new UnsupportedOperationException(
+                "Listing instance IDs is not supported by this client implementation.");
+    }
+
+    /**
+     * Retrieves the history of the specified orchestration instance as a list of {@link HistoryEvent} objects.
+     * <p>
+     * The events are returned in execution order. This is useful for archiving or offline analysis of an instance's
+     * execution history. Use {@code instanceof} to inspect each concrete event type.
+     *
+     * @param instanceId the instance ID of the orchestration
+     * @return the list of {@link HistoryEvent} objects representing the orchestration's history, in execution order;
+     *         empty if the instance has no history
+     * @throws IllegalArgumentException if {@code instanceId} is null
+     * @throws UnsupportedOperationException if the current client implementation does not support history retrieval
+     */
+    public List<HistoryEvent> getOrchestrationHistory(String instanceId) {
+        throw new UnsupportedOperationException(
+                "Retrieving orchestration history is not supported by this client implementation.");
+    }
 
     /**
      * Initializes the target task hub data store.

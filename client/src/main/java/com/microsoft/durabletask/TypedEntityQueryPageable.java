@@ -14,7 +14,7 @@ import java.util.NoSuchElementException;
  * <p>
  * Use {@link DurableEntityClient#getAllEntities(EntityQuery, Class)} to obtain an instance.
  *
- * <h3>Example:</h3>
+ * <h2>Example:</h2>
  * <pre>{@code
  * EntityQuery query = new EntityQuery().setInstanceIdStartsWith("counter");
  * for (TypedEntityMetadata<Integer> entity : client.getEntities().getAllEntities(query, Integer.class)) {
