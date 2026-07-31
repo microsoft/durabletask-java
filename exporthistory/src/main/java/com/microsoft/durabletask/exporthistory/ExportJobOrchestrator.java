@@ -151,7 +151,8 @@ final class ExportJobOrchestrator implements TaskOrchestration {
             TaskOrchestrationContext ctx,
             List<String> instanceIds,
             ExportJobConfiguration config) {
-        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+        // Retries until the batch fully succeeds or MAX_RETRY_ATTEMPTS is reached; every path returns from inside.
+        for (int attempt = 1; ; attempt++) {
             List<ExportResult> results = exportBatch(ctx, instanceIds, config);
             List<ExportResult> failedResults = results.stream()
                     .filter(r -> !r.isSuccess())
@@ -161,7 +162,7 @@ final class ExportJobOrchestrator implements TaskOrchestration {
                 return BatchExportResult.succeeded(results.size());
             }
 
-            if (attempt == MAX_RETRY_ATTEMPTS) {
+            if (attempt >= MAX_RETRY_ATTEMPTS) {
                 Instant now = ctx.getCurrentInstant();
                 int finalAttempt = attempt;
                 List<ExportFailure> failures = failedResults.stream()
@@ -179,9 +180,6 @@ final class ExportJobOrchestrator implements TaskOrchestration {
                     MIN_BACKOFF_SECONDS * (int) Math.pow(2, attempt - 1), MAX_BACKOFF_SECONDS);
             ctx.createTimer(Duration.ofSeconds(backoffSeconds)).await();
         }
-
-        // Unreachable: the loop either returns success/failure or retries.
-        return BatchExportResult.succeeded(0);
     }
 
     private List<ExportResult> exportBatch(

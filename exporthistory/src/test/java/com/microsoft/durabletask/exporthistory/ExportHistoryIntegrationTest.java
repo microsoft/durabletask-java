@@ -6,7 +6,6 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
-import com.azure.storage.blob.models.BlobItem;
 import com.azure.storage.blob.models.BlobProperties;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
@@ -213,11 +212,7 @@ public class ExportHistoryIntegrationTest {
         if (!containerClient.exists()) {
             return 0;
         }
-        long count = 0;
-        for (BlobItem ignored : containerClient.listBlobs()) {
-            count++;
-        }
-        return count;
+        return containerClient.listBlobs().stream().count();
     }
 
     private DurableTaskGrpcWorkerBuilder createWorkerBuilder() {
