@@ -257,6 +257,8 @@ final class HistoryEventSerializer {
         LinkedHashMap<String, Object> m = new LinkedHashMap<>();
         putIfNotNull(m, "name", p.getName());
         putIfNotNull(m, "orchestrationInstance", instanceMap(p.getOrchestrationInstance()));
+        // Deliberate wire-format field name (no trailing 'd'). Do not "correct" the spelling -- it would break
+        // byte-for-byte compatibility with the export format.
         m.put("taskScheduleId", p.getTaskScheduledId());
         putIfNotNull(m, "version", p.getVersion());
         return m;

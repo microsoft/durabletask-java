@@ -22,6 +22,7 @@ final class ExecuteExportJobOperationOrchestrator implements TaskOrchestration {
     @Override
     public void run(TaskOrchestrationContext ctx) {
         ExportJobOperationRequest input = ctx.getInput(ExportJobOperationRequest.class);
+        // The Object payload round-trips through a generic map before entity dispatch maps it to the operation type.
         Object result = ctx.getEntities()
                 .callEntity(input.getEntityId(), input.getOperationName(), input.getInput(), Object.class)
                 .await();

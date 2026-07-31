@@ -2,10 +2,12 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.exporthistory;
 
+import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobItem;
+import com.azure.storage.blob.models.BlobProperties;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
 import com.microsoft.durabletask.DurableTaskGrpcWorker;
@@ -24,11 +26,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.zip.GZIPInputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -149,6 +155,39 @@ public class ExportHistoryIntegrationTest {
         long blobCount = countBlobs(container);
         assertTrue(blobCount >= instanceCount,
                 "Expected at least " + instanceCount + " blobs in container " + container + ", found " + blobCount);
+    }
+
+    @Test
+    void blobWriter_repeatedUploadAtomicallyReplacesContentAndProperties() throws IOException {
+        String container = "exporthistory-writer-it-" + System.currentTimeMillis();
+        BlobServiceClient serviceClient = new BlobServiceClientBuilder()
+                .connectionString(AZURITE_CONNECTION_STRING)
+                .buildClient();
+        BlobContainerClient containerClient = serviceClient.getBlobContainerClient(container);
+
+        try {
+            ExportHistoryStorageOptions storage = new ExportHistoryStorageOptions()
+                    .setConnectionString(AZURITE_CONNECTION_STRING)
+                    .setContainerName(container);
+            BlobExportWriter writer = new BlobExportWriter(storage);
+            ExportFormat format = new ExportFormat(ExportFormatKind.JSONL, "1.0");
+            String blobPath = "history.jsonl.gz";
+
+            writer.upload(container, blobPath, "first", format, "instance-1");
+            writer.upload(container, blobPath, "second", format, "instance-2");
+
+            BlobClient blobClient = containerClient.getBlobClient(blobPath);
+            BlobProperties properties = blobClient.getProperties();
+            assertEquals("application/jsonl+gzip", properties.getContentType());
+            assertEquals("gzip", properties.getContentEncoding());
+            assertEquals("instance-2", properties.getMetadata().get("instanceId"));
+            byte[] payload = blobClient.downloadContent().toBytes();
+            try (GZIPInputStream stream = new GZIPInputStream(new ByteArrayInputStream(payload))) {
+                assertEquals("second", new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+            }
+        } finally {
+            containerClient.deleteIfExists();
+        }
     }
 
     private ExportJobDescription waitForJobCompletion(ExportHistoryJobClient jobClient, Duration timeout)

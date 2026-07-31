@@ -67,6 +67,10 @@ public final class ExportHistoryClient {
 
     /**
      * Lists export jobs matching the query (single page).
+     * <p>
+     * Server-side paging happens first; {@code status}/{@code createdFrom}/{@code createdTo} are then applied
+     * client-side, so a returned page may be smaller than {@code pageSize} (or empty) even when later pages hold
+     * more matches. {@code createdFrom} and {@code createdTo} are exclusive on both ends.
      *
      * @param filter the query, or {@code null} for defaults
      * @return a page of matching export job descriptions and a continuation token

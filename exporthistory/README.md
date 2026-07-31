@@ -90,16 +90,6 @@ Each blob holds the instance's full history, and the **blob body is byte-for-byt
 
 Blob **names**: a lowercase-hex SHA-256 of `"<completedTimestamp>|<instanceId>"` plus the format extension.
 
-## Differences from .NET
-
-1. **Worker registration takes an explicit client** — `useExportHistory(workerBuilder, storage, client)`. Java has
-   no dependency injection, so the export activities require a `DurableTaskClient` for the same backend.
-2. **Entity events** — the .NET export folds durable-entity operations into core events via a stateful converter, so
-   it has no distinct JSON for them; Java emits entity events in a Java-native shape instead (a reflective projection
-   with an `eventType` discriminator, e.g. `"EntityLockGranted"` — matching the Python SDK, which also keeps entity
-   events as first-class types). Every **non-entity** event is byte-for-byte identical to .NET, so only orchestrations
-   that call entities differ, and only on those entity-specific lines.
-
 ## Backend requirement
 
 The export feature relies on the `ListInstanceIds` and `StreamInstanceHistory` gRPC operations. Managed DTS serves

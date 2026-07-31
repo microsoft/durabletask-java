@@ -3,11 +3,13 @@
 package com.microsoft.durabletask.exporthistory;
 
 import com.azure.core.util.BinaryData;
+import com.azure.core.util.Context;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobHttpHeaders;
+import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import com.azure.storage.common.policy.RequestRetryOptions;
 import com.azure.storage.common.policy.RetryPolicyType;
 
@@ -103,11 +105,18 @@ final class BlobExportWriter {
         boolean gzip = HistoryEventSerializer.isCompressed(format);
         byte[] payload = gzip ? gzip(contentBytes) : contentBytes;
 
-        blobClient.upload(BinaryData.fromBytes(payload), true);
-        blobClient.setHttpHeaders(new BlobHttpHeaders()
+        BlobHttpHeaders headers = new BlobHttpHeaders()
                 .setContentType(HistoryEventSerializer.contentType(format))
-                .setContentEncoding(gzip ? "gzip" : null));
-        blobClient.setMetadata(Collections.singletonMap("instanceId", instanceId));
+                .setContentEncoding(gzip ? "gzip" : null);
+
+        // Single upload sets content, headers, and metadata atomically so a gzipped blob is never left without
+        // its Content-Encoding. No request conditions means an existing blob is overwritten (idempotent retries).
+        blobClient.uploadWithResponse(
+                new BlobParallelUploadOptions(BinaryData.fromBytes(payload))
+                        .setHeaders(headers)
+                        .setMetadata(Collections.singletonMap("instanceId", instanceId)),
+                null,
+                Context.NONE);
     }
 
     private static byte[] gzip(byte[] data) {

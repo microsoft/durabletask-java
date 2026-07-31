@@ -114,11 +114,9 @@ final class ExportJobOrchestrator implements TaskOrchestration {
                     log(ctx, Level.INFO, "Job " + jobId + " batch scanned=" + scannedCount
                             + " exported=" + batchResult.exportedCount);
                 } else {
-                    // Commit without advancing the cursor; the entity transitions the job to FAILED.
                     commitCheckpoint(ctx, jobEntityId, 0, 0, null, batchResult.failures);
-                    log(ctx, Level.WARNING, "Export job '" + jobId + "' batch export failed after "
+                    throw new IllegalStateException("Export job '" + jobId + "' batch export failed after "
                             + MAX_RETRY_ATTEMPTS + " retry attempts. " + summarizeFailures(batchResult.failures));
-                    return;
                 }
             }
 
