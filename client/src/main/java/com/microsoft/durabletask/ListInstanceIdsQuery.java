@@ -5,6 +5,7 @@ package com.microsoft.durabletask;
 import javax.annotation.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -93,26 +94,46 @@ public final class ListInstanceIdsQuery {
         return this;
     }
 
-    List<OrchestrationRuntimeStatus> getRuntimeStatusList() {
-        return this.runtimeStatusList;
+    /**
+     * Gets the configured terminal runtime status filter, or an empty list if none was configured.
+     * @return an unmodifiable view of the configured terminal runtime status filter
+     */
+    public List<OrchestrationRuntimeStatus> getRuntimeStatusList() {
+        return Collections.unmodifiableList(this.runtimeStatusList);
     }
 
+    /**
+     * Gets the configured minimum completion time, or {@code null} if none was configured.
+     * @return the configured minimum completion time, or {@code null} if none was configured
+     */
     @Nullable
-    Instant getCompletedTimeFrom() {
+    public Instant getCompletedTimeFrom() {
         return this.completedTimeFrom;
     }
 
+    /**
+     * Gets the configured maximum completion time, or {@code null} if none was configured.
+     * @return the configured maximum completion time, or {@code null} if none was configured
+     */
     @Nullable
-    Instant getCompletedTimeTo() {
+    public Instant getCompletedTimeTo() {
         return this.completedTimeTo;
     }
 
-    int getPageSize() {
+    /**
+     * Gets the configured maximum number of instance IDs to return per page.
+     * @return the configured page size
+     */
+    public int getPageSize() {
         return this.pageSize;
     }
 
+    /**
+     * Gets the configured pagination cursor, or {@code null} if none was configured.
+     * @return the configured pagination cursor, or {@code null} if none was configured
+     */
     @Nullable
-    String getContinuationToken() {
+    public String getContinuationToken() {
         return this.continuationToken;
     }
 }

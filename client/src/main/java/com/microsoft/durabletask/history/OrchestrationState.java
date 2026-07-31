@@ -84,7 +84,7 @@ public final class OrchestrationState {
         this.failureDetails = failureDetails;
         this.executionId = executionId;
         this.parentInstanceId = parentInstanceId;
-        this.tags = tags == null ? null : Collections.unmodifiableMap(new HashMap<>(tags));
+        this.tags = tags != null ? Collections.unmodifiableMap(new HashMap<>(tags)) : Collections.emptyMap();
     }
 
     /** @return the orchestration instance ID. */
@@ -168,8 +168,7 @@ public final class OrchestrationState {
         return this.parentInstanceId;
     }
 
-    /** @return an unmodifiable view of the orchestration tags, or {@code null} if not set. */
-    @Nullable
+    /** @return the orchestration tags (never {@code null}; empty when none). */
     public Map<String, String> getTags() {
         return this.tags;
     }
