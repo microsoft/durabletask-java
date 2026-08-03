@@ -247,8 +247,8 @@ public abstract class DurableTaskClient implements AutoCloseable {
                 "Listing instance IDs is not supported by this client implementation.");
     }
 
-        /**
-        * Retrieves the history of the specified orchestration instance as a list of {@link HistoryEvent} objects.
+    /**
+     * Retrieves the history of the specified orchestration instance as a list of {@link HistoryEvent} objects.
      * <p>
      * The events are returned in execution order. This is useful for archiving or offline analysis of an instance's
      * execution history. Use {@code instanceof} to inspect each concrete event type.

@@ -46,6 +46,8 @@ import com.microsoft.durabletask.history.TimerFiredEvent;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -89,6 +91,11 @@ final class HistoryEventSerializer {
 
     /**
      * Serializes the history events into the format requested by {@code format}.
+     * <p>
+     * The entire result is materialized in memory as a single string (and later copied to a UTF-8 byte array and
+     * gzipped by the blob writer). This is not a streaming serializer: peak memory scales with per-instance history
+     * size multiplied by the number of instances exporting concurrently on a worker, so callers should bound history
+     * size accordingly.
      *
      * @param historyEvents the ordered history events
      * @param format        the export format
@@ -169,7 +176,7 @@ final class HistoryEventSerializer {
             putIfNotNull(m, "orchestrationInstance", instanceMap(e.getOrchestrationInstance()));
         } else if (event instanceof ExecutionCompletedEvent) {
             ExecutionCompletedEvent e = (ExecutionCompletedEvent) event;
-            m.put("orchestrationStatus", statusString(e.getOrchestrationStatus()));
+            putIfNotNull(m, "orchestrationStatus", statusString(e.getOrchestrationStatus()));
             putIfNotNull(m, "result", e.getResult());
             putIfNotNull(m, "failureDetails", failureMap(e.getFailureDetails()));
         } else if (event instanceof ContinueAsNewEvent) {
@@ -311,6 +318,9 @@ final class HistoryEventSerializer {
     }
 
     private static String statusString(OrchestrationRuntimeStatus status) {
+        if (status == null) {
+            return null;
+        }
         switch (status) {
             case RUNNING: return "Running";
             case COMPLETED: return "Completed";
@@ -386,7 +396,7 @@ final class HistoryEventSerializer {
     private static String writeObject(Map<String, Object> map) {
         StringWriter sw = new StringWriter();
         try (JsonGenerator g = FACTORY.createGenerator(sw)) {
-            g.setCharacterEscapes(new HtmlSafeJsonEscapes());
+            g.setCharacterEscapes(HtmlSafeJsonEscapes.INSTANCE);
             g.setHighestNonEscapedChar(0x7F);
             writeMap(g, map);
         } catch (IOException ex) {
@@ -415,6 +425,16 @@ final class HistoryEventSerializer {
             g.writeNumber((Long) v);
         } else if (v instanceof Boolean) {
             g.writeBoolean((Boolean) v);
+        } else if (v instanceof Double) {
+            g.writeNumber((double) (Double) v);
+        } else if (v instanceof Float) {
+            g.writeNumber((float) (Float) v);
+        } else if (v instanceof BigInteger) {
+            g.writeNumber((BigInteger) v);
+        } else if (v instanceof BigDecimal) {
+            g.writeNumber((BigDecimal) v);
+        } else if (v instanceof Number) {
+            g.writeNumber(((Number) v).longValue());
         } else if (v instanceof Map) {
             writeMap(g, (Map<?, ?>) v);
         } else if (v instanceof Iterable) {

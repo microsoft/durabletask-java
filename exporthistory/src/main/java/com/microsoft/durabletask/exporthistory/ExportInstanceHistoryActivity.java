@@ -17,9 +17,9 @@ import java.util.logging.Logger;
 /**
  * Activity that exports a single orchestration instance's history to the configured blob destination.
  * <p>
- * It reads the instance metadata to confirm a terminal state and obtain the completion timestamp, streams the full
- * history via {@code getOrchestrationHistory}, serializes it (gzipped JSONL by default), and uploads it to a blob
- * named from a hash of the completion timestamp and instance ID.
+ * It reads the instance metadata to confirm a terminal state and obtain the completion timestamp, reads the full
+ * history via {@code getOrchestrationHistory} into memory, serializes it (gzipped JSONL by default), and uploads it
+ * to a blob named from a hash of the completion timestamp and instance ID.
  */
 final class ExportInstanceHistoryActivity implements TaskActivity {
 
@@ -57,6 +57,10 @@ final class ExportInstanceHistoryActivity implements TaskActivity {
             }
 
             Instant completedTimestamp = metadata.getLastUpdatedAt();
+            if (completedTimestamp == null) {
+                return ExportResult.failure(instanceId,
+                        "Instance " + instanceId + " has no completion timestamp");
+            }
             List<HistoryEvent> historyEvents = this.client.getOrchestrationHistory(instanceId);
 
             String blobFileName = ExportBlobNaming.blobFileName(completedTimestamp, instanceId, input.getFormat());

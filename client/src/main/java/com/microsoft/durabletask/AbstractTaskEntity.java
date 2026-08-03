@@ -329,7 +329,6 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
         }
 
         try {
-            makeDeclaringClassAccessible(method);
             return method.invoke(target, args);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getTargetException();
@@ -393,7 +392,13 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
                     "Ambiguous match: multiple methods named '" + operationName + "' found on " +
                     targetClass.getName() + ". Entity operation methods must have unique names.");
         }
-        return matches.isEmpty() ? Optional.empty() : Optional.of(matches.get(0));
+        if (matches.isEmpty()) {
+            return Optional.empty();
+        }
+        // Resolve reflective accessibility once, at method-caching time, rather than on every dispatch.
+        Method resolved = matches.get(0);
+        makeDeclaringClassAccessible(resolved);
+        return Optional.of(resolved);
     }
 
     /**
@@ -422,7 +427,6 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
         }
 
         try {
-            makeDeclaringClassAccessible(method);
             return method.invoke(target, args);
         } catch (InvocationTargetException e) {
             // Unwrap the target exception
@@ -436,7 +440,16 @@ public abstract class AbstractTaskEntity<TState> implements TaskEntity {
 
     private static void makeDeclaringClassAccessible(Method method) {
         if (!Modifier.isPublic(method.getDeclaringClass().getModifiers())) {
-            method.setAccessible(true);
+            try {
+                method.setAccessible(true);
+            } catch (RuntimeException ex) {
+                // Under JPMS (Java 16+), setAccessible throws InaccessibleObjectException when the entity's
+                // package is not open for reflection. Surface an actionable message instead of the raw error.
+                throw new IllegalStateException(
+                        "Unable to access entity method '" + method.getName() + "' on non-public class '"
+                                + method.getDeclaringClass().getName() + "'. Make the entity class public, or "
+                                + "open its package for reflection (e.g. 'opens' in module-info.java).", ex);
+            }
         }
     }
 }

@@ -68,12 +68,14 @@ public final class ExportHistoryJobClient {
 
         ExportDestination destination = new ExportDestination(container);
         destination.setPrefix(prefix);
-        options.setDestination(destination);
 
-        options.validateForCreate();
+        // Copy rather than mutate the caller's options.
+        ExportJobCreationOptions optionsForCreate = options.copy();
+        optionsForCreate.setDestination(destination);
+        optionsForCreate.validateForCreate();
 
         ExportJobOperationRequest request = new ExportJobOperationRequest(
-                this.entityId, ExportJobTransitions.OP_CREATE, options);
+                this.entityId, ExportJobTransitions.OP_CREATE, optionsForCreate);
 
         OrchestrationMetadata result = scheduleAndWait(request);
         if (result.getRuntimeStatus() != OrchestrationRuntimeStatus.COMPLETED) {

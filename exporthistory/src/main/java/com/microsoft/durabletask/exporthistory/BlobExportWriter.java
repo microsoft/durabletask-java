@@ -18,6 +18,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPOutputStream;
 
 /**
@@ -30,6 +32,10 @@ import java.util.zip.GZIPOutputStream;
 final class BlobExportWriter {
 
     private final BlobServiceClient serviceClient;
+
+    // Containers already ensured this process-lifetime, so createIfNotExists runs once per container
+    // rather than once per uploaded blob. The end state is identical; only redundant REST calls are avoided.
+    private final Set<String> ensuredContainers = ConcurrentHashMap.newKeySet();
 
     /**
      * Creates a {@code BlobExportWriter} from storage options.
@@ -97,7 +103,10 @@ final class BlobExportWriter {
             throw new IllegalArgumentException("Blob path must not be null or empty.");
         }
         BlobContainerClient containerClient = this.serviceClient.getBlobContainerClient(containerName);
-        containerClient.createIfNotExists();
+        if (!this.ensuredContainers.contains(containerName)) {
+            containerClient.createIfNotExists();
+            this.ensuredContainers.add(containerName);
+        }
 
         BlobClient blobClient = containerClient.getBlobClient(blobPath);
 

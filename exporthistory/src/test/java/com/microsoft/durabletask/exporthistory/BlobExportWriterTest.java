@@ -50,7 +50,8 @@ class BlobExportWriterTest {
         ArgumentCaptor<BlobParallelUploadOptions> options =
                 ArgumentCaptor.forClass(BlobParallelUploadOptions.class);
         verify(blobClient, times(2)).uploadWithResponse(options.capture(), isNull(), eq(Context.NONE));
-        verify(containerClient, times(2)).createIfNotExists();
+        // The container is ensured once and cached, not re-checked on every blob upload.
+        verify(containerClient, times(1)).createIfNotExists();
         verify(blobClient, never()).setHttpHeaders(any(BlobHttpHeaders.class));
         verify(blobClient, never()).setMetadata(anyMap());
 

@@ -244,4 +244,22 @@ public final class ExportJobCreationOptions {
             throw new IllegalArgumentException("Invalid export mode.");
         }
     }
+
+    /**
+     * Returns a copy of these options. Package-private so the client can populate the destination without mutating
+     * the caller's instance.
+     *
+     * @return a copy of these options
+     */
+    ExportJobCreationOptions copy() {
+        ExportJobCreationOptions c = new ExportJobCreationOptions(this.jobId);
+        c.mode = this.mode;
+        c.completedTimeFrom = this.completedTimeFrom;
+        c.completedTimeTo = this.completedTimeTo;
+        c.runtimeStatus = new ArrayList<>(this.runtimeStatus);
+        c.maxInstancesPerBatch = this.maxInstancesPerBatch;
+        c.format = this.format;
+        c.destination = this.destination;
+        return c;
+    }
 }

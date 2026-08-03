@@ -24,26 +24,36 @@ final class HtmlSafeJsonEscapes extends CharacterEscapes {
 
     private static final long serialVersionUID = 1L;
 
+    /** Shared, immutable instance -- the escape table and rules are stateless. */
+    static final HtmlSafeJsonEscapes INSTANCE = new HtmlSafeJsonEscapes();
+
+    private static final char[] HEX = "0123456789ABCDEF".toCharArray();
+
     /** Characters that must be emitted as {@code \\uXXXX} instead of their JSON short escape. */
     private static final int[] FORCED_UNICODE = {'"', '&', '\'', '+', '<', '>', '`', 0x7F};
 
-    private final int[] asciiEscapes;
+    /** Precomputed once and shared across all events; callers receive a defensive copy. */
+    private static final int[] ASCII_ESCAPES = buildAsciiEscapes();
 
-    HtmlSafeJsonEscapes() {
+    private HtmlSafeJsonEscapes() {
+    }
+
+    private static int[] buildAsciiEscapes() {
         int[] esc = CharacterEscapes.standardAsciiEscapesForJSON();
         for (int c : FORCED_UNICODE) {
             esc[c] = CharacterEscapes.ESCAPE_CUSTOM;
         }
-        this.asciiEscapes = esc;
+        return esc;
     }
 
     @Override
     public int[] getEscapeCodesForAscii() {
-        return this.asciiEscapes;
+        return ASCII_ESCAPES.clone();
     }
 
     @Override
     public SerializableString getEscapeSequence(int ch) {
-        return new SerializedString(String.format("\\u%04X", ch));
+        char[] buf = {'\\', 'u', HEX[(ch >> 12) & 0xF], HEX[(ch >> 8) & 0xF], HEX[(ch >> 4) & 0xF], HEX[ch & 0xF]};
+        return new SerializedString(new String(buf));
     }
 }
