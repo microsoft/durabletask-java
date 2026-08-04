@@ -1,0 +1,22 @@
+{"eventType":"OrchestratorStarted","eventId":0,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"OrchestratorCompleted","eventId":0,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ExecutionStarted","parentInstance":{"name":"Parent","orchestrationInstance":{"instanceId":"parent-1","executionId":"pe1"},"taskScheduleId":5,"version":"1.0"},"name":"ProcessOrder","version":"2.1","input":"\u0022widget\u0022","tags":{},"scheduledStartTime":"2026-06-30T12:05:00Z","orchestrationInstance":{"instanceId":"order-42","executionId":"e1"},"eventId":0,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ExecutionCompleted","orchestrationStatus":"Completed","result":"\u0022done\u0022","eventId":1,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ExecutionCompleted","orchestrationStatus":"Failed","failureDetails":{"errorType":"System.InvalidOperationException","errorMessage":"boom","stackTrace":"  at Foo()","innerFailure":{"errorType":"System.NullReferenceException","errorMessage":"npe","stackTrace":"  at Bar()","isNonRetriable":true},"isNonRetriable":false},"eventId":1,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ExecutionTerminated","input":"\u0022stop\u0022","eventId":2,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ExecutionSuspended","reason":"\u0022pause\u0022","eventId":3,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ExecutionResumed","reason":"\u0022go\u0022","eventId":4,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ExecutionRewound","eventId":5,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"TaskScheduled","name":"ChargeCard","input":"\u0022widget\u0022","tags":{"env":"prod"},"eventId":6,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"TaskCompleted","taskScheduledId":6,"result":"\u0022charged\u0022","eventId":7,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"TaskFailed","taskScheduledId":6,"failureDetails":{"errorType":"System.InvalidOperationException","errorMessage":"boom","stackTrace":"  at Foo()","innerFailure":{"errorType":"System.NullReferenceException","errorMessage":"npe","stackTrace":"  at Bar()","isNonRetriable":true},"isNonRetriable":false},"eventId":8,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"SubOrchestrationInstanceCreated","name":"ChildOrch","version":"1.0","instanceId":"child-1","input":"\u0022sub\u0022","eventId":9,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"SubOrchestrationInstanceCompleted","taskScheduledId":9,"result":"\u0022subdone\u0022","eventId":10,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"SubOrchestrationInstanceFailed","taskScheduledId":9,"failureDetails":{"errorType":"System.InvalidOperationException","errorMessage":"boom","stackTrace":"  at Foo()","innerFailure":{"errorType":"System.NullReferenceException","errorMessage":"npe","stackTrace":"  at Bar()","isNonRetriable":true},"isNonRetriable":false},"eventId":11,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"TimerCreated","fireAt":"2026-06-30T12:05:00Z","eventId":12,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"TimerFired","timerId":12,"fireAt":"2026-06-30T12:05:00Z","eventId":-1,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"EventSent","instanceId":"target-1","name":"approve","input":"\u0022payload\u0022","eventId":13,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"EventRaised","name":"approve","input":"\u0022payload\u0022","eventId":14,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"GenericEvent","data":"some-data","eventId":15,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"ContinueAsNew","orchestrationStatus":"ContinuedAsNew","result":"\u0022nextInput\u0022","eventId":16,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}
+{"eventType":"HistoryState","state":{"scheduledStartTime":"2026-06-30T12:05:00Z","completedTime":"0001-01-01T00:00:00","compressedSize":0,"createdTime":"2026-06-30T12:00:00Z","input":"\u0022widget\u0022","lastUpdatedTime":"2026-06-30T12:00:00Z","name":"ProcessOrder","orchestrationInstance":{"instanceId":"order-42"},"orchestrationStatus":"Running","output":"\u0022done\u0022","size":0,"status":"custom-status","tags":{},"version":"1.0"},"eventId":17,"isPlayed":false,"timestamp":"2026-06-30T12:00:00Z"}

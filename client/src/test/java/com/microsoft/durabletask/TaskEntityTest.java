@@ -42,6 +42,23 @@ public class TaskEntityTest {
         }
     }
 
+    /** A non-public entity implementation, matching internal feature entities. */
+    private static class PrivateEntity extends AbstractTaskEntity<String> {
+        public String get() {
+            return this.state;
+        }
+
+        @Override
+        protected String initializeState(TaskEntityOperation operation) {
+            return "private-state";
+        }
+
+        @Override
+        protected Class<String> getStateType() {
+            return String.class;
+        }
+    }
+
     /**
      * Entity that accepts a TaskEntityContext as a method parameter.
      */
@@ -245,6 +262,12 @@ public class TaskEntityTest {
         String serializedState = converter.serialize(42);
         Object result = entity.run(createOperation("get", null, serializedState));
         assertEquals(42, result);
+    }
+
+    @Test
+    void reflectionDispatch_publicOperationOnPrivateEntityClass() throws Exception {
+        Object result = new PrivateEntity().run(createOperation("get"));
+        assertEquals("private-state", result);
     }
 
     @Test
