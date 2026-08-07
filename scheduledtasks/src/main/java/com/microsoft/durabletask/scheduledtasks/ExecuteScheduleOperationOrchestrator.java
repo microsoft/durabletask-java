@@ -40,7 +40,7 @@ final class ScheduleOperationRequest {
     private Object input;
 
     /** Creates an empty {@code ScheduleOperationRequest} (for deserialization). */
-    ScheduleOperationRequest() {
+    public ScheduleOperationRequest() {
     }
 
     ScheduleOperationRequest(EntityInstanceId entityId, String operationName, @Nullable Object input) {
@@ -49,28 +49,28 @@ final class ScheduleOperationRequest {
         this.input = input;
     }
 
-    EntityInstanceId getEntityId() {
+    public EntityInstanceId getEntityId() {
         return this.entityId;
     }
 
-    void setEntityId(EntityInstanceId entityId) {
+    public void setEntityId(EntityInstanceId entityId) {
         this.entityId = entityId;
     }
 
-    String getOperationName() {
+    public String getOperationName() {
         return this.operationName;
     }
 
-    void setOperationName(String operationName) {
+    public void setOperationName(String operationName) {
         this.operationName = operationName;
     }
 
     @Nullable
-    Object getInput() {
+    public Object getInput() {
         return this.input;
     }
 
-    void setInput(@Nullable Object input) {
+    public void setInput(@Nullable Object input) {
         this.input = input;
     }
 }
