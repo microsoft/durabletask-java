@@ -121,6 +121,10 @@ final class TaskEntityExecutor {
             logger.log(Level.FINE, "Executing operation '{0}' (requestId={1}) on entity '{2}'.",
                     new Object[]{operationName, requestId, instanceId});
 
+            // Parent context for any signals/orchestrations this operation produces, so the host can link them.
+            context.setCurrentOperationTraceContext(
+                    opRequest.hasTraceContext() ? opRequest.getTraceContext() : null);
+
             // Snapshot state and actions before each operation (for rollback on failure)
             entityState.commit();
             context.commit();
@@ -221,10 +225,16 @@ final class TaskEntityExecutor {
         private final DataConverter dataConverter;
         private final List<PendingAction> pendingActions = new ArrayList<>();
         private int committedActionCount = 0;
+        @Nullable
+        private TraceContext currentOperationTraceContext;
 
         TaskEntityContextImpl(EntityInstanceId entityId, DataConverter dataConverter) {
             this.entityId = entityId;
             this.dataConverter = dataConverter;
+        }
+
+        void setCurrentOperationTraceContext(@Nullable TraceContext traceContext) {
+            this.currentOperationTraceContext = traceContext;
         }
 
         @Nonnull
@@ -259,6 +269,10 @@ final class TaskEntityExecutor {
                         .setSeconds(scheduledTime.getEpochSecond())
                         .setNanos(scheduledTime.getNano())
                         .build());
+            }
+
+            if (this.currentOperationTraceContext != null) {
+                signalBuilder.setParentTraceContext(this.currentOperationTraceContext);
             }
 
             this.pendingActions.add(new PendingAction(PendingAction.Type.SEND_SIGNAL, signalBuilder.build(), null));
@@ -298,6 +312,10 @@ final class TaskEntityExecutor {
                             .setNanos(startTime.getNano())
                             .build());
                 }
+            }
+
+            if (this.currentOperationTraceContext != null) {
+                orchBuilder.setParentTraceContext(this.currentOperationTraceContext);
             }
 
             this.pendingActions.add(new PendingAction(
