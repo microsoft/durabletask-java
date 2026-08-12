@@ -1,4 +1,7 @@
 ## Unreleased
+* Add the `exporthistory` module for durable, checkpointed export of terminal orchestration history to Azure Blob Storage ([#293](https://github.com/microsoft/durabletask-java/pull/293))
+* Add client APIs to list terminal instance IDs by completion time (`listInstanceIds`) and read orchestration history (`getOrchestrationHistory`) ([#292](https://github.com/microsoft/durabletask-java/pull/292))
+* Add `createReplaySafeLogger` to suppress orchestration log output during replay ([#295](https://github.com/microsoft/durabletask-java/pull/295)).
 * Add `getParentInstance()` API to `TaskOrchestrationContext` for discovering parent orchestration info ([#284](https://github.com/microsoft/durabletask-java/pull/284))
 
 ## v1.9.0

@@ -4,6 +4,7 @@ import com.functions.model.Person;
 import com.microsoft.azure.functions.annotation.*;
 import com.microsoft.azure.functions.*;
 import java.util.*;
+import java.util.logging.Logger;
 
 import com.microsoft.durabletask.*;
 import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
@@ -37,12 +38,18 @@ public class AzureFunctions {
      */
     @FunctionName("Cities")
     public String citiesOrchestrator(
-            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx) {
+            @DurableOrchestrationTrigger(name = "ctx") TaskOrchestrationContext ctx,
+            final ExecutionContext context) {
+        Logger logger = ctx.createReplaySafeLogger(context.getLogger());
+        logger.info("Starting Cities orchestration.");
+
         String result = "";
         result += ctx.callActivity("Capitalize", "Tokyo", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "London", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "Seattle", String.class).await() + ", ";
         result += ctx.callActivity("Capitalize", "Austin", String.class).await();
+
+        logger.info("Cities orchestration completed.");
         return result;
     }
 

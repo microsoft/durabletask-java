@@ -142,6 +142,14 @@ jobs:
         name: Integration test report
         path: client/build/reports/tests/integrationTest
 
+    - name: Archive export history integration test report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: Export history integration test report
+        path: exporthistory/build/reports/tests/integrationTest
+        if-no-files-found: ignore
+
     - name: Upload JAR output
       uses: actions/upload-artifact@v4
       with:
