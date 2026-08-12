@@ -546,9 +546,10 @@ final class TracingHelper {
 
     /**
      * Emits the retroactive {@link SpanKind#CLIENT} span for a call to an entity, covering the
-     * request-to-response interval and sharing {@code syntheticSpanId} with the SERVER processing
-     * span. The status is left unset for normal completion or entity-processing failure (matching
-     * .NET); {@code errorDescription} is set only for timeout/cancellation closure boundaries.
+     * request-to-response interval. The CLIENT span's ID is set to {@code syntheticSpanId}, which
+     * the SERVER processing span uses as its parent span ID. The status is left unset for normal
+     * completion or entity-processing failure (matching .NET); {@code errorDescription} is set only
+     * for timeout/cancellation closure boundaries.
      * Does nothing when the parent context is absent or invalid.
      */
     static void emitEntityCallClientSpan(
