@@ -162,4 +162,27 @@ public class TaskOrchestrationEntityTracingTest {
         assertTrue(spans.stream().noneMatch(s -> s.getKind() == SpanKind.PRODUCER),
                 "expected no PRODUCER span when emitTraceSpans is disabled");
     }
+
+    @Test
+    void callAndSignal_signalEmitsProducerSpan_callClientSpanDeferred() {
+        String orchestratorName = "CallAndSignalOrch";
+        EntityInstanceId signalTarget = new EntityInstanceId("Counter", "c1");
+        EntityInstanceId callTarget = new EntityInstanceId("Counter", "c2");
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            ctx.signalEntity(signalTarget, "add", 1);
+            ctx.callEntity(callTarget, "get", null, Integer.class);
+            ctx.complete("done");
+        }, true);
+
+        executor.execute(
+                Collections.emptyList(),
+                Arrays.asList(orchestratorStarted(), executionStarted(orchestratorName)),
+                orchestrationContext());
+
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        long producers = spans.stream().filter(s -> s.getKind() == SpanKind.PRODUCER).count();
+        long clients = spans.stream().filter(s -> s.getKind() == SpanKind.CLIENT).count();
+        assertEquals(1L, producers, "signalEntity should emit exactly one PRODUCER span");
+        assertEquals(0L, clients, "callEntity CLIENT span is deferred pending protocol support");
+    }
 }

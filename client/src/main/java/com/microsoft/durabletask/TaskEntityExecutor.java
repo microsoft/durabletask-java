@@ -132,10 +132,8 @@ final class TaskEntityExecutor {
 
             Instant startTime = Instant.now();
 
-            // Entity processing (SERVER) span. All operations use call_entity semantics: the
-            // OperationRequest carries no call-vs-signal bit, so we cannot emit CONSUMER for signals
-            // the way the .NET engine does. Emission is suppressed when emitTraceSpans is false (e.g.
-            // under Azure Functions, where the host already emits DurableTask.Core entity spans).
+            // Entity processing span parented on the incoming operation trace context;
+            // suppressed when the host emits its own (emitTraceSpans is false).
             Span processingSpan = this.emitTraceSpans
                     ? TracingHelper.startEntityProcessingSpan(
                             entityName,
@@ -280,7 +278,8 @@ final class TaskEntityExecutor {
 
             SendSignalAction.Builder signalBuilder = SendSignalAction.newBuilder()
                     .setInstanceId(targetEntityId.toString())
-                    .setName(operationName);
+                    .setName(operationName)
+                    .setRequestTime(toTimestamp(Instant.now()));
 
             if (input != null) {
                 String serializedInput = this.dataConverter.serialize(input);
@@ -334,7 +333,8 @@ final class TaskEntityExecutor {
 
             StartNewOrchestrationAction.Builder orchBuilder = StartNewOrchestrationAction.newBuilder()
                     .setInstanceId(instanceId)
-                    .setName(name);
+                    .setName(name)
+                    .setRequestTime(toTimestamp(Instant.now()));
 
             if (input != null) {
                 String serializedInput = this.dataConverter.serialize(input);

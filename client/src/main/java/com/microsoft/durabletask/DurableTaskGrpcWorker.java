@@ -454,7 +454,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         EntityRequest entityRequestV2 = workItem.getEntityRequestV2();
                         this.workItemExecutor.submit(() -> {
                             try {
-                                // Convert V2 (history-based) format to V1 (flat) format
+                                // Convert V2 (history-based) format to V1 (flat) format.
                                 EntityBatchRequest.Builder batchBuilder = EntityBatchRequest.newBuilder()
                                         .setInstanceId(entityRequestV2.getInstanceId());
                                 if (entityRequestV2.hasEntityState()) {

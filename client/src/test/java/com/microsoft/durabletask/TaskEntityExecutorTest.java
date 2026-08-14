@@ -358,6 +358,9 @@ public class TaskEntityExecutorTest {
         SendSignalAction signalAction = result.getActions(0).getSendSignal();
         assertEquals("@counter@target1", signalAction.getInstanceId());
         assertEquals("add", signalAction.getName());
+        assertTrue(signalAction.hasRequestTime(), "SendSignalAction should set requestTime");
+        assertTrue(signalAction.getRequestTime().getSeconds() > 0,
+                "requestTime should be a real timestamp, not the unset Unix epoch");
     }
 
     @Test
@@ -378,6 +381,9 @@ public class TaskEntityExecutorTest {
 
         StartNewOrchestrationAction orchAction = result.getActions(0).getStartNewOrchestration();
         assertEquals("MyOrchestration", orchAction.getName());
+        assertTrue(orchAction.hasRequestTime(), "StartNewOrchestrationAction should set requestTime");
+        assertTrue(orchAction.getRequestTime().getSeconds() > 0,
+                "requestTime should be a real timestamp, not the unset Unix epoch");
     }
 
     @Test

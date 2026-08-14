@@ -77,8 +77,7 @@ final class TracingHelper {
     static final String ATTR_EVENT_TARGET_INSTANCE_ID = "durabletask.event.target_instance_id";
 
     // Entity span constants matching .NET SDK schema. Entity spans deliberately do NOT set
-    // durabletask.task.name/version/task_id: no .NET entity trace helper sets them, and the
-    // entity name already appears in the span name.
+    // durabletask.task.name/version/task_id; the entity name already appears in the span name.
     static final String TYPE_ENTITY = "entity";
     static final String OP_CALL_ENTITY = "call_entity";
     static final String OP_SIGNAL_ENTITY = "signal_entity";
@@ -502,8 +501,8 @@ final class TracingHelper {
     /**
      * Starts a processing span for an entity operation: {@link SpanKind#SERVER} for a call,
      * {@link SpanKind#CONSUMER} for a signal. Returns {@code null} when the parent context is absent
-     * or invalid, matching the .NET guard that avoids attaching entity spans to an unrelated ambient
-     * trace. The caller makes the span current and later calls {@link #endEntityProcessingSpan}.
+     * or invalid, which avoids attaching entity spans to an unrelated ambient trace. The caller makes
+     * the span current and later calls {@link #endEntityProcessingSpan}.
      */
     @Nullable
     static Span startEntityProcessingSpan(
@@ -528,8 +527,7 @@ final class TracingHelper {
 
     /**
      * Ends a processing span with {@code OK}/{@code Completed} on success or {@code ERROR} plus
-     * {@code durabletask.entity.error_message} on failure, matching .NET's
-     * {@code EndActivitiesForProcessingEntityInvocation}.
+     * {@code durabletask.entity.error_message} on failure.
      */
     static void endEntityProcessingSpan(@Nullable Span span, @Nullable String errorMessage) {
         if (span == null) {
@@ -548,8 +546,8 @@ final class TracingHelper {
      * Emits the retroactive {@link SpanKind#CLIENT} span for a call to an entity, covering the
      * request-to-response interval. The CLIENT span's ID is set to {@code syntheticSpanId}, which
      * the SERVER processing span uses as its parent span ID. The status is left unset for normal
-     * completion or entity-processing failure (matching .NET); {@code errorDescription} is set only
-     * for timeout/cancellation closure boundaries.
+     * completion or entity-processing failure; {@code errorDescription} is set only for
+     * timeout/cancellation closure boundaries.
      * Does nothing when the parent context is absent or invalid.
      */
     static void emitEntityCallClientSpan(
