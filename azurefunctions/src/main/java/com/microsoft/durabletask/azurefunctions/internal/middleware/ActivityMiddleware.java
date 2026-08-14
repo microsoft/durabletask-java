@@ -23,8 +23,8 @@ import java.util.logging.Logger;
  * Durable Function Activity Middleware.
  *
  * <p>When an activity function throws, this middleware gives a registered
- * {@link ExceptionPropertiesProvider} the chance to attach custom properties to the failure. If the
- * provider returns any properties, the exception is reshaped into a serialized
+ * {@link ExceptionPropertiesProvider} the chance to attach custom properties to the failure or any
+ * exception in its causal chain. If the provider returns any properties, the exception is reshaped into a serialized
  * {@code TaskFailureDetails} JSON payload (matching the protobuf JSON shape) so the Durable Task
  * host extension can surface the structured properties on {@code FailureDetails.Properties}. This
  * mirrors the {@code durable-functions} JavaScript SDK's activity handler wrapper.
@@ -74,13 +74,13 @@ public class ActivityMiddleware implements Middleware {
             }
 
             Throwable userException = unwrap(e);
-            Map<String, Object> properties = safeGetProperties(provider, userException);
-            if (properties == null || properties.isEmpty()) {
-                // No custom properties for this failure - preserve the original behavior.
+            String failureDetailsJson = buildFailureDetailsJson(userException, provider);
+            if (failureDetailsJson == null) {
+                // No custom properties for this failure chain - preserve the original behavior.
                 throw e;
             }
 
-            throw new StructuredActivityFailure(buildFailureDetailsJson(userException, properties, provider));
+            throw new StructuredActivityFailure(failureDetailsJson);
         }
     }
 
@@ -209,23 +209,23 @@ public class ActivityMiddleware implements Middleware {
      */
     private static String buildFailureDetailsJson(
             Throwable exception,
-            Map<String, Object> properties,
             ExceptionPropertiesProvider provider) {
         StringBuilder sb = new StringBuilder(256);
-        appendFailure(sb, exception, properties, provider, 0);
-        return sb.toString();
+        return appendFailure(sb, exception, provider, 0) ? sb.toString() : null;
     }
 
     /**
      * Recursively appends one failure level (error type/message/stack trace, any custom properties,
      * and the cause as a nested {@code innerFailure}) to the JSON buffer.
      */
-    private static void appendFailure(
+    private static boolean appendFailure(
             StringBuilder sb,
             Throwable exception,
-            Map<String, Object> properties,
             ExceptionPropertiesProvider provider,
             int depth) {
+        Map<String, Object> properties = safeGetProperties(provider, exception);
+        boolean hasCustomProperties = properties != null && !properties.isEmpty();
+
         sb.append('{');
         sb.append("\"errorType\":");
         appendString(sb, exception.getClass().getName());
@@ -241,12 +241,13 @@ public class ActivityMiddleware implements Middleware {
         }
 
         Throwable cause = exception.getCause();
-        if (cause != null && cause != exception && depth < MAX_INNER_FAILURE_DEPTH) {
+        if (cause != null && cause != exception && depth + 1 < MAX_INNER_FAILURE_DEPTH) {
             sb.append(",\"innerFailure\":");
-            appendFailure(sb, cause, safeGetProperties(provider, cause), provider, depth + 1);
+            hasCustomProperties |= appendFailure(sb, cause, provider, depth + 1);
         }
 
         sb.append('}');
+        return hasCustomProperties;
     }
 
     /**

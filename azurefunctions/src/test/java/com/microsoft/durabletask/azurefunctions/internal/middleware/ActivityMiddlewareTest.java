@@ -243,6 +243,57 @@ public class ActivityMiddlewareTest {
         assertTrue(message.contains("\"layer\":\"outer\""), message);
     }
 
+    /** Verifies that properties supplied only for an inner exception still produce structured failure details. */
+    @Test
+    @DisplayName("Reshapes a failure when only an inner cause yields properties")
+    void reshapesFailureWhenOnlyInnerCauseYieldsProperties() {
+        setProviderSupplier(() -> exception -> {
+            if ("inner".equals(exception.getMessage())) {
+                return Collections.singletonMap("layer", "inner");
+            }
+            return null;
+        });
+
+        BusinessException cause = new BusinessException("inner");
+        Exception outer = new RuntimeException("outer", cause);
+        ActivityMiddleware middleware = new ActivityMiddleware();
+
+        Exception thrown = assertThrows(Exception.class,
+                () -> middleware.invoke(activityContext(), throwingChain(outer)));
+
+        assertFalse(outer == thrown, "the inner provider properties should produce structured details");
+        String message = thrown.getMessage();
+        assertNotNull(message);
+        assertTrue(message.contains("\"innerFailure\":{"), message);
+        assertTrue(message.contains("\"layer\":\"inner\""), message);
+    }
+
+    /** Verifies that the middleware stops provider invocations and failure serialization after ten levels. */
+    @Test
+    @DisplayName("Limits exception provider calls to ten failure levels")
+    void limitsProviderCallsToTenFailureLevels() {
+        AtomicInteger providerCalls = new AtomicInteger();
+        setProviderSupplier(() -> exception -> {
+            providerCalls.incrementAndGet();
+            return Collections.singletonMap("level", exception.getMessage());
+        });
+
+        Exception exception = new BusinessException("level 10");
+        for (int level = 9; level >= 0; level--) {
+            exception = new RuntimeException("level " + level, exception);
+        }
+        Exception outer = exception;
+        ActivityMiddleware middleware = new ActivityMiddleware();
+
+        Exception thrown = assertThrows(Exception.class,
+            () -> middleware.invoke(activityContext(), throwingChain(outer)));
+
+        assertEquals(10, providerCalls.get());
+        String message = thrown.getMessage();
+        assertNotNull(message);
+        assertFalse(message.contains("level 10"), message);
+    }
+
     // --- Cross-class-loader SPI discovery (the worker-thread regression guard) ---
 
     @Test

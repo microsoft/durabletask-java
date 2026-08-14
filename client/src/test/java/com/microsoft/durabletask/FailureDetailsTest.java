@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -169,6 +170,30 @@ public class FailureDetailsTest {
         assertEquals("RuntimeException", roundTripped.getProperties().get("exceptionType"));
         assertEquals("java.io.IOException", roundTripped.getInnerFailure().getErrorType());
         assertEquals("IOException", roundTripped.getInnerFailure().getProperties().get("exceptionType"));
+    }
+
+    /** Verifies that recursive failure construction stops after ten levels and provider invocations. */
+    @Test
+    void fromException_limitsProviderCallsToTenFailureLevels() {
+        AtomicInteger providerCalls = new AtomicInteger();
+        ExceptionPropertiesProvider provider = exception -> {
+            providerCalls.incrementAndGet();
+            return null;
+        };
+
+        Exception exception = new IOException("level 10");
+        for (int level = 9; level >= 0; level--) {
+            exception = new RuntimeException("level " + level, exception);
+        }
+
+        FailureDetails details = FailureDetails.fromException(exception, provider);
+
+        assertEquals(10, providerCalls.get());
+        int failureLevels = 0;
+        for (FailureDetails current = details; current != null; current = current.getInnerFailure()) {
+            failureLevels++;
+        }
+        assertEquals(10, failureLevels);
     }
 
     @Test

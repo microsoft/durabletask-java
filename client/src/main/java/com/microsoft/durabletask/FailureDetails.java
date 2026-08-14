@@ -229,7 +229,7 @@ public final class FailureDetails {
             @Nullable Throwable exception,
             @Nullable ExceptionPropertiesProvider provider,
             int depth) {
-        if (exception == null || depth > MAX_INNER_FAILURE_DEPTH) {
+        if (exception == null || depth >= MAX_INNER_FAILURE_DEPTH) {
             return null;
         }
         Map<String, Object> properties = null;
