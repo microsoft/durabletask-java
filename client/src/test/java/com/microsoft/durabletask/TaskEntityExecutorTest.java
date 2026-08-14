@@ -116,7 +116,7 @@ public class TaskEntityExecutorTest {
     private TaskEntityExecutor createExecutor(String entityName, TaskEntityFactory factory) {
         HashMap<String, TaskEntityFactory> factories = new HashMap<>();
         factories.put(entityName.toLowerCase(java.util.Locale.ROOT), factory);
-        return new TaskEntityExecutor(factories, dataConverter, logger);
+        return new TaskEntityExecutor(factories, dataConverter, logger, true);
     }
 
     private OperationRequest buildOperationRequest(String operationName, Object input, String requestId) {
