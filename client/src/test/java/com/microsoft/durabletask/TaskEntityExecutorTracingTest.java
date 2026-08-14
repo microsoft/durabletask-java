@@ -71,7 +71,7 @@ public class TaskEntityExecutorTracingTest {
             this.context.signalEntity(new EntityInstanceId("counter", "c2"), "add", amount);
         }
 
-        public void startOrch(int amount) {
+        public void startOrch() {
             this.context.startNewOrchestration("DownstreamOrch", null);
         }
 
