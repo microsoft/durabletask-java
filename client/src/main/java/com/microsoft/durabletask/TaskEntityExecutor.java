@@ -6,6 +6,8 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 
+import io.opentelemetry.api.trace.Span;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.time.Instant;
@@ -24,14 +26,17 @@ final class TaskEntityExecutor {
     private final HashMap<String, TaskEntityFactory> entityFactories;
     private final DataConverter dataConverter;
     private final Logger logger;
+    private final boolean emitTraceSpans;
 
     TaskEntityExecutor(
             HashMap<String, TaskEntityFactory> entityFactories,
             DataConverter dataConverter,
-            Logger logger) {
+            Logger logger,
+            boolean emitTraceSpans) {
         this.entityFactories = entityFactories;
         this.dataConverter = dataConverter;
         this.logger = logger;
+        this.emitTraceSpans = emitTraceSpans;
     }
 
     /**
@@ -80,7 +85,7 @@ final class TaskEntityExecutor {
         TaskEntityState entityState = new TaskEntityState(this.dataConverter, initialState);
 
         // Create the concrete context that collects actions
-        TaskEntityContextImpl context = new TaskEntityContextImpl(entityId, this.dataConverter);
+        TaskEntityContextImpl context = new TaskEntityContextImpl(entityId, this.dataConverter, this.emitTraceSpans);
 
         // Process each operation
         List<OperationResult> results = new ArrayList<>();
@@ -127,6 +132,23 @@ final class TaskEntityExecutor {
 
             Instant startTime = Instant.now();
 
+            // Entity processing span parented on the incoming operation trace context;
+            // suppressed when the host emits its own (emitTraceSpans is false).
+            Span processingSpan = this.emitTraceSpans
+                    ? TracingHelper.startEntityProcessingSpan(
+                            entityName,
+                            operationName,
+                            false,
+                            instanceId,
+                            opRequest.hasTraceContext() ? opRequest.getTraceContext() : null)
+                    : null;
+
+            // Signals/orchestrations this operation produces nest under the processing span (or the
+            // raw incoming context when spans are suppressed), so the host can link them downstream.
+            context.setCurrentOperationTraceContext(processingSpan != null
+                    ? TracingHelper.getCurrentTraceContext(processingSpan)
+                    : (opRequest.hasTraceContext() ? opRequest.getTraceContext() : null));
+
             try {
                 // Build the operation
                 TaskEntityOperation operation = new TaskEntityOperation(
@@ -156,6 +178,8 @@ final class TaskEntityExecutor {
                 // Commit state and actions on success
                 entityState.commit();
                 context.commit();
+
+                TracingHelper.endEntityProcessingSpan(processingSpan, null);
 
                 logger.log(Level.FINE, "Operation '{0}' on entity '{1}' completed successfully.",
                         new Object[]{operationName, instanceId});
@@ -188,6 +212,8 @@ final class TaskEntityExecutor {
                 // Rollback state and actions on failure
                 entityState.rollback();
                 context.rollback();
+
+                TracingHelper.endEntityProcessingSpan(processingSpan, e.getMessage());
             }
         }
 
@@ -219,12 +245,20 @@ final class TaskEntityExecutor {
     private static class TaskEntityContextImpl extends TaskEntityContext {
         private final EntityInstanceId entityId;
         private final DataConverter dataConverter;
+        private final boolean emitTraceSpans;
         private final List<PendingAction> pendingActions = new ArrayList<>();
         private int committedActionCount = 0;
+        @Nullable
+        private TraceContext currentOperationTraceContext;
 
-        TaskEntityContextImpl(EntityInstanceId entityId, DataConverter dataConverter) {
+        TaskEntityContextImpl(EntityInstanceId entityId, DataConverter dataConverter, boolean emitTraceSpans) {
             this.entityId = entityId;
             this.dataConverter = dataConverter;
+            this.emitTraceSpans = emitTraceSpans;
+        }
+
+        void setCurrentOperationTraceContext(@Nullable TraceContext traceContext) {
+            this.currentOperationTraceContext = traceContext;
         }
 
         @Nonnull
@@ -244,7 +278,8 @@ final class TaskEntityExecutor {
 
             SendSignalAction.Builder signalBuilder = SendSignalAction.newBuilder()
                     .setInstanceId(targetEntityId.toString())
-                    .setName(operationName);
+                    .setName(operationName)
+                    .setRequestTime(toTimestamp(Instant.now()));
 
             if (input != null) {
                 String serializedInput = this.dataConverter.serialize(input);
@@ -259,6 +294,26 @@ final class TaskEntityExecutor {
                         .setSeconds(scheduledTime.getEpochSecond())
                         .setNanos(scheduledTime.getNano())
                         .build());
+            }
+
+            if (this.currentOperationTraceContext != null) {
+                signalBuilder.setParentTraceContext(this.currentOperationTraceContext);
+            }
+
+            if (this.emitTraceSpans && this.currentOperationTraceContext != null) {
+                String signalScheduledTime = (options != null && options.getScheduledTime() != null)
+                        ? options.getScheduledTime().toString() : null;
+                Span producerSpan = TracingHelper.startEntitySignalProducerSpan(
+                        targetEntityId.getName(),
+                        operationName,
+                        targetEntityId.toString(),
+                        this.entityId.toString(),
+                        this.currentOperationTraceContext,
+                        null,
+                        signalScheduledTime);
+                if (producerSpan != null) {
+                    producerSpan.end();
+                }
             }
 
             this.pendingActions.add(new PendingAction(PendingAction.Type.SEND_SIGNAL, signalBuilder.build(), null));
@@ -278,7 +333,8 @@ final class TaskEntityExecutor {
 
             StartNewOrchestrationAction.Builder orchBuilder = StartNewOrchestrationAction.newBuilder()
                     .setInstanceId(instanceId)
-                    .setName(name);
+                    .setName(name)
+                    .setRequestTime(toTimestamp(Instant.now()));
 
             if (input != null) {
                 String serializedInput = this.dataConverter.serialize(input);
@@ -297,6 +353,25 @@ final class TaskEntityExecutor {
                             .setSeconds(startTime.getEpochSecond())
                             .setNanos(startTime.getNano())
                             .build());
+                }
+            }
+
+            if (this.currentOperationTraceContext != null) {
+                orchBuilder.setParentTraceContext(this.currentOperationTraceContext);
+            }
+
+            if (this.emitTraceSpans && this.currentOperationTraceContext != null) {
+                String orchScheduledTime = (options != null && options.getStartTime() != null)
+                        ? options.getStartTime().toString() : null;
+                Span producerSpan = TracingHelper.startEntityStartOrchestrationSpan(
+                        this.entityId.getName(),
+                        this.entityId.toString(),
+                        instanceId,
+                        this.currentOperationTraceContext,
+                        null,
+                        orchScheduledTime);
+                if (producerSpan != null) {
+                    producerSpan.end();
                 }
             }
 

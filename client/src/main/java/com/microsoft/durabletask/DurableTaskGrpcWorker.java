@@ -59,6 +59,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final boolean supportsLargePayloads;
     private final int maxChunkSizeBytes;
     private final int largePayloadThresholdBytes;
+    private final boolean emitTraceSpans;
 
     DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
@@ -95,6 +96,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.supportsLargePayloads = builder.supportsLargePayloads;
         this.maxChunkSizeBytes = builder.maxChunkSizeBytes;
         this.largePayloadThresholdBytes = builder.largePayloadThresholdBytes;
+        this.emitTraceSpans = builder.emitTraceSpans;
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
@@ -175,7 +177,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 logger,
                 this.versioningOptions,
                 true,
-                this.exceptionPropertiesProvider);
+                this.exceptionPropertiesProvider,
+                this.emitTraceSpans);
         TaskActivityExecutor taskActivityExecutor = new TaskActivityExecutor(
                 this.activityFactories,
                 this.dataConverter,
@@ -183,7 +186,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         TaskEntityExecutor taskEntityExecutor = new TaskEntityExecutor(
                 this.entityFactories,
                 this.dataConverter,
-                logger);
+                logger,
+                this.emitTraceSpans);
 
         // TODO: How do we interrupt manually?
         while (true) {
@@ -450,7 +454,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                         EntityRequest entityRequestV2 = workItem.getEntityRequestV2();
                         this.workItemExecutor.submit(() -> {
                             try {
-                                // Convert V2 (history-based) format to V1 (flat) format
+                                // Convert V2 (history-based) format to V1 (flat) format.
                                 EntityBatchRequest.Builder batchBuilder = EntityBatchRequest.newBuilder()
                                         .setInstanceId(entityRequestV2.getInstanceId());
                                 if (entityRequestV2.hasEntityState()) {
