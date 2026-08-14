@@ -583,7 +583,7 @@ final class TracingHelper {
             span.setStatus(StatusCode.ERROR, errorDescription);
         }
         if (endTime != null) {
-            span.end(toEpochNanos(endTime), java.util.concurrent.TimeUnit.NANOSECONDS);
+            span.end(endTime);
         } else {
             span.end();
         }
@@ -658,10 +658,6 @@ final class TracingHelper {
             spanBuilder.setStartTimestamp(startTime);
         }
         return spanBuilder.startSpan();
-    }
-
-    private static long toEpochNanos(java.time.Instant instant) {
-        return instant.getEpochSecond() * 1_000_000_000L + instant.getNano();
     }
 
     // endregion
