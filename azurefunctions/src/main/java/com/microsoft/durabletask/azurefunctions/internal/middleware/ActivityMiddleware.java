@@ -26,17 +26,12 @@ import java.util.logging.Logger;
  * {@link ExceptionPropertiesProvider} the chance to attach custom properties to the failure or any
  * exception in its causal chain. If the provider returns any properties, the exception is reshaped into a serialized
  * {@code TaskFailureDetails} JSON payload (matching the protobuf JSON shape) so the Durable Task
- * host extension can surface the structured properties on {@code FailureDetails.Properties}. This
- * mirrors the {@code durable-functions} JavaScript SDK's activity handler wrapper.
- *
+ * host extension can surface the structured properties on {@code FailureDetails.Properties}.
  * <p>If no provider is registered, or it yields no properties for the thrown exception, the original
- * exception is re-thrown untouched so the legacy failure behavior is preserved.
+ * exception is re-thrown untouched.
  *
  * <p>The provider is discovered via {@link ServiceLoader} (SPI): an application registers its
  * implementation in {@code META-INF/services/com.microsoft.durabletask.ExceptionPropertiesProvider}.
- *
- * <p>This class is internal and is hence not for public use. Its APIs are unstable and can change
- * at any time.
  */
 public class ActivityMiddleware implements Middleware {
 
