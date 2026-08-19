@@ -1,0 +1,22 @@
+allprojects {
+    def azfuncFeedToken = System.getenv('AZURE_ARTIFACTS_ENV_ACCESS_TOKEN') ?: findProperty('vstsMavenAccessToken')
+    repositories {
+        all { ArtifactRepository repo ->
+            if (repo instanceof MavenArtifactRepository &&
+                (repo.url.toString().contains('.maven.org') ||
+                 repo.url.toString().contains('maven.apache.org') ||
+                 repo.url.toString().contains('oss.sonatype.org'))) {
+                remove repo
+            }
+        }
+        maven {
+            url 'https://pkgs.dev.azure.com/azfunc/public/_packaging/upstream-public/maven/v1'
+            if (azfuncFeedToken) {
+                credentials {
+                    username 'Azure DevOps Services'
+                    password azfuncFeedToken
+                }
+            }
+        }
+    }
+}

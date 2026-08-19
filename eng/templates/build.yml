@@ -11,13 +11,6 @@ jobs:
       steps:
         - checkout: self
 
-        # Authenticate to the azfunc upstream-public Azure Artifacts feed using the build identity
-        # (no stored secret). Writes credentials to ~/.m2/settings.xml, which settings.gradle reads.
-        - task: MavenAuthenticate@0
-          displayName: 'Authenticate to Azure Artifacts feed'
-          inputs:
-            artifactsFeeds: upstream-public
-
         - task: Gradle@3
           inputs:
             # Specifies the working directory to run the Gradle build. The task uses the repository root directory if the working directory is not specified.
@@ -31,6 +24,7 @@ jobs:
             jdkArchitectureOption: 'x64'
             publishJUnitResults: false
             tasks: clean assemble
+            options: '--init-script init.gradle'
           displayName: Assemble durabletask-client and durabletask-azure-functions and durabletask-azuremanaged
 
         # the secring.gpg file is required to sign the artifacts, it's generated from GnuPG, and it's stored in the library of the durabletaskframework ADO
@@ -49,7 +43,7 @@ jobs:
             jdkVersionOption: 1.11
             jdkArchitectureOption: 'x64'
             tasks: publish
-            options: '-Psigning.keyId=$(gpgSignKey) -Psigning.password=$(gpgSignPassword) -Psigning.secretKeyRingFile=$(gpgSecretFile.secureFilePath)'
+            options: '--init-script init.gradle -Psigning.keyId=$(gpgSignKey) -Psigning.password=$(gpgSignPassword) -Psigning.secretKeyRingFile=$(gpgSecretFile.secureFilePath)'
           displayName: Publish durabletask-client and durabletask-azure-functions and durabletask-azuremanaged
 
         - task: CopyFiles@2
