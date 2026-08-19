@@ -4,8 +4,7 @@ allprojects {
         all { ArtifactRepository repo ->
             if (repo instanceof MavenArtifactRepository &&
                 (repo.url.toString().contains('.maven.org') ||
-                 repo.url.toString().contains('maven.apache.org') ||
-                 repo.url.toString().contains('oss.sonatype.org'))) {
+                 repo.url.toString().contains('maven.apache.org'))) {
                 remove repo
             }
         }
