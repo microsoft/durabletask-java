@@ -1,5 +1,44 @@
 rootProject.name = 'durabletask-java'
 
+// Resolve all dependencies through the azfunc upstream-public Azure Artifacts feed instead of
+// Maven Central. PREFER_SETTINGS makes per-project mavenCentral()/oss.sonatype.org repositories
+// inert so the build never reaches repo.maven.apache.org.
+//
+// CI auth: MavenAuthenticate@0 writes feed credentials to ~/.m2/settings.xml using the build
+// identity (no stored secret). Gradle doesn't read that file, so extract the token here. When the
+// file is absent (external clones / local dev), the feed is read anonymously.
+def azfuncFeedUser = null
+def azfuncFeedToken = null
+def m2Settings = new File(System.getProperty('user.home'), '.m2/settings.xml')
+if (m2Settings.exists()) {
+    try {
+        // MavenAuthenticate@0 writes a <server> whose id is the feed name (upstream-public).
+        def server = new XmlSlurper().parse(m2Settings).servers.server.find { it.id.text() == 'upstream-public' }
+        if (server) {
+            azfuncFeedUser = server.username.text()
+            azfuncFeedToken = server.password.text()
+        }
+    } catch (Exception ignored) {
+        // Malformed/unreadable settings.xml: fall back to anonymous reads.
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        maven {
+            url 'https://pkgs.dev.azure.com/azfunc/public/_packaging/upstream-public/maven/v1'
+            if (azfuncFeedToken) {
+                credentials {
+                    username azfuncFeedUser ?: 'AzureDevOps'
+                    password azfuncFeedToken
+                }
+                authentication { basic(BasicAuthentication) }
+            }
+        }
+    }
+}
+
 include ":client"
 include ":azurefunctions"
 include ":azuremanaged"

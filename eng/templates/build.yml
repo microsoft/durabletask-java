@@ -11,6 +11,13 @@ jobs:
       steps:
         - checkout: self
 
+        # Authenticate to the azfunc upstream-public Azure Artifacts feed using the build identity
+        # (no stored secret). Writes credentials to ~/.m2/settings.xml, which settings.gradle reads.
+        - task: MavenAuthenticate@0
+          displayName: 'Authenticate to Azure Artifacts feed'
+          inputs:
+            artifactsFeeds: upstream-public
+
         - task: Gradle@3
           inputs:
             # Specifies the working directory to run the Gradle build. The task uses the repository root directory if the working directory is not specified.
