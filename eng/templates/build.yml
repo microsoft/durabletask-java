@@ -24,7 +24,7 @@ jobs:
             jdkArchitectureOption: 'x64'
             publishJUnitResults: false
             tasks: clean assemble
-            options: '--init-script init.gradle --info'
+            options: '--init-script init.gradle'
           displayName: Assemble durabletask-client and durabletask-azure-functions and durabletask-azuremanaged
 
         # the secring.gpg file is required to sign the artifacts, it's generated from GnuPG, and it's stored in the library of the durabletaskframework ADO
@@ -43,7 +43,7 @@ jobs:
             jdkVersionOption: 1.11
             jdkArchitectureOption: 'x64'
             tasks: publish
-            options: '--init-script init.gradle --info -Psigning.keyId=$(gpgSignKey) -Psigning.password=$(gpgSignPassword) -Psigning.secretKeyRingFile=$(gpgSecretFile.secureFilePath)'
+            options: '--init-script init.gradle -Psigning.keyId=$(gpgSignKey) -Psigning.password=$(gpgSignPassword) -Psigning.secretKeyRingFile=$(gpgSecretFile.secureFilePath)'
           displayName: Publish durabletask-client and durabletask-azure-functions and durabletask-azuremanaged
 
         - task: CopyFiles@2
