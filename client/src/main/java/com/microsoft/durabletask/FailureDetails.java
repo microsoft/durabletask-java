@@ -11,6 +11,7 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.Tas
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -71,7 +72,10 @@ public final class FailureDetails {
      * @param provider  the provider for extracting custom properties, or {@code null}
      * @return a new {@code FailureDetails} instance
      */
-    static FailureDetails fromException(Throwable throwable, @Nullable ExceptionPropertiesProvider provider) {
+    @Nonnull
+    public static FailureDetails fromException(
+            @Nonnull Throwable throwable,
+            @Nullable ExceptionPropertiesProvider provider) {
         return fromExceptionRecursive(throwable, provider, 0);
     }
 
@@ -204,7 +208,13 @@ public final class FailureDetails {
         return sb.toString();
     }
 
-    TaskFailureDetails toProto() {
+    /**
+     * Converts this failure to its protocol representation.
+     *
+     * @return the protocol representation of this failure
+     */
+    @Nonnull
+    public TaskFailureDetails toProto() {
         TaskFailureDetails.Builder builder = TaskFailureDetails.newBuilder()
                 .setErrorType(this.getErrorType())
                 .setErrorMessage(this.getErrorMessage())
@@ -306,7 +316,6 @@ public final class FailureDetails {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     private static Value convertToProtoValue(@Nullable Object obj) {
         if (obj == null) {
             return Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build();
@@ -316,16 +325,23 @@ public final class FailureDetails {
             return Value.newBuilder().setBoolValue((Boolean) obj).build();
         } else if (obj instanceof String) {
             return Value.newBuilder().setStringValue((String) obj).build();
-        } else if (obj instanceof List) {
+        } else if (obj instanceof Iterable) {
             ListValue.Builder listBuilder = ListValue.newBuilder();
-            for (Object item : (List<?>) obj) {
+            for (Object item : (Iterable<?>) obj) {
                 listBuilder.addValues(convertToProtoValue(item));
+            }
+            return Value.newBuilder().setListValue(listBuilder).build();
+        } else if (obj.getClass().isArray()) {
+            ListValue.Builder listBuilder = ListValue.newBuilder();
+            int length = Array.getLength(obj);
+            for (int index = 0; index < length; index++) {
+                listBuilder.addValues(convertToProtoValue(Array.get(obj, index)));
             }
             return Value.newBuilder().setListValue(listBuilder).build();
         } else if (obj instanceof Map) {
             Struct.Builder structBuilder = Struct.newBuilder();
-            for (Map.Entry<String, Object> entry : ((Map<String, Object>) obj).entrySet()) {
-                structBuilder.putFields(entry.getKey(), convertToProtoValue(entry.getValue()));
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) obj).entrySet()) {
+                structBuilder.putFields(String.valueOf(entry.getKey()), convertToProtoValue(entry.getValue()));
             }
             return Value.newBuilder().setStructValue(structBuilder).build();
         } else {

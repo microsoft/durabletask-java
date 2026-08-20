@@ -2,9 +2,12 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.azurefunctions.internal.middleware;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.util.JsonFormat;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareChain;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareContext;
 import com.microsoft.durabletask.ExceptionPropertiesProvider;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.TaskFailureDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -112,11 +116,12 @@ public class ActivityMiddlewareTest {
     @Test
     @DisplayName("Reshapes a failing activity into structured TaskFailureDetails JSON when the "
             + "provider yields properties")
-    void reshapesFailureWhenProviderYieldsProperties() {
+    void reshapesFailureWhenProviderYieldsProperties() throws InvalidProtocolBufferException {
         setProviderSupplier(() -> exception -> {
             Map<String, Object> properties = new LinkedHashMap<>();
             properties.put("code", "E123");
             properties.put("count", 7);
+            properties.put("attempts", new int[] {1, 2});
             return properties;
         });
 
@@ -127,7 +132,7 @@ public class ActivityMiddlewareTest {
                 () -> middleware.invoke(activityContext(), throwingChain(original)));
 
         // The original exception is replaced by a structured-failure carrier whose message is JSON.
-        assertNotSameInstance(original, thrown);
+    assertNotSame(original, thrown);
         String message = thrown.getMessage();
         assertNotNull(message);
         assertTrue(message.startsWith("{"), "message should be a JSON object, was: " + message);
@@ -136,6 +141,10 @@ public class ActivityMiddlewareTest {
         assertTrue(message.contains("\"errorMessage\":\"boom\""), message);
         assertTrue(message.contains("\"code\":\"E123\""), message);
         assertTrue(message.contains("\"count\":7"), message);
+
+        TaskFailureDetails failureDetails = parseFailureDetails(message);
+        assertFalse(failureDetails.getIsNonRetriable());
+        assertEquals(2, failureDetails.getPropertiesMap().get("attempts").getListValue().getValuesCount());
     }
 
     @Test
@@ -261,7 +270,7 @@ public class ActivityMiddlewareTest {
         Exception thrown = assertThrows(Exception.class,
                 () -> middleware.invoke(activityContext(), throwingChain(outer)));
 
-        assertFalse(outer == thrown, "the inner provider properties should produce structured details");
+        assertNotSame(outer, thrown, "the inner provider properties should produce structured details");
         String message = thrown.getMessage();
         assertNotNull(message);
         assertTrue(message.contains("\"innerFailure\":{"), message);
@@ -360,8 +369,9 @@ public class ActivityMiddlewareTest {
         return new URLClassLoader(new URL[] {rootUrl}, parent);
     }
 
-    private static void assertNotSameInstance(Object unexpected, Object actual) {
-        assertFalse(unexpected == actual,
-                "expected a different instance than the original exception");
+    private static TaskFailureDetails parseFailureDetails(String json) throws InvalidProtocolBufferException {
+        TaskFailureDetails.Builder builder = TaskFailureDetails.newBuilder();
+        JsonFormat.parser().merge(json, builder);
+        return builder.build();
     }
 }

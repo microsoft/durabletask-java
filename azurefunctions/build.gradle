@@ -37,6 +37,7 @@ dependencies {
     api project(':client')
     implementation group: 'com.microsoft.azure.functions', name: 'azure-functions-java-library', version: '3.2.3'
     implementation "com.google.protobuf:protobuf-java:${protocVersion}"
+    implementation "com.google.protobuf:protobuf-java-util:${protocVersion}"
     compileOnly "com.microsoft.azure.functions:azure-functions-java-spi:1.1.0"
 
     // Test dependencies

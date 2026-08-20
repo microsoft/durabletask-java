@@ -6,10 +6,13 @@
 
 package com.microsoft.durabletask.azurefunctions.internal.middleware;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.util.JsonFormat;
 import com.microsoft.azure.functions.internal.spi.middleware.Middleware;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareChain;
 import com.microsoft.azure.functions.internal.spi.middleware.MiddlewareContext;
 import com.microsoft.durabletask.ExceptionPropertiesProvider;
+import com.microsoft.durabletask.FailureDetails;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Iterator;
@@ -36,7 +39,8 @@ import java.util.logging.Logger;
 public class ActivityMiddleware implements Middleware {
 
     private static final String ACTIVITY_TRIGGER = "DurableActivityTrigger";
-    private static final int MAX_INNER_FAILURE_DEPTH = 10;
+    private static final JsonFormat.Printer FAILURE_DETAILS_JSON_PRINTER =
+            JsonFormat.printer().omittingInsignificantWhitespace();
     private static final Logger LOGGER = Logger.getLogger(ActivityMiddleware.class.getName());
 
     private static final Object PROVIDER_LOCK = new Object();
@@ -68,14 +72,21 @@ public class ActivityMiddleware implements Middleware {
                 throw e;
             }
 
-            Throwable userException = unwrap(e);
-            String failureDetailsJson = buildFailureDetailsJson(userException, provider);
-            if (failureDetailsJson == null) {
+            FailureDetails failureDetails = FailureDetails.fromException(unwrap(e), provider);
+            if (!hasCustomProperties(failureDetails)) {
                 // No custom properties for this failure chain - preserve the original behavior.
                 throw e;
             }
 
-            throw new StructuredActivityFailure(failureDetailsJson);
+            try {
+                throw new StructuredActivityFailure(
+                        FAILURE_DETAILS_JSON_PRINTER.print(failureDetails.toProto()));
+            } catch (InvalidProtocolBufferException serializationException) {
+                LOGGER.log(Level.WARNING,
+                        "Failed to serialize structured failure details; rethrowing the original exception.",
+                        serializationException);
+                throw e;
+            }
         }
     }
 
@@ -176,183 +187,16 @@ public class ActivityMiddleware implements Middleware {
         return current;
     }
 
-    /**
-     * Invokes the provider defensively, returning {@code null} if the failure is not an
-     * {@link Exception} or the provider itself throws, so a misbehaving provider never masks the
-     * original failure.
-     */
-    private static Map<String, Object> safeGetProperties(
-            ExceptionPropertiesProvider provider,
-            Throwable exception) {
-        if (!(exception instanceof Exception)) {
-            return null;
-        }
-        try {
-            return provider.getExceptionProperties((Exception) exception);
-        } catch (Exception providerException) {
-            // Don't let a misbehaving provider mask the original failure.
-            LOGGER.log(Level.WARNING,
-                    "ExceptionPropertiesProvider threw while extracting properties; ignoring provider output.",
-                    providerException);
-            return null;
-        }
-    }
-
-    /**
-     * Builds the single-line JSON payload that mirrors the protobuf {@code TaskFailureDetails} shape
-     * consumed by the Durable Task host extension.
-     */
-    private static String buildFailureDetailsJson(
-            Throwable exception,
-            ExceptionPropertiesProvider provider) {
-        StringBuilder sb = new StringBuilder(256);
-        return appendFailure(sb, exception, provider, 0) ? sb.toString() : null;
-    }
-
-    /**
-     * Recursively appends one failure level (error type/message/stack trace, any custom properties,
-     * and the cause as a nested {@code innerFailure}) to the JSON buffer.
-     */
-    private static boolean appendFailure(
-            StringBuilder sb,
-            Throwable exception,
-            ExceptionPropertiesProvider provider,
-            int depth) {
-        Map<String, Object> properties = safeGetProperties(provider, exception);
-        boolean hasCustomProperties = properties != null && !properties.isEmpty();
-
-        sb.append('{');
-        sb.append("\"errorType\":");
-        appendString(sb, exception.getClass().getName());
-        sb.append(",\"errorMessage\":");
-        appendString(sb, exception.getMessage() != null ? exception.getMessage() : "");
-        sb.append(",\"stackTrace\":");
-        appendString(sb, getFullStackTrace(exception));
-        sb.append(",\"isNonRetriable\":false");
-
-        if (properties != null && !properties.isEmpty()) {
-            sb.append(",\"properties\":");
-            appendValue(sb, properties);
-        }
-
-        Throwable cause = exception.getCause();
-        if (cause != null && cause != exception && depth + 1 < MAX_INNER_FAILURE_DEPTH) {
-            sb.append(",\"innerFailure\":");
-            hasCustomProperties |= appendFailure(sb, cause, provider, depth + 1);
-        }
-
-        sb.append('}');
-        return hasCustomProperties;
-    }
-
-    /**
-     * Serializes a single property value as JSON, handling strings, booleans, numbers (non-finite
-     * doubles fall back to strings), maps, iterables, and arrays; anything else is written as its
-     * {@code toString()}.
-     */
-    @SuppressWarnings("unchecked")
-    private static void appendValue(StringBuilder sb, Object value) {
-        if (value == null) {
-            sb.append("null");
-        } else if (value instanceof String) {
-            appendString(sb, (String) value);
-        } else if (value instanceof Boolean) {
-            sb.append(((Boolean) value) ? "true" : "false");
-        } else if (value instanceof Double || value instanceof Float) {
-            double d = ((Number) value).doubleValue();
-            if (Double.isNaN(d) || Double.isInfinite(d)) {
-                appendString(sb, value.toString());
-            } else {
-                sb.append(value.toString());
-            }
-        } else if (value instanceof Number) {
-            sb.append(value.toString());
-        } else if (value instanceof Map) {
-            sb.append('{');
-            boolean first = true;
-            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
-                if (!first) {
-                    sb.append(',');
-                }
-                first = false;
-                appendString(sb, String.valueOf(entry.getKey()));
-                sb.append(':');
-                appendValue(sb, entry.getValue());
-            }
-            sb.append('}');
-        } else if (value instanceof Iterable) {
-            sb.append('[');
-            boolean first = true;
-            for (Object item : (Iterable<Object>) value) {
-                if (!first) {
-                    sb.append(',');
-                }
-                first = false;
-                appendValue(sb, item);
-            }
-            sb.append(']');
-        } else if (value instanceof Object[]) {
-            sb.append('[');
-            Object[] array = (Object[]) value;
-            for (int i = 0; i < array.length; i++) {
-                if (i > 0) {
-                    sb.append(',');
-                }
-                appendValue(sb, array[i]);
-            }
-            sb.append(']');
-        } else {
-            appendString(sb, value.toString());
-        }
-    }
-
-    /** Appends {@code value} as a JSON string literal, escaping quotes, backslashes, and control characters. */
-    private static void appendString(StringBuilder sb, String value) {
-        sb.append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '"':
-                    sb.append("\\\"");
-                    break;
-                case '\\':
-                    sb.append("\\\\");
-                    break;
-                case '\n':
-                    sb.append("\\n");
-                    break;
-                case '\r':
-                    sb.append("\\r");
-                    break;
-                case '\t':
-                    sb.append("\\t");
-                    break;
-                case '\b':
-                    sb.append("\\b");
-                    break;
-                case '\f':
-                    sb.append("\\f");
-                    break;
-                default:
-                    if (c < 0x20) {
-                        sb.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sb.append(c);
-                    }
-                    break;
+    private static boolean hasCustomProperties(FailureDetails failureDetails) {
+        for (FailureDetails current = failureDetails;
+                current != null;
+                current = current.getInnerFailure()) {
+            Map<String, Object> properties = current.getProperties();
+            if (properties != null && !properties.isEmpty()) {
+                return true;
             }
         }
-        sb.append('"');
-    }
-
-    /** Formats the throwable's stack trace as newline-separated {@code \tat ...} frames. */
-    private static String getFullStackTrace(Throwable e) {
-        StackTraceElement[] elements = e.getStackTrace();
-        StringBuilder sb = new StringBuilder(elements.length * 64);
-        for (StackTraceElement element : elements) {
-            sb.append("\tat ").append(element.toString()).append(System.lineSeparator());
-        }
-        return sb.toString();
+        return false;
     }
 
     /**

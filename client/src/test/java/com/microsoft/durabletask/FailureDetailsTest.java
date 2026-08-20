@@ -140,6 +140,24 @@ public class FailureDetailsTest {
         assertNull(roundTrippedInner.getProperties().get("nullVal"));
     }
 
+    /** Verifies that primitive arrays are represented as protobuf lists rather than stringified values. */
+    @Test
+    void toProto_primitiveArrayProperty_serializesAsList() {
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("attempts", new int[] {1, 2, 3});
+
+        FailureDetails details = new FailureDetails(
+                "CustomException", "error", "stack", false, null, properties);
+        Value attempts = details.toProto().getPropertiesMap().get("attempts");
+
+        assertNotNull(attempts);
+        assertEquals(Value.KindCase.LIST_VALUE, attempts.getKindCase());
+        assertEquals(3, attempts.getListValue().getValuesCount());
+        assertEquals(1.0, attempts.getListValue().getValues(0).getNumberValue());
+        assertEquals(2.0, attempts.getListValue().getValues(1).getNumberValue());
+        assertEquals(3.0, attempts.getListValue().getValues(2).getNumberValue());
+    }
+
     @Test
     void fromException_withProvider_extractsAndRoundTrips() {
         ExceptionPropertiesProvider provider = exception -> {
