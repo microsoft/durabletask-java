@@ -1,13 +1,6 @@
 allprojects {
     def azfuncFeedToken = System.getenv('AZURE_ARTIFACTS_ENV_ACCESS_TOKEN') ?: findProperty('vstsMavenAccessToken')
     repositories {
-        all { ArtifactRepository repo ->
-            if (repo instanceof MavenArtifactRepository &&
-                (repo.url.toString().contains('.maven.org') ||
-                 repo.url.toString().contains('maven.apache.org'))) {
-                remove repo
-            }
-        }
         maven {
             url 'https://pkgs.dev.azure.com/azfunc/public/_packaging/upstream-public/maven/v1'
             if (azfuncFeedToken) {
@@ -17,5 +10,15 @@ allprojects {
                 }
             }
         }
+    }
+    // Strip public Maven Central repos after all build scripts have declared them.
+    // Snapshot the list first — removing while iterating repositories.all {} silently skips entries.
+    afterEvaluate { proj ->
+        def publicMavenRepos = proj.repositories.findAll { repo ->
+            repo instanceof MavenArtifactRepository &&
+            (repo.url.toString().contains('.maven.org') ||
+             repo.url.toString().contains('maven.apache.org'))
+        }
+        publicMavenRepos.each { proj.repositories.remove(it) }
     }
 }
