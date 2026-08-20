@@ -1,6 +1,5 @@
 pluginManagement {
-    // Feed-first so plugin-classpath artifacts (and their Gradle Module Metadata probes)
-    // resolve from the Azure Artifacts feed instead of being redirected to Maven Central.
+    // Resolve plugins through the Azure Artifacts feed only.
     def azfuncFeedToken = System.getenv('AZURE_ARTIFACTS_ENV_ACCESS_TOKEN') ?: providers.gradleProperty('vstsMavenAccessToken').orNull
     repositories {
         maven {
@@ -12,7 +11,6 @@ pluginManagement {
                 }
             }
         }
-        gradlePluginPortal()
     }
 }
 
