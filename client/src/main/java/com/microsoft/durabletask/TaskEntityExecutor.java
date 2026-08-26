@@ -7,6 +7,7 @@ import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -132,22 +133,11 @@ final class TaskEntityExecutor {
 
             Instant startTime = Instant.now();
 
-            // Entity processing span parented on the incoming operation trace context;
-            // suppressed when the host emits its own (emitTraceSpans is false).
-            Span processingSpan = this.emitTraceSpans
-                    ? TracingHelper.startEntityProcessingSpan(
-                            entityName,
-                            operationName,
-                            false,
-                            instanceId,
-                            opRequest.hasTraceContext() ? opRequest.getTraceContext() : null)
-                    : null;
-
-            // Signals/orchestrations this operation produces nest under the processing span (or the
-            // raw incoming context when spans are suppressed), so the host can link them downstream.
-            context.setCurrentOperationTraceContext(processingSpan != null
-                    ? TracingHelper.getCurrentTraceContext(processingSpan)
-                    : (opRequest.hasTraceContext() ? opRequest.getTraceContext() : null));
+            // The dispatcher owns the processing span and propagates its context with the operation.
+            // Child spans and actions created by user code use that context without re-emitting it.
+            TraceContext operationTraceContext = opRequest.hasTraceContext()
+                    ? opRequest.getTraceContext() : null;
+            context.setCurrentOperationTraceContext(operationTraceContext);
 
             try {
                 // Build the operation
@@ -155,7 +145,15 @@ final class TaskEntityExecutor {
                         operationName, serializedInput, context, entityState, this.dataConverter);
 
                 // Execute
-                Object result = entity.run(operation);
+                Object result;
+                Scope processingScope = TracingHelper.makeTraceContextCurrent(operationTraceContext);
+                try {
+                    result = entity.run(operation);
+                } finally {
+                    if (processingScope != null) {
+                        processingScope.close();
+                    }
+                }
 
                 Instant endTime = Instant.now();
 
@@ -178,8 +176,6 @@ final class TaskEntityExecutor {
                 // Commit state and actions on success
                 entityState.commit();
                 context.commit();
-
-                TracingHelper.endEntityProcessingSpan(processingSpan, null);
 
                 logger.log(Level.FINE, "Operation '{0}' on entity '{1}' completed successfully.",
                         new Object[]{operationName, instanceId});
@@ -212,8 +208,6 @@ final class TaskEntityExecutor {
                 // Rollback state and actions on failure
                 entityState.rollback();
                 context.rollback();
-
-                TracingHelper.endEntityProcessingSpan(processingSpan, e.getMessage());
             }
         }
 
@@ -276,10 +270,11 @@ final class TaskEntityExecutor {
             Objects.requireNonNull(targetEntityId, "targetEntityId must not be null");
             Objects.requireNonNull(operationName, "operationName must not be null");
 
+            Instant requestTime = Instant.now();
             SendSignalAction.Builder signalBuilder = SendSignalAction.newBuilder()
                     .setInstanceId(targetEntityId.toString())
                     .setName(operationName)
-                    .setRequestTime(toTimestamp(Instant.now()));
+                    .setRequestTime(toTimestamp(requestTime));
 
             if (input != null) {
                 String serializedInput = this.dataConverter.serialize(input);
@@ -300,23 +295,17 @@ final class TaskEntityExecutor {
                 signalBuilder.setParentTraceContext(this.currentOperationTraceContext);
             }
 
-            if (this.emitTraceSpans && this.currentOperationTraceContext != null) {
-                String signalScheduledTime = (options != null && options.getScheduledTime() != null)
-                        ? options.getScheduledTime().toString() : null;
-                Span producerSpan = TracingHelper.startEntitySignalProducerSpan(
-                        targetEntityId.getName(),
-                        operationName,
-                        targetEntityId.toString(),
-                        this.entityId.toString(),
-                        this.currentOperationTraceContext,
-                        null,
-                        signalScheduledTime);
-                if (producerSpan != null) {
-                    producerSpan.end();
-                }
-            }
-
-            this.pendingActions.add(new PendingAction(PendingAction.Type.SEND_SIGNAL, signalBuilder.build(), null));
+            String signalScheduledTime = (options != null && options.getScheduledTime() != null)
+                    ? options.getScheduledTime().toString() : null;
+            this.pendingActions.add(PendingAction.forSignal(
+                    signalBuilder,
+                    targetEntityId.getName(),
+                    operationName,
+                    targetEntityId.toString(),
+                    this.entityId.toString(),
+                    this.currentOperationTraceContext,
+                    requestTime,
+                    signalScheduledTime));
         }
 
         @Nonnull
@@ -331,10 +320,11 @@ final class TaskEntityExecutor {
                     ? options.getInstanceId()
                     : UUID.randomUUID().toString();
 
+            Instant requestTime = Instant.now();
             StartNewOrchestrationAction.Builder orchBuilder = StartNewOrchestrationAction.newBuilder()
                     .setInstanceId(instanceId)
                     .setName(name)
-                    .setRequestTime(toTimestamp(Instant.now()));
+                    .setRequestTime(toTimestamp(requestTime));
 
             if (input != null) {
                 String serializedInput = this.dataConverter.serialize(input);
@@ -360,23 +350,16 @@ final class TaskEntityExecutor {
                 orchBuilder.setParentTraceContext(this.currentOperationTraceContext);
             }
 
-            if (this.emitTraceSpans && this.currentOperationTraceContext != null) {
-                String orchScheduledTime = (options != null && options.getStartTime() != null)
-                        ? options.getStartTime().toString() : null;
-                Span producerSpan = TracingHelper.startEntityStartOrchestrationSpan(
-                        this.entityId.getName(),
-                        this.entityId.toString(),
-                        instanceId,
-                        this.currentOperationTraceContext,
-                        null,
-                        orchScheduledTime);
-                if (producerSpan != null) {
-                    producerSpan.end();
-                }
-            }
-
-            this.pendingActions.add(new PendingAction(
-                    PendingAction.Type.START_NEW_ORCHESTRATION, null, orchBuilder.build()));
+            String orchScheduledTime = (options != null && options.getStartTime() != null)
+                    ? options.getStartTime().toString() : null;
+            this.pendingActions.add(PendingAction.forOrchestration(
+                    orchBuilder,
+                    this.entityId.getName(),
+                    this.entityId.toString(),
+                    instanceId,
+                    this.currentOperationTraceContext,
+                    requestTime,
+                    orchScheduledTime));
 
             return instanceId;
         }
@@ -385,6 +368,9 @@ final class TaskEntityExecutor {
          * Marks the current set of pending actions as committed (snapshot for rollback).
          */
         void commit() {
+            for (int i = this.committedActionCount; i < this.pendingActions.size(); i++) {
+                this.pendingActions.get(i).commit(this.emitTraceSpans);
+            }
             this.committedActionCount = this.pendingActions.size();
         }
 
@@ -411,9 +397,9 @@ final class TaskEntityExecutor {
                 OperationAction.Builder actionBuilder = OperationAction.newBuilder()
                         .setId(id++);
                 if (pending.type == PendingAction.Type.SEND_SIGNAL) {
-                    actionBuilder.setSendSignal(pending.sendSignal);
+                    actionBuilder.setSendSignal(pending.sendSignal.build());
                 } else {
-                    actionBuilder.setStartNewOrchestration(pending.startNewOrchestration);
+                    actionBuilder.setStartNewOrchestration(pending.startNewOrchestration.build());
                 }
                 actions.add(actionBuilder.build());
             }
@@ -427,13 +413,125 @@ final class TaskEntityExecutor {
             enum Type { SEND_SIGNAL, START_NEW_ORCHESTRATION }
 
             final Type type;
-            final SendSignalAction sendSignal;
-            final StartNewOrchestrationAction startNewOrchestration;
+            final SendSignalAction.Builder sendSignal;
+            final StartNewOrchestrationAction.Builder startNewOrchestration;
+            final String sourceEntityName;
+            final String sourceEntityInstanceId;
+            final String targetName;
+            final String operationName;
+            final String targetInstanceId;
+            final TraceContext parentTraceContext;
+            final Instant requestTime;
+            final String scheduledTime;
 
-            PendingAction(Type type, SendSignalAction sendSignal, StartNewOrchestrationAction startNewOrchestration) {
+            private PendingAction(
+                    Type type,
+                    SendSignalAction.Builder sendSignal,
+                    StartNewOrchestrationAction.Builder startNewOrchestration,
+                    String sourceEntityName,
+                    String sourceEntityInstanceId,
+                    String targetName,
+                    String operationName,
+                    String targetInstanceId,
+                    TraceContext parentTraceContext,
+                    Instant requestTime,
+                    String scheduledTime) {
                 this.type = type;
                 this.sendSignal = sendSignal;
                 this.startNewOrchestration = startNewOrchestration;
+                this.sourceEntityName = sourceEntityName;
+                this.sourceEntityInstanceId = sourceEntityInstanceId;
+                this.targetName = targetName;
+                this.operationName = operationName;
+                this.targetInstanceId = targetInstanceId;
+                this.parentTraceContext = parentTraceContext;
+                this.requestTime = requestTime;
+                this.scheduledTime = scheduledTime;
+            }
+
+            static PendingAction forSignal(
+                    SendSignalAction.Builder signal,
+                    String targetEntityName,
+                    String operationName,
+                    String targetEntityInstanceId,
+                    String sourceEntityInstanceId,
+                    TraceContext parentTraceContext,
+                    Instant requestTime,
+                    String scheduledTime) {
+                return new PendingAction(
+                        Type.SEND_SIGNAL,
+                        signal,
+                        null,
+                        null,
+                        sourceEntityInstanceId,
+                        targetEntityName,
+                        operationName,
+                        targetEntityInstanceId,
+                        parentTraceContext,
+                        requestTime,
+                        scheduledTime);
+            }
+
+            static PendingAction forOrchestration(
+                    StartNewOrchestrationAction.Builder orchestration,
+                    String sourceEntityName,
+                    String sourceEntityInstanceId,
+                    String targetOrchestrationInstanceId,
+                    TraceContext parentTraceContext,
+                    Instant requestTime,
+                    String scheduledTime) {
+                return new PendingAction(
+                        Type.START_NEW_ORCHESTRATION,
+                        null,
+                        orchestration,
+                        sourceEntityName,
+                        sourceEntityInstanceId,
+                        null,
+                        null,
+                        targetOrchestrationInstanceId,
+                        parentTraceContext,
+                        requestTime,
+                        scheduledTime);
+            }
+
+            void commit(boolean emitTraceSpans) {
+                if (!emitTraceSpans || this.parentTraceContext == null) {
+                    return;
+                }
+
+                Span producerSpan;
+                if (this.type == Type.SEND_SIGNAL) {
+                    producerSpan = TracingHelper.startEntitySignalProducerSpan(
+                            this.targetName,
+                            this.operationName,
+                            this.targetInstanceId,
+                            this.sourceEntityInstanceId,
+                            this.parentTraceContext,
+                            this.requestTime,
+                            this.scheduledTime);
+                } else {
+                    producerSpan = TracingHelper.startEntityStartOrchestrationSpan(
+                            this.sourceEntityName,
+                            this.sourceEntityInstanceId,
+                            this.targetInstanceId,
+                            this.parentTraceContext,
+                            this.requestTime,
+                            this.scheduledTime);
+                }
+
+                if (producerSpan == null) {
+                    return;
+                }
+
+                TraceContext producerTraceContext = TracingHelper.getCurrentTraceContext(producerSpan);
+                if (producerTraceContext != null) {
+                    if (this.type == Type.SEND_SIGNAL) {
+                        this.sendSignal.setParentTraceContext(producerTraceContext);
+                    } else {
+                        this.startNewOrchestration.setParentTraceContext(producerTraceContext);
+                    }
+                }
+                producerSpan.end();
             }
         }
     }

@@ -16,6 +16,7 @@ import io.opentelemetry.api.trace.TraceStateBuilder;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Field;
@@ -79,11 +80,9 @@ final class TracingHelper {
     // Entity span constants matching .NET SDK schema. Entity spans deliberately do NOT set
     // durabletask.task.name/version/task_id; the entity name already appears in the span name.
     static final String TYPE_ENTITY = "entity";
-    static final String OP_CALL_ENTITY = "call_entity";
     static final String OP_SIGNAL_ENTITY = "signal_entity";
     static final String ATTR_OPERATION = "durabletask.task.operation";
     static final String ATTR_SCHEDULED_TIME = "durabletask.task.scheduled_time";
-    static final String ATTR_ENTITY_ERROR_MESSAGE = "durabletask.entity.error_message";
 
     private TracingHelper() {
         // Static utility class
@@ -240,6 +239,13 @@ final class TracingHelper {
         }
 
         return Context.current().with(Span.wrap(remoteContext));
+    }
+
+    /** Makes a propagated trace context current until the returned scope is closed. */
+    @Nullable
+    static Scope makeTraceContextCurrent(@Nullable TraceContext traceContext) {
+        Context context = extractTraceContext(traceContext);
+        return context != null ? context.makeCurrent() : null;
     }
 
     /**
@@ -496,97 +502,6 @@ final class TracingHelper {
     /** Builds an entity-starts-orchestration span name: {@code <entityName>:create_orchestration}. */
     static String createEntityStartOrchestrationSpanName(String entityName) {
         return entityName + ":" + TYPE_CREATE_ORCHESTRATION;
-    }
-
-    /**
-     * Starts a processing span for an entity operation: {@link SpanKind#SERVER} for a call,
-     * {@link SpanKind#CONSUMER} for a signal. Returns {@code null} when the parent context is absent
-     * or invalid, which avoids attaching entity spans to an unrelated ambient trace. The caller makes
-     * the span current and later calls {@link #endEntityProcessingSpan}.
-     */
-    @Nullable
-    static Span startEntityProcessingSpan(
-            String entityName,
-            String operation,
-            boolean signal,
-            String entityInstanceId,
-            @Nullable TraceContext parentContext) {
-        Context parentCtx = extractTraceContext(parentContext);
-        if (parentCtx == null) {
-            return null;
-        }
-        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
-        return tracer.spanBuilder(createEntitySpanName(entityName, operation))
-                .setSpanKind(signal ? SpanKind.CONSUMER : SpanKind.SERVER)
-                .setParent(parentCtx)
-                .setAttribute(ATTR_TYPE, TYPE_ENTITY)
-                .setAttribute(ATTR_OPERATION, signal ? OP_SIGNAL_ENTITY : OP_CALL_ENTITY)
-                .setAttribute(ATTR_INSTANCE_ID, entityInstanceId)
-                .startSpan();
-    }
-
-    /**
-     * Ends a processing span with {@code OK}/{@code Completed} on success or {@code ERROR} plus
-     * {@code durabletask.entity.error_message} on failure.
-     */
-    static void endEntityProcessingSpan(@Nullable Span span, @Nullable String errorMessage) {
-        if (span == null) {
-            return;
-        }
-        if (errorMessage != null) {
-            span.setAttribute(ATTR_ENTITY_ERROR_MESSAGE, errorMessage);
-            span.setStatus(StatusCode.ERROR, errorMessage);
-        } else {
-            span.setStatus(StatusCode.OK, "Completed");
-        }
-        span.end();
-    }
-
-    /**
-     * Emits the retroactive {@link SpanKind#CLIENT} span for a call to an entity, covering the
-     * request-to-response interval. The CLIENT span's ID is set to {@code syntheticSpanId}, which
-     * the SERVER processing span uses as its parent span ID. The status is left unset for normal
-     * completion or entity-processing failure; {@code errorDescription} is set only for
-     * timeout/cancellation closure boundaries.
-     * Does nothing when the parent context is absent or invalid.
-     */
-    static void emitEntityCallClientSpan(
-            String entityName,
-            String operation,
-            String targetEntityInstanceId,
-            @Nullable TraceContext parentContext,
-            @Nullable java.time.Instant startTime,
-            @Nullable java.time.Instant endTime,
-            @Nullable String syntheticSpanId,
-            @Nullable String scheduledTime,
-            @Nullable String errorDescription) {
-        Context parentCtx = extractTraceContext(parentContext);
-        if (parentCtx == null) {
-            return;
-        }
-        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
-        SpanBuilder spanBuilder = tracer.spanBuilder(createEntitySpanName(entityName, operation))
-                .setSpanKind(SpanKind.CLIENT)
-                .setParent(parentCtx)
-                .setAttribute(ATTR_TYPE, TYPE_ENTITY)
-                .setAttribute(ATTR_OPERATION, OP_CALL_ENTITY)
-                .setAttribute(ATTR_EVENT_TARGET_INSTANCE_ID, targetEntityInstanceId);
-        if (scheduledTime != null) {
-            spanBuilder.setAttribute(ATTR_SCHEDULED_TIME, scheduledTime);
-        }
-        if (startTime != null) {
-            spanBuilder.setStartTimestamp(startTime);
-        }
-        Span span = spanBuilder.startSpan();
-        setSpanId(span, syntheticSpanId);
-        if (errorDescription != null) {
-            span.setStatus(StatusCode.ERROR, errorDescription);
-        }
-        if (endTime != null) {
-            span.end(endTime);
-        } else {
-            span.end();
-        }
     }
 
     /**

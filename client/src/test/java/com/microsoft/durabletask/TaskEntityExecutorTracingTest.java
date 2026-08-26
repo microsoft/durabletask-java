@@ -10,7 +10,6 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.Tra
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
@@ -30,8 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies that {@link TaskEntityExecutor} emits the entity processing (SERVER) span when
- * {@code emitTraceSpans} is enabled and suppresses it otherwise.
+ * Verifies entity action spans and propagation from the dispatcher-owned processing context.
  */
 public class TaskEntityExecutorTracingTest {
 
@@ -69,6 +67,19 @@ public class TaskEntityExecutorTracingTest {
 
         public void signalOther(int amount) {
             this.context.signalEntity(new EntityInstanceId("counter", "c2"), "add", amount);
+        }
+
+        public void signalThenThrow(int amount) {
+            this.context.signalEntity(new EntityInstanceId("counter", "c2"), "add", amount);
+            throw new IllegalStateException("operation failed");
+        }
+
+        public void createNestedSpan(int amount) {
+            io.opentelemetry.api.GlobalOpenTelemetry.getTracer("test")
+                    .spanBuilder("entity-user-code")
+                    .setAttribute("amount", amount)
+                    .startSpan()
+                    .end();
         }
 
         public void startOrch() {
@@ -119,25 +130,12 @@ public class TaskEntityExecutorTracingTest {
     }
 
     @Test
-    void execute_emitsEntityProcessingServerSpanUnderParent() {
+    void execute_doesNotDuplicateDispatcherProcessingSpan() {
         TaskEntityExecutor executor = createExecutor(true);
 
         EntityBatchResult result = executor.execute(requestWith(parentTraceContext()));
         assertTrue(result.getResults(0).hasSuccess());
-
-        List<SpanData> spans = spanExporter.getFinishedSpanItems();
-        assertEquals(1, spans.size());
-        SpanData span = spans.get(0);
-        assertEquals("entity:counter:add", span.getName());
-        assertEquals(SpanKind.SERVER, span.getKind());
-        assertEquals(TRACE_ID, span.getTraceId());
-        assertEquals(PARENT_SPAN_ID, span.getParentSpanId());
-        assertEquals("entity", span.getAttributes().get(AttributeKey.stringKey("durabletask.type")));
-        assertEquals("call_entity",
-                span.getAttributes().get(AttributeKey.stringKey("durabletask.task.operation")));
-        assertEquals("@counter@c1",
-                span.getAttributes().get(AttributeKey.stringKey("durabletask.task.instance_id")));
-        assertEquals(StatusCode.OK, span.getStatus().getStatusCode());
+        assertTrue(spanExporter.getFinishedSpanItems().isEmpty());
     }
 
     @Test
@@ -161,39 +159,65 @@ public class TaskEntityExecutorTracingTest {
     }
 
     @Test
-    void execute_entitySignalsEntity_emitsProducerSpanNestedUnderProcessingSpan() {
+    void execute_entitySignalsEntity_emitsProducerSpanUnderProcessingContext() {
         TaskEntityExecutor executor = createExecutor(true);
 
         EntityBatchResult result = executor.execute(requestWithOp("signalOther", 3, parentTraceContext()));
         assertTrue(result.getResults(0).hasSuccess());
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();
-        SpanData server = spans.stream().filter(s -> s.getKind() == SpanKind.SERVER).findFirst().orElse(null);
         SpanData producer = spans.stream().filter(s -> s.getKind() == SpanKind.PRODUCER).findFirst().orElse(null);
-        assertNotNull(server, "expected SERVER processing span");
         assertNotNull(producer, "expected PRODUCER signal span");
         assertEquals("entity:counter:add", producer.getName());
         assertEquals("signal_entity",
                 producer.getAttributes().get(AttributeKey.stringKey("durabletask.task.operation")));
         assertEquals(TRACE_ID, producer.getTraceId());
-        assertEquals(server.getSpanId(), producer.getParentSpanId());
+        assertEquals(PARENT_SPAN_ID, producer.getParentSpanId());
+        assertEquals(producer.getSpanId(), result.getActions(0).getSendSignal()
+            .getParentTraceContext().getTraceParent().split("-")[2]);
     }
 
     @Test
-    void execute_entityStartsOrchestration_emitsProducerSpanNestedUnderProcessingSpan() {
+    void execute_entityStartsOrchestration_emitsProducerSpanUnderProcessingContext() {
         TaskEntityExecutor executor = createExecutor(true);
 
         EntityBatchResult result = executor.execute(requestWithOp("startOrch", 0, parentTraceContext()));
         assertTrue(result.getResults(0).hasSuccess());
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();
-        SpanData server = spans.stream().filter(s -> s.getKind() == SpanKind.SERVER).findFirst().orElse(null);
         SpanData producer = spans.stream().filter(s -> s.getKind() == SpanKind.PRODUCER).findFirst().orElse(null);
-        assertNotNull(server, "expected SERVER processing span");
         assertNotNull(producer, "expected PRODUCER create_orchestration span");
         assertEquals("counter:create_orchestration", producer.getName());
         assertEquals("entity", producer.getAttributes().get(AttributeKey.stringKey("durabletask.type")));
         assertEquals(TRACE_ID, producer.getTraceId());
-        assertEquals(server.getSpanId(), producer.getParentSpanId());
+        assertEquals(PARENT_SPAN_ID, producer.getParentSpanId());
+        assertEquals(producer.getSpanId(), result.getActions(0).getStartNewOrchestration()
+                .getParentTraceContext().getTraceParent().split("-")[2]);
+    }
+
+    @Test
+    void execute_makesProcessingSpanCurrentForUserCode() {
+        TaskEntityExecutor executor = createExecutor(true);
+
+        EntityBatchResult result = executor.execute(requestWithOp("createNestedSpan", 3, parentTraceContext()));
+
+        assertTrue(result.getResults(0).hasSuccess());
+        List<SpanData> spans = spanExporter.getFinishedSpanItems();
+        SpanData nested = spans.stream().filter(s -> s.getName().equals("entity-user-code")).findFirst().orElse(null);
+        assertNotNull(nested, "expected span created by entity user code");
+        assertEquals(TRACE_ID, nested.getTraceId());
+        assertEquals(PARENT_SPAN_ID, nested.getParentSpanId());
+    }
+
+    @Test
+    void execute_entityActionRollsBack_emitsNoProducerSpan() {
+        TaskEntityExecutor executor = createExecutor(true);
+
+        EntityBatchResult result = executor.execute(requestWithOp("signalThenThrow", 3, parentTraceContext()));
+
+        assertTrue(result.getResults(0).hasFailure());
+        assertEquals(0, result.getActionsCount());
+        assertTrue(spanExporter.getFinishedSpanItems().stream()
+                .noneMatch(span -> span.getKind() == SpanKind.PRODUCER));
     }
 }
