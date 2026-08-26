@@ -78,15 +78,16 @@ public class ActivityMiddleware implements Middleware {
                 throw e;
             }
 
+            String serializedFailureDetails;
             try {
-                throw new StructuredActivityFailure(
-                        FAILURE_DETAILS_JSON_PRINTER.print(failureDetails.toProto()));
-            } catch (InvalidProtocolBufferException serializationException) {
+                serializedFailureDetails = FAILURE_DETAILS_JSON_PRINTER.print(failureDetails.toProto());
+            } catch (InvalidProtocolBufferException | RuntimeException conversionException) {
                 LOGGER.log(Level.WARNING,
-                        "Failed to serialize structured failure details; rethrowing the original exception.",
-                        serializationException);
+                        "Failed to convert or serialize structured failure details; rethrowing the original exception.",
+                        conversionException);
                 throw e;
             }
+            throw new StructuredActivityFailure(serializedFailureDetails);
         }
     }
 

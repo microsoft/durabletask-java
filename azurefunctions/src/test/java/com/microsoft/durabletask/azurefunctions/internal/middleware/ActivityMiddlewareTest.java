@@ -207,6 +207,24 @@ public class ActivityMiddlewareTest {
     }
 
     @Test
+    @DisplayName("Rethrows the original exception unchanged when failure detail conversion fails")
+    void rethrowsOriginalWhenFailureDetailConversionFails() {
+        setProviderSupplier(() -> exception -> {
+            Map<String, Object> properties = new LinkedHashMap<>();
+            properties.put(null, "value");
+            return properties;
+        });
+
+        BusinessException original = new BusinessException("boom");
+        ActivityMiddleware middleware = new ActivityMiddleware();
+
+        Exception thrown = assertThrows(Exception.class,
+                () -> middleware.invoke(activityContext(), throwingChain(original)));
+
+        assertSame(original, thrown);
+    }
+
+    @Test
     @DisplayName("Does not invoke the provider for non-activity triggers")
     void passesThroughNonActivityTrigger() throws Exception {
         AtomicInteger providerCalls = new AtomicInteger();
