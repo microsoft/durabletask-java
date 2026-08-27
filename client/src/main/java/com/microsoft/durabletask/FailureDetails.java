@@ -325,9 +325,9 @@ public final class FailureDetails {
             return Value.newBuilder().setBoolValue((Boolean) obj).build();
         } else if (obj instanceof String) {
             return Value.newBuilder().setStringValue((String) obj).build();
-        } else if (obj instanceof Iterable) {
+        } else if (obj instanceof List) {
             ListValue.Builder listBuilder = ListValue.newBuilder();
-            for (Object item : (Iterable<?>) obj) {
+            for (Object item : (List<?>) obj) {
                 listBuilder.addValues(convertToProtoValue(item));
             }
             return Value.newBuilder().setListValue(listBuilder).build();
@@ -341,7 +341,7 @@ public final class FailureDetails {
         } else if (obj instanceof Map) {
             Struct.Builder structBuilder = Struct.newBuilder();
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) obj).entrySet()) {
-                structBuilder.putFields(String.valueOf(entry.getKey()), convertToProtoValue(entry.getValue()));
+                structBuilder.putFields((String) entry.getKey(), convertToProtoValue(entry.getValue()));
             }
             return Value.newBuilder().setStructValue(structBuilder).build();
         } else {

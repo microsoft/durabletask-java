@@ -48,8 +48,6 @@ import static org.mockito.Mockito.when;
  */
 public class ActivityMiddlewareTest {
 
-    private static final String ACTIVITY_TRIGGER = "DurableActivityTrigger";
-
     /** Auto-cleaned temp directory root for SPI class loader fixtures. */
     @TempDir
     Path tempDir;
@@ -132,7 +130,7 @@ public class ActivityMiddlewareTest {
                 () -> middleware.invoke(activityContext(), throwingChain(original)));
 
         // The original exception is replaced by a structured-failure carrier whose message is JSON.
-    assertNotSame(original, thrown);
+        assertNotSame(original, thrown);
         String message = thrown.getMessage();
         assertNotNull(message);
         assertTrue(message.startsWith("{"), "message should be a JSON object, was: " + message);
