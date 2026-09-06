@@ -90,7 +90,10 @@ public final class EntityRunner {
         TaskEntityExecutor executor = new TaskEntityExecutor(
                 factories,
                 new JacksonDataConverter(),
-                logger);
+                logger,
+                // EntityRunner is the Azure Functions entry point; the Durable extension host already
+                // emits DurableTask.Core entity spans, so the worker suppresses its own to avoid duplicates.
+                false);
 
         EntityBatchResult result = executor.execute(request);
         return result.toByteArray();

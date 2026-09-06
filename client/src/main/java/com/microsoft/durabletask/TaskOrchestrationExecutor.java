@@ -14,6 +14,8 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.ScheduleTaskAction.Builder;
 import com.microsoft.durabletask.util.UUIDGenerator;
 
+import io.opentelemetry.api.trace.Span;
+
 import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,6 +41,7 @@ final class TaskOrchestrationExecutor {
     private final DurableTaskGrpcWorkerVersioningOptions versioningOptions;
     private final ExceptionPropertiesProvider exceptionPropertiesProvider;
     private final boolean useNativeEntityActions;
+    private final boolean emitTraceSpans;
 
     public TaskOrchestrationExecutor(
             HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
@@ -67,6 +70,19 @@ final class TaskOrchestrationExecutor {
             DurableTaskGrpcWorkerVersioningOptions versioningOptions,
             boolean useNativeEntityActions,
             ExceptionPropertiesProvider exceptionPropertiesProvider) {
+        this(orchestrationFactories, dataConverter, maximumTimerInterval, logger, versioningOptions,
+                useNativeEntityActions, exceptionPropertiesProvider, false);
+    }
+
+    public TaskOrchestrationExecutor(
+            HashMap<String, TaskOrchestrationFactory> orchestrationFactories,
+            DataConverter dataConverter,
+            Duration maximumTimerInterval,
+            Logger logger,
+            DurableTaskGrpcWorkerVersioningOptions versioningOptions,
+            boolean useNativeEntityActions,
+            ExceptionPropertiesProvider exceptionPropertiesProvider,
+            boolean emitTraceSpans) {
         this.orchestrationFactories = orchestrationFactories;
         this.dataConverter = dataConverter;
         this.maximumTimerInterval = maximumTimerInterval;
@@ -74,6 +90,7 @@ final class TaskOrchestrationExecutor {
         this.versioningOptions = versioningOptions;
         this.useNativeEntityActions = useNativeEntityActions;
         this.exceptionPropertiesProvider = exceptionPropertiesProvider;
+        this.emitTraceSpans = emitTraceSpans;
     }
 
     public TaskOrchestratorResult execute(
@@ -446,6 +463,24 @@ final class TaskOrchestrationExecutor {
 
         // region Entity integration methods (Phase 4)
 
+        // Writes the orchestration trace context into the legacy DTFx RequestMessage JSON as
+        // parentTraceContext (DistributedTraceContext, PascalCase members) so the Azure Functions
+        // host can link its entity spans. The orchestration context is deterministic (from history).
+        private void addLegacyEntityParentTraceContext(ObjectNode requestMessage) {
+            TraceContext propagatedCtx = this.orchestrationSpanContext != null
+                    ? this.orchestrationSpanContext : this.parentTraceContext;
+            if (propagatedCtx == null || propagatedCtx.getTraceParent() == null
+                    || propagatedCtx.getTraceParent().isEmpty()) {
+                return;
+            }
+            ObjectNode ptc = requestMessage.putObject("parentTraceContext");
+            ptc.put("TraceParent", propagatedCtx.getTraceParent());
+            if (propagatedCtx.hasTraceState() && propagatedCtx.getTraceState().getValue() != null
+                    && !propagatedCtx.getTraceState().getValue().isEmpty()) {
+                ptc.put("TraceState", propagatedCtx.getTraceState().getValue());
+            }
+        }
+
         @Override
         public void signalEntity(EntityInstanceId entityId, String operationName, Object input, SignalEntityOptions options) {
             Helpers.throwIfOrchestratorComplete(this.isComplete);
@@ -490,6 +525,7 @@ final class TaskOrchestrationExecutor {
                     requestMessage.put("due", scheduledTimeStr);
                     eventName = "op@" + scheduledTimeStr;
                 }
+                this.addLegacyEntityParentTraceContext(requestMessage);
                 this.pendingActions.put(id, OrchestratorAction.newBuilder()
                         .setId(id)
                         .setSendEvent(SendEventAction.newBuilder()
@@ -498,6 +534,28 @@ final class TaskOrchestrationExecutor {
                                 .setName(eventName)
                                 .setData(StringValue.of(requestMessage.toString())))
                         .build());
+            }
+
+            // PRODUCER span for the signal so standalone/DTS workers record the client side.
+            // Suppressed under Azure Functions, where the host emits it.
+            if (TaskOrchestrationExecutor.this.emitTraceSpans && !this.isReplaying) {
+                TraceContext signalParentCtx = this.orchestrationSpanContext != null
+                        ? this.orchestrationSpanContext : this.parentTraceContext;
+                if (signalParentCtx != null) {
+                    String signalScheduledTime = (options != null && options.getScheduledTime() != null)
+                            ? options.getScheduledTime().toString() : null;
+                    Span signalSpan = TracingHelper.startEntitySignalProducerSpan(
+                            entityId.getName(),
+                            operationName,
+                            entityId.toString(),
+                            this.instanceId,
+                            signalParentCtx,
+                            null,
+                            signalScheduledTime);
+                    if (signalSpan != null) {
+                        signalSpan.end();
+                    }
+                }
             }
 
             if (!this.isReplaying) {
@@ -567,6 +625,7 @@ final class TaskOrchestrationExecutor {
                 if (this.executionId != null) {
                     requestMessage.put("parentExecution", this.executionId);
                 }
+                this.addLegacyEntityParentTraceContext(requestMessage);
                 this.pendingActions.put(id, OrchestratorAction.newBuilder()
                         .setId(id)
                         .setSendEvent(SendEventAction.newBuilder()

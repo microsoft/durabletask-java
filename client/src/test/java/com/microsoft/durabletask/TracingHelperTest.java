@@ -358,4 +358,82 @@ public class TracingHelperTest {
         assertEquals("event", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.type")));
         assertEquals("target-orch-1", sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("durabletask.event.target_instance_id")));
     }
+
+    // region Entity spans
+
+    private static final String TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
+    private static final String PARENT_SPAN_ID = "b7ad6b7169203331";
+
+    private static TraceContext parentCtx() {
+        return TraceContext.newBuilder()
+                .setTraceParent("00-" + TRACE_ID + "-" + PARENT_SPAN_ID + "-01")
+                .build();
+    }
+
+    private static String attr(SpanData sd, String key) {
+        return sd.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey(key));
+    }
+
+    @Test
+    void createEntitySpanName_usesEntityAndOperation() {
+        assertEquals("entity:Counter:add", TracingHelper.createEntitySpanName("Counter", "add"));
+    }
+
+    @Test
+    void createEntityStartOrchestrationSpanName_isInverted() {
+        assertEquals("Counter:create_orchestration",
+                TracingHelper.createEntityStartOrchestrationSpanName("Counter"));
+    }
+
+    @Test
+    void startEntitySignalProducerSpan_setsTargetAndSource() {
+        Span span = TracingHelper.startEntitySignalProducerSpan(
+                "Audit", "record", "@audit@a1", "@counter@c1", parentCtx(), null, null);
+        assertNotNull(span);
+        span.end();
+
+        SpanData sd = spanExporter.getFinishedSpanItems().get(0);
+        assertEquals("entity:Audit:record", sd.getName());
+        assertEquals(SpanKind.PRODUCER, sd.getKind());
+        assertEquals("signal_entity", attr(sd, "durabletask.task.operation"));
+        assertEquals("@audit@a1", attr(sd, "durabletask.event.target_instance_id"));
+        assertEquals("@counter@c1", attr(sd, "durabletask.task.instance_id"));
+    }
+
+    @Test
+    void startEntitySignalProducerSpan_scheduledTime_setsAttribute() {
+        Span span = TracingHelper.startEntitySignalProducerSpan(
+                "Audit", "record", "@audit@a1", null, parentCtx(), null, "2026-01-01T00:00:00Z");
+        span.end();
+
+        SpanData sd = spanExporter.getFinishedSpanItems().get(0);
+        assertEquals("2026-01-01T00:00:00Z", attr(sd, "durabletask.task.scheduled_time"));
+        assertNull(attr(sd, "durabletask.task.instance_id"));
+    }
+
+    @Test
+    void startEntityStartOrchestrationSpan_setsInvertedNameAndAttributes() {
+        Span span = TracingHelper.startEntityStartOrchestrationSpan(
+                "Counter", "@counter@c1", "orch-2", parentCtx(), null, null);
+        assertNotNull(span);
+        span.end();
+
+        SpanData sd = spanExporter.getFinishedSpanItems().get(0);
+        assertEquals("Counter:create_orchestration", sd.getName());
+        assertEquals(SpanKind.PRODUCER, sd.getKind());
+        assertEquals("entity", attr(sd, "durabletask.type"));
+        assertEquals("orch-2", attr(sd, "durabletask.event.target_instance_id"));
+        assertEquals("@counter@c1", attr(sd, "durabletask.task.instance_id"));
+    }
+
+    @Test
+    void entityProducerSpans_missingParent_returnNull() {
+        assertNull(TracingHelper.startEntitySignalProducerSpan(
+                "Audit", "record", "@audit@a1", null, null, null, null));
+        assertNull(TracingHelper.startEntityStartOrchestrationSpan(
+                "Counter", "@counter@c1", "orch-2", null, null, null));
+        assertTrue(spanExporter.getFinishedSpanItems().isEmpty());
+    }
+
+    // endregion
 }
