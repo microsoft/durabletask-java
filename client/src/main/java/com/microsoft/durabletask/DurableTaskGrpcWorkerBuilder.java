@@ -32,6 +32,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     private boolean autoGenerateWorkItemFilters;
     final List<ClientInterceptor> interceptors = new ArrayList<>();
     boolean supportsLargePayloads;
+    boolean supportsScheduledTasks;
 
     /**
      * Default maximum chunk size in bytes for orchestrator responses, matching the .NET
@@ -401,6 +402,21 @@ public final class DurableTaskGrpcWorkerBuilder {
      */
     public DurableTaskGrpcWorkerBuilder setSupportsLargePayloads(boolean enabled) {
         this.supportsLargePayloads = enabled;
+        return this;
+    }
+
+    /**
+     * Indicates that this worker supports scheduled tasks.
+     * <p>
+     * When enabled, the worker announces the {@code WORKER_CAPABILITY_SCHEDULED_TASKS} capability to the sidecar.
+     * This is set by feature registration helpers (such as the scheduled-tasks worker extension) after they register
+     * the built-in schedule entity and operation orchestrator; most applications do not call it directly.
+     *
+     * @param enabled whether scheduled-task support is enabled
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder setSupportsScheduledTasks(boolean enabled) {
+        this.supportsScheduledTasks = enabled;
         return this;
     }
 

@@ -57,6 +57,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
     private final TaskHubSidecarServiceBlockingStub sidecarClient;
     private final boolean supportsLargePayloads;
+    private final boolean supportsScheduledTasks;
     private final int maxChunkSizeBytes;
     private final int largePayloadThresholdBytes;
 
@@ -93,6 +94,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
         this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
         this.supportsLargePayloads = builder.supportsLargePayloads;
+        this.supportsScheduledTasks = builder.supportsScheduledTasks;
         this.maxChunkSizeBytes = builder.maxChunkSizeBytes;
         this.largePayloadThresholdBytes = builder.largePayloadThresholdBytes;
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
@@ -581,6 +583,9 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         }
         if (this.supportsLargePayloads) {
             builder.addCapabilities(WorkerCapability.WORKER_CAPABILITY_LARGE_PAYLOADS);
+        }
+        if (this.supportsScheduledTasks) {
+            builder.addCapabilities(WorkerCapability.WORKER_CAPABILITY_SCHEDULED_TASKS);
         }
         if (this.workItemFilter != null) {
             builder.setWorkItemFilters(toProtoWorkItemFilters(this.workItemFilter));
