@@ -341,7 +341,11 @@ public final class FailureDetails {
         } else if (obj instanceof Map) {
             Struct.Builder structBuilder = Struct.newBuilder();
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) obj).entrySet()) {
-                structBuilder.putFields((String) entry.getKey(), convertToProtoValue(entry.getValue()));
+                Object key = entry.getKey();
+                if (!(key instanceof String)) {
+                    throw new IllegalArgumentException("Failure property map keys must be strings.");
+                }
+                structBuilder.putFields((String) key, convertToProtoValue(entry.getValue()));
             }
             return Value.newBuilder().setStructValue(structBuilder).build();
         } else {
