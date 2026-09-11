@@ -39,6 +39,7 @@ def exeSuffix = isWindows ? ".exe" : ""
 dependencies {
 
     // https://github.com/grpc/grpc-java#download
+    api "com.google.protobuf:protobuf-java:${protocVersion}"
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"

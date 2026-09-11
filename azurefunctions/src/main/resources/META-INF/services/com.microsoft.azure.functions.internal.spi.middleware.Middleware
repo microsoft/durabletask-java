@@ -1,2 +1,3 @@
 com.microsoft.durabletask.azurefunctions.internal.middleware.OrchestrationMiddleware
 com.microsoft.durabletask.azurefunctions.internal.middleware.EntityMiddleware
+com.microsoft.durabletask.azurefunctions.internal.middleware.ActivityMiddleware

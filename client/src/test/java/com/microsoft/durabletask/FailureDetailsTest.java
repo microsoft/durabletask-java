@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -139,6 +140,24 @@ public class FailureDetailsTest {
         assertNull(roundTrippedInner.getProperties().get("nullVal"));
     }
 
+    /** Verifies that primitive arrays are represented as protobuf lists rather than stringified values. */
+    @Test
+    void toProto_primitiveArrayProperty_serializesAsList() {
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("attempts", new int[] {1, 2, 3});
+
+        FailureDetails details = new FailureDetails(
+                "CustomException", "error", "stack", false, null, properties);
+        Value attempts = details.toProto().getPropertiesMap().get("attempts");
+
+        assertNotNull(attempts);
+        assertEquals(Value.KindCase.LIST_VALUE, attempts.getKindCase());
+        assertEquals(3, attempts.getListValue().getValuesCount());
+        assertEquals(1.0, attempts.getListValue().getValues(0).getNumberValue());
+        assertEquals(2.0, attempts.getListValue().getValues(1).getNumberValue());
+        assertEquals(3.0, attempts.getListValue().getValues(2).getNumberValue());
+    }
+
     @Test
     void fromException_withProvider_extractsAndRoundTrips() {
         ExceptionPropertiesProvider provider = exception -> {
@@ -169,6 +188,30 @@ public class FailureDetailsTest {
         assertEquals("RuntimeException", roundTripped.getProperties().get("exceptionType"));
         assertEquals("java.io.IOException", roundTripped.getInnerFailure().getErrorType());
         assertEquals("IOException", roundTripped.getInnerFailure().getProperties().get("exceptionType"));
+    }
+
+    /** Verifies that recursive failure construction stops after ten levels and provider invocations. */
+    @Test
+    void fromException_limitsProviderCallsToTenFailureLevels() {
+        AtomicInteger providerCalls = new AtomicInteger();
+        ExceptionPropertiesProvider provider = exception -> {
+            providerCalls.incrementAndGet();
+            return null;
+        };
+
+        Exception exception = new IOException("level 10");
+        for (int level = 9; level >= 0; level--) {
+            exception = new RuntimeException("level " + level, exception);
+        }
+
+        FailureDetails details = FailureDetails.fromException(exception, provider);
+
+        assertEquals(10, providerCalls.get());
+        int failureLevels = 0;
+        for (FailureDetails current = details; current != null; current = current.getInnerFailure()) {
+            failureLevels++;
+        }
+        assertEquals(10, failureLevels);
     }
 
     @Test
