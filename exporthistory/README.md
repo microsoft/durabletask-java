@@ -7,14 +7,14 @@ This module is at parity with the .NET `Microsoft.DurableTask.ExportHistory` (pr
 entity + orchestrator that pages terminal instances by completion window, fans out per-instance export activities,
 and uploads serialized history (gzipped JSONL by default) to a customer-owned blob container.
 
-> **Status:** preview (`0.1.0`).
+> **Status:** preview (`1.10.0-preview.1`).
 
 ## Install
 
 Add the module dependency alongside the core `client` (and your Durable Task Scheduler extension):
 
 ```groovy
-implementation 'com.microsoft:durabletask-exporthistory:0.1.0'
+implementation 'com.microsoft:durabletask-exporthistory:1.10.0-preview.1'
 ```
 
 The export activities upload to Azure Blob Storage via `azure-storage-blob`. If you authenticate with a managed

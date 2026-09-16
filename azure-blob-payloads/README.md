@@ -7,7 +7,7 @@ The `durabletask-azure-blob-payloads` module transparently externalizes large Du
 Add the module alongside the Durable Task client and your backend-specific extension:
 
 ```groovy
-implementation 'com.microsoft:durabletask-azure-blob-payloads:1.0.0'
+implementation 'com.microsoft:durabletask-azure-blob-payloads:1.10.0'
 ```
 
 The module includes Azure Blob Storage support. Applications that use managed identity should also add `com.azure:azure-identity`.
