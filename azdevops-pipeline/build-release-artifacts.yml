@@ -25,7 +25,7 @@ steps:
     publishJUnitResults: false
     tasks: clean assemble
     options: '--init-script init.gradle'
-  displayName: Assemble durabletask-client and durabletask-azure-functions
+  displayName: Assemble all publishable Durable Task Java packages
 
 # the secring.gpg file is required to sign the artifacts, it's generated from GnuPG, and it's stored in the library of the durabletaskframework ADO
 - task: DownloadSecureFile@1
@@ -44,7 +44,7 @@ steps:
     jdkArchitectureOption: 'x64'
     tasks: publish
     options: '--init-script init.gradle -Psigning.keyId=$(gpgSignKey) -Psigning.password=$(gpgSignPassword) -Psigning.secretKeyRingFile=$(gpgSecretFile.secureFilePath)'
-  displayName: Publish durabletask-client and durabletask-azure-functions
+  displayName: Stage all publishable Durable Task Java packages
     
 - task: CopyFiles@2
   displayName: 'Copy publish file to Artifact Staging Directory'

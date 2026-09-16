@@ -23,31 +23,6 @@ extends:
     stages:
     - stage: release
       jobs:
-      - job: durabletask_azuremanaged 
-        templateContext:
-          type: releaseJob
-          isProduction: true
-          inputs:
-          # Declare inputs to be released here to ensure they receive relevant checks
-          - input: pipelineArtifact
-            pipeline: DurableTaskJavaBuildPipeline
-            artifactName: drop
-            targetPath: $(System.DefaultWorkingDirectory)/drop
-
-        steps:
-        - task: SFP.release-tasks.custom-build-release-task.EsrpRelease@9
-          displayName: 'Release durabletask-azuremanaged'
-          inputs:
-            connectedservicename: 'dtfx-internal-esrp-prod'
-            usemanagedidentity: true
-            keyvaultname: 'durable-esrp-akv'
-            signcertname: 'dts-esrp-cert'
-            clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
-            folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-azuremanaged'
-            owners: 'wangbill@microsoft.com'
-            approvers: 'kaibocai@microsoft.com'
-            mainpublisher: 'durabletask-java'
-
       - job: durabletask_client
         templateContext:
           type: releaseJob
@@ -73,7 +48,34 @@ extends:
             approvers: 'kaibocai@microsoft.com'
             mainpublisher: 'durabletask-java'
 
+      - job: durabletask_azuremanaged
+        dependsOn: durabletask_client
+        templateContext:
+          type: releaseJob
+          isProduction: true
+          inputs:
+          # Declare inputs to be released here to ensure they receive relevant checks
+          - input: pipelineArtifact
+            pipeline: DurableTaskJavaBuildPipeline
+            artifactName: drop
+            targetPath: $(System.DefaultWorkingDirectory)/drop
+
+        steps:
+        - task: SFP.release-tasks.custom-build-release-task.EsrpRelease@9
+          displayName: 'Release durabletask-azuremanaged'
+          inputs:
+            connectedservicename: 'dtfx-internal-esrp-prod'
+            usemanagedidentity: true
+            keyvaultname: 'durable-esrp-akv'
+            signcertname: 'dts-esrp-cert'
+            clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
+            folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-azuremanaged'
+            owners: 'wangbill@microsoft.com'
+            approvers: 'kaibocai@microsoft.com'
+            mainpublisher: 'durabletask-java'
+
       - job: durabletask_azure_functions
+        dependsOn: durabletask_client
         templateContext:
           type: releaseJob
           isProduction: true
@@ -94,6 +96,58 @@ extends:
             signcertname: 'dts-esrp-cert'
             clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
             folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-azure-functions'
+            owners: 'wangbill@microsoft.com'
+            approvers: 'kaibocai@microsoft.com'
+            mainpublisher: 'durabletask-java'
+
+      - job: durabletask_azure_blob_payloads
+        dependsOn: durabletask_client
+        templateContext:
+          type: releaseJob
+          isProduction: true
+          inputs:
+          # Declare inputs to be released here to ensure they receive relevant checks
+          - input: pipelineArtifact
+            pipeline: DurableTaskJavaBuildPipeline
+            artifactName: drop
+            targetPath: $(System.DefaultWorkingDirectory)/drop
+
+        steps:
+        - task: SFP.release-tasks.custom-build-release-task.EsrpRelease@9
+          displayName: 'Release durabletask-azure-blob-payloads'
+          inputs:
+            connectedservicename: 'dtfx-internal-esrp-prod'
+            usemanagedidentity: true
+            keyvaultname: 'durable-esrp-akv'
+            signcertname: 'dts-esrp-cert'
+            clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
+            folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-azure-blob-payloads'
+            owners: 'wangbill@microsoft.com'
+            approvers: 'kaibocai@microsoft.com'
+            mainpublisher: 'durabletask-java'
+
+      - job: durabletask_exporthistory
+        dependsOn: durabletask_client
+        templateContext:
+          type: releaseJob
+          isProduction: true
+          inputs:
+          # Declare inputs to be released here to ensure they receive relevant checks
+          - input: pipelineArtifact
+            pipeline: DurableTaskJavaBuildPipeline
+            artifactName: drop
+            targetPath: $(System.DefaultWorkingDirectory)/drop
+
+        steps:
+        - task: SFP.release-tasks.custom-build-release-task.EsrpRelease@9
+          displayName: 'Release durabletask-exporthistory'
+          inputs:
+            connectedservicename: 'dtfx-internal-esrp-prod'
+            usemanagedidentity: true
+            keyvaultname: 'durable-esrp-akv'
+            signcertname: 'dts-esrp-cert'
+            clientid: '0b3ed1a4-0727-4a50-b82a-02c2bd9dec89'
+            folderlocation: '$(System.DefaultWorkingDirectory)/drop/durabletask-exporthistory'
             owners: 'wangbill@microsoft.com'
             approvers: 'kaibocai@microsoft.com'
             mainpublisher: 'durabletask-java'

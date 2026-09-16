@@ -40,6 +40,10 @@ Logger logger = ctx.createReplaySafeLogger(executionContext.getLogger());
 Replay-safe logging suppresses calls made while replaying; it does not guarantee
 exactly-once log delivery across failed or retried live orchestration turns.
 
+### Externalized large payloads
+
+The [`durabletask-azure-blob-payloads`](azure-blob-payloads/README.md) module transparently stores orchestration payloads that exceed a configurable threshold in Azure Blob Storage. Configure the same storage container on the client and worker to exchange large inputs, outputs, activity payloads, and orchestration actions without exceeding gRPC message limits.
+
 ### Reliable fan-out / fan-in orchestration pattern
 
 ```java
@@ -102,8 +106,11 @@ The following packages are produced from this repo.
 
 | Package | Latest version |
 | - | - |
-| Durable Task - Client | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-client?label=durabletask-client)](https://mvnrepository.com/artifact/com.microsoft/durabletask-client/1.0.0) |
-| Durable Task - Azure Functions | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azure-functions?label=durabletask-azure-functions)](https://mvnrepository.com/artifact/com.microsoft/durabletask-azure-functions/1.0.1) |
+| Durable Task - Client | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-client?label=durabletask-client)](https://mvnrepository.com/artifact/com.microsoft/durabletask-client) |
+| Durable Task - Azure Functions | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azure-functions?label=durabletask-azure-functions)](https://mvnrepository.com/artifact/com.microsoft/durabletask-azure-functions) |
+| Durable Task - Azure Managed | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azuremanaged?label=durabletask-azuremanaged)](https://mvnrepository.com/artifact/com.microsoft/durabletask-azuremanaged) |
+| [Durable Task - Azure Blob Payloads](azure-blob-payloads/README.md) | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azure-blob-payloads?label=durabletask-azure-blob-payloads)](https://mvnrepository.com/artifact/com.microsoft/durabletask-azure-blob-payloads) |
+| [Durable Task - Export History](exporthistory/README.md) | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-exporthistory?label=durabletask-exporthistory)](https://mvnrepository.com/artifact/com.microsoft/durabletask-exporthistory) |
 
 ## Getting started with Azure Functions
 
