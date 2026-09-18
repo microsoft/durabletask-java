@@ -116,7 +116,7 @@ public class TaskEntityExecutorTest {
     private TaskEntityExecutor createExecutor(String entityName, TaskEntityFactory factory) {
         HashMap<String, TaskEntityFactory> factories = new HashMap<>();
         factories.put(entityName.toLowerCase(java.util.Locale.ROOT), factory);
-        return new TaskEntityExecutor(factories, dataConverter, logger);
+        return new TaskEntityExecutor(factories, dataConverter, logger, true);
     }
 
     private OperationRequest buildOperationRequest(String operationName, Object input, String requestId) {
@@ -358,6 +358,9 @@ public class TaskEntityExecutorTest {
         SendSignalAction signalAction = result.getActions(0).getSendSignal();
         assertEquals("@counter@target1", signalAction.getInstanceId());
         assertEquals("add", signalAction.getName());
+        assertTrue(signalAction.hasRequestTime(), "SendSignalAction should set requestTime");
+        assertTrue(signalAction.getRequestTime().getSeconds() > 0,
+                "requestTime should be a real timestamp, not the unset Unix epoch");
     }
 
     @Test
@@ -378,6 +381,72 @@ public class TaskEntityExecutorTest {
 
         StartNewOrchestrationAction orchAction = result.getActions(0).getStartNewOrchestration();
         assertEquals("MyOrchestration", orchAction.getName());
+        assertTrue(orchAction.hasRequestTime(), "StartNewOrchestrationAction should set requestTime");
+        assertTrue(orchAction.getRequestTime().getSeconds() > 0,
+                "requestTime should be a real timestamp, not the unset Unix epoch");
+    }
+
+    @Test
+    void execute_entitySignalsOther_propagatesOperationTraceContext() {
+        TaskEntityExecutor executor = createExecutor("Signaler", SignalingEntity::new);
+
+        TraceContext opTraceContext = TraceContext.newBuilder()
+                .setTraceParent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+                .setTraceState(StringValue.of("rojo=00f067aa0ba902b7"))
+                .build();
+        OperationRequest op = OperationRequest.newBuilder()
+                .setOperation("signalOther")
+                .setRequestId("req-signalOther")
+                .setTraceContext(opTraceContext)
+                .build();
+
+        EntityBatchResult result = executor.execute(buildBatchRequest("Signaler", "s1", null, op));
+
+        assertEquals(1, result.getActionsCount());
+        assertTrue(result.getActions(0).hasSendSignal());
+        SendSignalAction signalAction = result.getActions(0).getSendSignal();
+        assertTrue(signalAction.hasParentTraceContext(),
+                "SendSignalAction should carry the operation's trace context");
+        assertEquals("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+                signalAction.getParentTraceContext().getTraceParent());
+        assertEquals("rojo=00f067aa0ba902b7", signalAction.getParentTraceContext().getTraceState().getValue());
+    }
+
+    @Test
+    void execute_entityStartsOrchestration_propagatesOperationTraceContext() {
+        TaskEntityExecutor executor = createExecutor("OrchStarter", OrchestrationStartingEntity::new);
+
+        TraceContext opTraceContext = TraceContext.newBuilder()
+                .setTraceParent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+                .build();
+        OperationRequest op = OperationRequest.newBuilder()
+                .setOperation("startOrch")
+                .setRequestId("req-startOrch")
+                .setTraceContext(opTraceContext)
+                .build();
+
+        EntityBatchResult result = executor.execute(buildBatchRequest("OrchStarter", "o1", null, op));
+
+        assertEquals(1, result.getActionsCount());
+        assertTrue(result.getActions(0).hasStartNewOrchestration());
+        StartNewOrchestrationAction orchAction = result.getActions(0).getStartNewOrchestration();
+        assertTrue(orchAction.hasParentTraceContext(),
+                "StartNewOrchestrationAction should carry the operation's trace context");
+        assertEquals("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+                orchAction.getParentTraceContext().getTraceParent());
+    }
+
+    @Test
+    void execute_entitySignalsOther_noTraceContext_noParentTraceContext() {
+        TaskEntityExecutor executor = createExecutor("Signaler", SignalingEntity::new);
+
+        EntityBatchResult result = executor.execute(
+                buildBatchRequest("Signaler", "s1", null, buildOperationRequest("signalOther")));
+
+        assertEquals(1, result.getActionsCount());
+        assertTrue(result.getActions(0).hasSendSignal());
+        assertFalse(result.getActions(0).getSendSignal().hasParentTraceContext(),
+                "SendSignalAction should not carry a trace context when the operation had none");
     }
 
     @Test

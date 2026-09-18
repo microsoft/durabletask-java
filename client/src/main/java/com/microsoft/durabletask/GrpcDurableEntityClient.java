@@ -7,6 +7,9 @@ import com.google.protobuf.Timestamp;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc.TaskHubSidecarServiceBlockingStub;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
+
 import javax.annotation.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,10 +42,12 @@ final class GrpcDurableEntityClient extends DurableEntityClient {
         Helpers.throwIfArgumentNull(entityId, "entityId");
         Helpers.throwIfArgumentNull(operationName, "operationName");
 
+        Instant requestTime = Instant.now();
         SignalEntityRequest.Builder builder = SignalEntityRequest.newBuilder()
                 .setInstanceId(entityId.toString())
                 .setName(operationName)
-                .setRequestId(UUID.randomUUID().toString());
+            .setRequestId(UUID.randomUUID().toString())
+            .setRequestTime(DataConverter.getTimestampFromInstant(requestTime));
 
         if (input != null) {
             String serializedInput = this.dataConverter.serialize(input);
@@ -58,11 +63,34 @@ final class GrpcDurableEntityClient extends DurableEntityClient {
 
         // Capture and propagate distributed trace context (matching .NET SDK pattern)
         TraceContext traceContext = TracingHelper.getCurrentTraceContext();
-        if (traceContext != null) {
-            builder.setParentTraceContext(traceContext);
+        String scheduledTime = options != null && options.getScheduledTime() != null
+                ? options.getScheduledTime().toString() : null;
+        Span producerSpan = TracingHelper.startEntitySignalProducerSpan(
+                entityId.getName(),
+                operationName,
+                entityId.toString(),
+                null,
+                traceContext,
+                requestTime,
+                scheduledTime);
+        TraceContext producerTraceContext = TracingHelper.getCurrentTraceContext(producerSpan);
+        TraceContext propagatedTraceContext = producerTraceContext != null
+                ? producerTraceContext : traceContext;
+        if (propagatedTraceContext != null) {
+            builder.setParentTraceContext(propagatedTraceContext);
         }
 
-        this.sidecarClient.signalEntity(builder.build());
+        Scope producerScope = producerTraceContext != null ? producerSpan.makeCurrent() : null;
+        try {
+            this.sidecarClient.signalEntity(builder.build());
+        } finally {
+            if (producerScope != null) {
+                producerScope.close();
+            }
+            if (producerSpan != null) {
+                producerSpan.end();
+            }
+        }
     }
 
     @Override
