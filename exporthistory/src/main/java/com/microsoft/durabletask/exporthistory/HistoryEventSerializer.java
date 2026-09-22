@@ -2,15 +2,11 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.exporthistory;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.core.SerializableString;
+import com.fasterxml.jackson.core.io.CharacterEscapes;
+import com.fasterxml.jackson.core.io.SerializedString;
 import com.microsoft.durabletask.FailureDetails;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 import com.microsoft.durabletask.history.ContinueAsNewEvent;
@@ -52,6 +48,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -63,13 +61,13 @@ import java.util.Map;
  * Each event is written as a single JSON object with a leading {@code eventType} discriminator, the type-specific
  * fields, and a trailing {@code eventId}/{@code isPlayed}/{@code timestamp}: camelCase field names, null fields
  * omitted, empty maps rendered as {@code {}}, enum values in PascalCase, timestamps as trimmed ISO-8601 with a
- * {@code Z} suffix, and (for non-entity events) strings escaped by {@link HtmlSafeJsonEscapes}.
+ * {@code Z} suffix, and strings escaped by {@link HtmlSafeJsonEscapes}.
  * <p>
  * {@link ExportFormatKind#JSONL} emits one object per line (gzip applied by the blob writer);
  * {@link ExportFormatKind#JSON} emits a single JSON array.
  * <p>
- * Entity events have no dedicated representation in this wire format, so they fall back to a Java-native shape: a
- * reflective projection of the event with an added {@code eventType} discriminator (serialized with Jackson defaults).
+ * Entity messages use the reference SDK's legacy {@code EventSent}/{@code EventRaised} representation, including
+ * the JSON-encoded request or response in the event's {@code input}.
  */
 final class HistoryEventSerializer {
 
@@ -78,13 +76,28 @@ final class HistoryEventSerializer {
 
     private static final JsonFactory FACTORY = new JsonFactory();
 
-    // Fallback for entity events, which have no dedicated wire-format representation.
-    private static final ObjectMapper LEGACY_MAPPER = JsonMapper.builder()
-            .findAndAddModules()
-            .propertyNamingStrategy(PropertyNamingStrategies.LOWER_CAMEL_CASE)
-            .serializationInclusion(JsonInclude.Include.NON_NULL)
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .build();
+    // Entity message JSON uses Newtonsoft's escaping, before the outer event applies HTML-safe escaping.
+    private static final CharacterEscapes ENTITY_MESSAGE_ESCAPES = new CharacterEscapes() {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public int[] getEscapeCodesForAscii() {
+            int[] escapes = CharacterEscapes.standardAsciiEscapesForJSON();
+            for (int i = 0; i < 0x20; i++) {
+                if (escapes[i] == CharacterEscapes.ESCAPE_STANDARD) {
+                    escapes[i] = CharacterEscapes.ESCAPE_CUSTOM;
+                }
+            }
+            return escapes;
+        }
+
+        @Override
+        public SerializableString getEscapeSequence(int ch) {
+            return ch < 0x20 || ch == 0x85 || ch == 0x2028 || ch == 0x2029
+                    ? new SerializedString(String.format(Locale.ROOT, "\\u%04x", ch))
+                    : null;
+        }
+    };
 
     private HistoryEventSerializer() {
     }
@@ -100,20 +113,22 @@ final class HistoryEventSerializer {
      * @param historyEvents the ordered history events
      * @param format        the export format
      * @return the serialized content (JSONL text or JSON array text)
-     * @throws JsonProcessingException if serialization of an entity event fails
+     * @throws IllegalArgumentException if an entity message is missing required history context or fields
      */
-    static String serialize(List<HistoryEvent> historyEvents, ExportFormat format)
-            throws JsonProcessingException {
+    static String serialize(List<HistoryEvent> historyEvents, ExportFormat format) {
         StringBuilder sb = new StringBuilder();
         boolean json = format.getKind() == ExportFormatKind.JSON;
+        OrchestrationInstance currentInstance = null;
         if (json) {
             sb.append('[');
         }
         for (int i = 0; i < historyEvents.size(); i++) {
             HistoryEvent event = historyEvents.get(i);
-            String line = isEntityEvent(event)
-                    ? writeEntity(event)
-                    : writeObject(coreMap(event));
+            if (event instanceof ExecutionStartedEvent) {
+                currentInstance = ((ExecutionStartedEvent) event).getOrchestrationInstance();
+            }
+            HistoryEvent exportEvent = isEntityEvent(event) ? toExportEvent(event, currentInstance) : event;
+            String line = writeObject(coreMap(exportEvent));
             if (json) {
                 if (i > 0) {
                     sb.append(',');
@@ -382,22 +397,149 @@ final class HistoryEventSerializer {
         return sb.toString();
     }
 
-    // ---- ordered map -> JSON with the parity escaper -------------------------------------------
-
-    private static String writeEntity(HistoryEvent event) throws JsonProcessingException {
-        // Entity events have no wire-format equivalent; project the event reflectively and prepend an eventType.
-        ObjectNode node = LEGACY_MAPPER.valueToTree(event);
-        ObjectNode withType = LEGACY_MAPPER.createObjectNode();
-        withType.put("eventType", eventType(event));
-        withType.setAll(node);
-        return LEGACY_MAPPER.writeValueAsString(withType);
+    private static HistoryEvent toExportEvent(HistoryEvent event, OrchestrationInstance currentInstance) {
+        Map<String, Object> message = new LinkedHashMap<>();
+        if (event instanceof EntityOperationCalledEvent) {
+            EntityOperationCalledEvent e = (EntityOperationCalledEvent) event;
+            message = operationMessage(e.getOperation(), false, e.getInput(), e.getRequestId(),
+                    e.getScheduledTime(), requireCurrentInstance(currentInstance));
+            return entityEventSent(e, e.getTargetInstanceId(), operationEventName(e.getScheduledTime()), message);
+        } else if (event instanceof EntityOperationSignaledEvent) {
+            EntityOperationSignaledEvent e = (EntityOperationSignaledEvent) event;
+            message = operationMessage(e.getOperation(), true, e.getInput(), e.getRequestId(),
+                    e.getScheduledTime(), null);
+            return entityEventSent(e, e.getTargetInstanceId(), operationEventName(e.getScheduledTime()), message);
+        } else if (event instanceof EntityOperationCompletedEvent) {
+            EntityOperationCompletedEvent e = (EntityOperationCompletedEvent) event;
+            message.put("result", e.getOutput());
+            return entityEventRaised(e, e.getRequestId(), message);
+        } else if (event instanceof EntityOperationFailedEvent) {
+            EntityOperationFailedEvent e = (EntityOperationFailedEvent) event;
+            FailureDetails failure = e.getFailureDetails();
+            if (failure == null) {
+                throw new IllegalArgumentException("EntityOperationFailed history is missing failure details.");
+            }
+            message.put("result", failure.getErrorMessage());
+            putIfNotNull(message, "exceptionType", failure.getErrorType());
+            message.put("failureDetails", entityFailureMap(failure));
+            return entityEventRaised(e, e.getRequestId(), message);
+        } else if (event instanceof EntityLockRequestedEvent) {
+            EntityLockRequestedEvent e = (EntityLockRequestedEvent) event;
+            if (e.getPosition() < 0 || e.getPosition() >= e.getLockSet().size()) {
+                throw new IllegalArgumentException("Entity lock position must identify a member of the lock set.");
+            }
+            message.put("op", null);
+            message.put("id", e.getCriticalSectionId());
+            message.put("parent", requireCurrentInstance(currentInstance).getInstanceId());
+            List<Map<String, Object>> lockSet = new ArrayList<>();
+            for (String entityId : e.getLockSet()) {
+                lockSet.add(entityIdMap(entityId));
+            }
+            message.put("lockset", lockSet);
+            if (e.getPosition() != 0) {
+                message.put("pos", e.getPosition());
+            }
+            return entityEventSent(e, e.getLockSet().get(e.getPosition()), "op", message);
+        } else if (event instanceof EntityLockGrantedEvent) {
+            EntityLockGrantedEvent e = (EntityLockGrantedEvent) event;
+            message.put("result", "Lock Acquisition Completed");
+            return entityEventRaised(e, e.getCriticalSectionId(), message);
+        } else if (event instanceof EntityUnlockSentEvent) {
+            EntityUnlockSentEvent e = (EntityUnlockSentEvent) event;
+            message.put("parent", requireCurrentInstance(currentInstance).getInstanceId());
+            message.put("id", e.getCriticalSectionId());
+            return entityEventSent(e, e.getTargetInstanceId(), "release", message);
+        }
+        throw new IllegalArgumentException("Unsupported entity history event: " + event.getClass().getSimpleName());
     }
 
+    private static Map<String, Object> operationMessage(
+            String operation, boolean signal, String input, String requestId,
+            Instant scheduledTime, OrchestrationInstance parent) {
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("op", operation);
+        if (signal) {
+            message.put("signal", true);
+        }
+        putIfNotNull(message, "input", input);
+        message.put("id", requestId);
+        if (parent != null) {
+            message.put("parent", parent.getInstanceId());
+            putIfNotNull(message, "parentExecution", parent.getExecutionId());
+        }
+        putIfNotNull(message, "due", formatInstantOrNull(scheduledTime));
+        return message;
+    }
+
+    private static OrchestrationInstance requireCurrentInstance(OrchestrationInstance instance) {
+        if (instance == null || instance.getInstanceId() == null) {
+            throw new IllegalArgumentException(
+                    "Entity history export requires an ExecutionStarted event with an orchestration instance.");
+        }
+        return instance;
+    }
+
+    private static Map<String, Object> entityIdMap(String entityId) {
+        int separator = entityId == null ? -1 : entityId.indexOf('@', 1);
+        if (entityId == null || !entityId.startsWith("@") || separator < 2) {
+            throw new IllegalArgumentException("Invalid entity ID in exported lock set: " + entityId);
+        }
+        // DT Core preserves name casing and permits empty keys, unlike the SDK's EntityInstanceId.
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("name", entityId.substring(1, separator));
+        result.put("key", entityId.substring(separator + 1));
+        return result;
+    }
+
+    private static Map<String, Object> entityFailureMap(FailureDetails failure) {
+        if (failure == null) {
+            return null;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ErrorType", failure.getErrorType());
+        result.put("ErrorMessage", failure.getErrorMessage());
+        result.put("StackTrace", failure.getStackTrace());
+        result.put("InnerFailure", entityFailureMap(failure.getInnerFailure()));
+        result.put("IsNonRetriable", failure.isNonRetriable());
+        result.put("Properties", failure.getProperties() == null ? Collections.emptyMap() : failure.getProperties());
+        return result;
+    }
+
+    private static String operationEventName(Instant scheduledTime) {
+        if (scheduledTime == null) {
+            return "op";
+        }
+        OffsetDateTime utc = scheduledTime.atOffset(ZoneOffset.UTC);
+        return "op@" + DATE_TIME.format(utc)
+                + String.format(Locale.ROOT, ".%07dZ", utc.getNano() / 100);
+    }
+
+    private static HistoryEvent entityEventSent(
+            HistoryEvent event, String target, String name, Map<String, Object> message) {
+        if (target == null) {
+            throw new IllegalArgumentException("Entity history export requires a target instance ID.");
+        }
+        return new EventSentEvent(event.getEventId(), event.getTimestamp(), target, name,
+                writeObject(message, ENTITY_MESSAGE_ESCAPES, 0));
+    }
+
+    private static HistoryEvent entityEventRaised(HistoryEvent event, String name, Map<String, Object> message) {
+        return new EventRaisedEvent(event.getEventId(), event.getTimestamp(), name,
+                writeObject(message, ENTITY_MESSAGE_ESCAPES, 0));
+    }
+
+    // ---- ordered map -> JSON with the parity escaper -------------------------------------------
+
     private static String writeObject(Map<String, Object> map) {
+        return writeObject(map, HtmlSafeJsonEscapes.INSTANCE, 0x7F);
+    }
+
+    private static String writeObject(
+            Map<String, Object> map, CharacterEscapes escapes, int highestNonEscapedChar) {
         StringWriter sw = new StringWriter();
         try (JsonGenerator g = FACTORY.createGenerator(sw)) {
-            g.setCharacterEscapes(HtmlSafeJsonEscapes.INSTANCE);
-            g.setHighestNonEscapedChar(0x7F);
+            g.setCharacterEscapes(escapes);
+            g.setHighestNonEscapedChar(highestNonEscapedChar);
             writeMap(g, map);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);

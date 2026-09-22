@@ -6,12 +6,16 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.models.BlobDownloadHeaders;
 import com.azure.storage.blob.models.BlobDownloadResponse;
+import com.azure.storage.blob.models.BlobErrorCode;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.azure.storage.blob.models.BlobRequestConditions;
 import com.azure.storage.blob.models.BlobStorageException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
@@ -19,6 +23,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -134,9 +144,9 @@ class BlobPayloadStoreTest {
 
     @Test
     void upload_containerAlreadyExists_succeeds() {
-        // createIfNotExists throwing 409 should be silently ignored
         BlobStorageException conflict = mock(BlobStorageException.class);
         when(conflict.getStatusCode()).thenReturn(409);
+        when(conflict.getErrorCode()).thenReturn(BlobErrorCode.CONTAINER_ALREADY_EXISTS);
         doThrow(conflict).when(mockContainerClient).createIfNotExists();
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
@@ -155,6 +165,140 @@ class BlobPayloadStoreTest {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
 
         assertThrows(PayloadStorageException.class, () -> store.upload("test"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void upload_deletedContainer_recreatesAndRetriesSameBlob(boolean compressed) {
+        options.setCompressionEnabled(compressed);
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        store.upload("first payload");
+
+        BlobStorageException missing = storageFailure(404, BlobErrorCode.CONTAINER_NOT_FOUND);
+        doThrow(missing).doNothing().when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), nullable(BlobHttpHeaders.class),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+
+        String token = store.upload("payload after deletion");
+
+        assertTrue(token.startsWith("blob:v1:durabletask-payloads:"));
+        verify(mockContainerClient, times(2)).createIfNotExists();
+        verify(mockContainerClient, times(2)).getBlobClient(anyString());
+        verify(mockBlobClient, times(3)).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), nullable(BlobHttpHeaders.class),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+    }
+
+    @Test
+    void upload_containerStillMissing_retriesOnlyOnce() {
+        BlobStorageException missing = storageFailure(404, BlobErrorCode.CONTAINER_NOT_FOUND);
+        doThrow(missing).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), any(BlobHttpHeaders.class),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+
+        PayloadStorageException failure = assertThrows(PayloadStorageException.class, () -> store.upload("payload"));
+
+        assertSame(missing, failure.getCause());
+        verify(mockContainerClient, times(2)).createIfNotExists();
+        verify(mockContainerClient).getBlobClient(anyString());
+        verify(mockBlobClient, times(2)).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), any(BlobHttpHeaders.class),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"404,BlobNotFound", "404,", "403,AuthorizationFailure", "500,InternalError"})
+    void upload_otherStorageFailures_doNotRecreateContainer(int status, String errorCode) {
+        BlobStorageException storageFailure = storageFailure(
+            status, errorCode == null ? null : BlobErrorCode.fromString(errorCode));
+        doThrow(storageFailure).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), any(BlobHttpHeaders.class),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+
+        PayloadStorageException failure = assertThrows(PayloadStorageException.class, () -> store.upload("payload"));
+
+        assertSame(storageFailure, failure.getCause());
+        verify(mockContainerClient).createIfNotExists();
+        verify(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), any(BlobHttpHeaders.class),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+    }
+
+    @Test
+    void upload_containerBeingDeleted_doesNotCacheFailedInitialization() {
+        BlobStorageException deleting = storageFailure(409, BlobErrorCode.CONTAINER_BEING_DELETED);
+        doThrow(deleting).doReturn(true).when(mockContainerClient).createIfNotExists();
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+
+        PayloadStorageException failure = assertThrows(PayloadStorageException.class, () -> store.upload("payload"));
+        assertSame(deleting, failure.getCause());
+        store.upload("later payload");
+
+        verify(mockContainerClient, times(2)).createIfNotExists();
+        verify(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), any(BlobHttpHeaders.class),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+    }
+
+    @Test
+    void upload_staleContainerNotFound_doesNotInvalidateNewGeneration() throws Exception {
+        options.setCompressionEnabled(false);
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        store.upload("initial payload");
+
+        CountDownLatch slowUploadStarted = new CountDownLatch(1);
+        CountDownLatch releaseSlowFailure = new CountDownLatch(1);
+        AtomicInteger slowAttempts = new AtomicInteger();
+        AtomicInteger fastAttempts = new AtomicInteger();
+        BlobStorageException missing = storageFailure(404, BlobErrorCode.CONTAINER_NOT_FOUND);
+        doAnswer(invocation -> {
+            InputStream stream = invocation.getArgument(0);
+            String payload = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            if (payload.equals("slow") && slowAttempts.incrementAndGet() == 1) {
+                slowUploadStarted.countDown();
+                assertTrue(releaseSlowFailure.await(5, TimeUnit.SECONDS));
+                throw missing;
+            }
+            if (payload.equals("fast") && fastAttempts.incrementAndGet() == 1) {
+                throw missing;
+            }
+            return null;
+        }).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(), isNull(),
+            isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> slow = executor.submit(() -> store.upload("slow"));
+            assertTrue(slowUploadStarted.await(5, TimeUnit.SECONDS));
+            Future<String> fast = executor.submit(() -> store.upload("fast"));
+            assertNotNull(fast.get(5, TimeUnit.SECONDS));
+            releaseSlowFailure.countDown();
+            assertNotNull(slow.get(5, TimeUnit.SECONDS));
+
+            assertEquals(2, slowAttempts.get());
+            assertEquals(2, fastAttempts.get());
+            verify(mockContainerClient, times(2)).createIfNotExists();
+        } finally {
+            releaseSlowFailure.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void upload_interruptedInitialization_preservesInterrupt() {
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(PayloadStorageException.class, () -> store.upload("payload"));
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(mockContainerClient, never()).createIfNotExists();
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     // ==================== Download tests ====================
@@ -388,6 +532,13 @@ class BlobPayloadStoreTest {
     }
 
     // ==================== Test helpers ====================
+
+    private static BlobStorageException storageFailure(int status, BlobErrorCode errorCode) {
+        BlobStorageException failure = mock(BlobStorageException.class);
+        when(failure.getStatusCode()).thenReturn(status);
+        when(failure.getErrorCode()).thenReturn(errorCode);
+        return failure;
+    }
 
     /**
      * Sets up the mockBlobClient to return a downloadStreamWithResponse that writes

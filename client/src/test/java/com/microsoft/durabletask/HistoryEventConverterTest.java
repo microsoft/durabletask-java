@@ -55,12 +55,54 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class HistoryEventConverterTest {
 
     private static final long EPOCH_SECONDS = 1_700_000_000L;
-    private static final Instant EXPECTED_TIMESTAMP = Instant.ofEpochSecond(EPOCH_SECONDS);
+    private static final int NANOSECONDS = 123_456_700;
+    private static final Instant EXPECTED_TIMESTAMP = Instant.ofEpochSecond(EPOCH_SECONDS, NANOSECONDS);
 
     private static OrchestratorService.HistoryEvent.Builder baseEvent(int eventId) {
         return OrchestratorService.HistoryEvent.newBuilder()
                 .setEventId(eventId)
-                .setTimestamp(Timestamp.newBuilder().setSeconds(EPOCH_SECONDS).build());
+                .setTimestamp(Timestamp.newBuilder().setSeconds(EPOCH_SECONDS).setNanos(NANOSECONDS).build());
+    }
+
+    @Test
+    void preservesPrecisionInNestedHistoryTimestamps() {
+        Timestamp precise = DataConverter.getTimestampFromInstant(EXPECTED_TIMESTAMP);
+        ExecutionStartedEvent started = (ExecutionStartedEvent) HistoryEventConverter.fromProto(baseEvent(1)
+                .setExecutionStarted(OrchestratorService.ExecutionStartedEvent.newBuilder()
+                        .setScheduledStartTimestamp(precise))
+                .build());
+        TimerCreatedEvent created = (TimerCreatedEvent) HistoryEventConverter.fromProto(baseEvent(2)
+                .setTimerCreated(OrchestratorService.TimerCreatedEvent.newBuilder().setFireAt(precise))
+                .build());
+        TimerFiredEvent fired = (TimerFiredEvent) HistoryEventConverter.fromProto(baseEvent(3)
+                .setTimerFired(OrchestratorService.TimerFiredEvent.newBuilder().setFireAt(precise))
+                .build());
+        EntityOperationCalledEvent called = (EntityOperationCalledEvent) HistoryEventConverter.fromProto(baseEvent(4)
+                .setEntityOperationCalled(OrchestratorService.EntityOperationCalledEvent.newBuilder()
+                        .setScheduledTime(precise))
+                .build());
+        EntityOperationSignaledEvent signaled = (EntityOperationSignaledEvent) HistoryEventConverter.fromProto(baseEvent(5)
+                .setEntityOperationSignaled(OrchestratorService.EntityOperationSignaledEvent.newBuilder()
+                        .setScheduledTime(precise))
+                .build());
+        HistoryStateEvent historyState = (HistoryStateEvent) HistoryEventConverter.fromProto(baseEvent(6)
+                .setHistoryState(OrchestratorService.HistoryStateEvent.newBuilder()
+                        .setOrchestrationState(OrchestratorService.OrchestrationState.newBuilder()
+                                .setScheduledStartTimestamp(precise)
+                                .setCreatedTimestamp(precise)
+                                .setLastUpdatedTimestamp(precise)
+                                .setCompletedTimestamp(precise)))
+                .build());
+
+        assertEquals(EXPECTED_TIMESTAMP, started.getScheduledStartTimestamp());
+        assertEquals(EXPECTED_TIMESTAMP, created.getFireAt());
+        assertEquals(EXPECTED_TIMESTAMP, fired.getFireAt());
+        assertEquals(EXPECTED_TIMESTAMP, called.getScheduledTime());
+        assertEquals(EXPECTED_TIMESTAMP, signaled.getScheduledTime());
+        assertEquals(EXPECTED_TIMESTAMP, historyState.getState().getScheduledStartTime());
+        assertEquals(EXPECTED_TIMESTAMP, historyState.getState().getCreatedTime());
+        assertEquals(EXPECTED_TIMESTAMP, historyState.getState().getLastUpdatedTime());
+        assertEquals(EXPECTED_TIMESTAMP, historyState.getState().getCompletedTime());
     }
 
     @Test

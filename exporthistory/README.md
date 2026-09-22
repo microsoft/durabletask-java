@@ -3,9 +3,7 @@
 Durable, resumable export of **terminal orchestration history** to Azure Blob Storage for the Durable Task Java
 SDK — for compliance, audit, and offline analysis before instances age out of the task hub.
 
-This module is at parity with the .NET `Microsoft.DurableTask.ExportHistory` (preview) feature: a checkpointed
-entity + orchestrator that pages terminal instances by completion window, fans out per-instance export activities,
-and uploads serialized history (gzipped JSONL by default) to a customer-owned blob container.
+This module uses the same checkpointed entity-and-orchestrator workflow as the .NET `Microsoft.DurableTask.ExportHistory` (preview) feature: it pages terminal instances by completion window, fans out per-instance export activities, and uploads serialized history (gzipped JSONL by default) to a customer-owned blob container.
 
 > **Status:** preview (`0.1.0`).
 
@@ -78,17 +76,16 @@ supplied, all three are exported.
 
 ## Export format
 
-Each blob holds the instance's full history, and the **blob body is byte-for-byte identical to the .NET
-`Microsoft.DurableTask.ExportHistory` output** (pinned by a test against golden output captured from
-`Microsoft.Azure.DurableTask.Core`):
+Each blob holds the instance's full history using .NET-style history-event JSON. Golden fixtures cover core event serialization and the legacy entity-message encoding produced by the .NET SDK and `Microsoft.Azure.DurableTask.Core`:
 
 - **JSONL** (default, gzipped) is one JSON object per line; **JSON** is a single array.
 - Each event is `{"eventType": "...", <type-specific fields>, "eventId": N, "isPlayed": false, "timestamp": "..."}`.
-- camelCase field names, null fields omitted, empty maps as `{}`, enum values in PascalCase (e.g. `"Completed"`),
-  timestamps as trimmed ISO-8601 ending in `Z`, and the same HTML-safe string escaping (`"` → `\u0022`,
-  `& < > ' +` and all non-ASCII → `\uXXXX`).
+- camelCase field names, null event fields omitted, empty maps as `{}`, enum values in PascalCase (e.g. `"Completed"`), timestamps as trimmed ISO-8601 ending in `Z`, and HTML-safe string escaping (`"` → `\u0022`, `& < > ' +` and all non-ASCII → `\uXXXX`).
+- Sub-millisecond timestamps are preserved when reading history and metadata. Exported timestamps and blob-name timestamps use .NET's 100-nanosecond precision; orchestration replay timestamp behavior is unchanged.
+- Entity operations and locks are exported as `EventSent`/`EventRaised` events. Their `input` contains the reference SDK's JSON-encoded entity request or response, including parent orchestration context and nested failure details. This replaces the earlier Java-native `Entity...` event format; consumers of that preview format must update their event handling. The public history API continues returning typed Java entity events.
+- JSONL uses LF line endings. Identical compressed bytes or identical fields across all SDK versions are not guaranteed.
 
-Blob **names**: a lowercase-hex SHA-256 of `"<completedTimestamp>|<instanceId>"` plus the format extension.
+Blob **names**: a lowercase-hex SHA-256 of `"<completedTimestamp>|<instanceId>"` plus the format extension. Re-exporting an instance previously named using millisecond-truncated metadata can produce a new blob name; existing export blobs are not renamed or removed.
 
 ## Backend requirement
 

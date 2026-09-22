@@ -1,4 +1,7 @@
 ## Unreleased
+* Recreate a deleted large-payload container and retry the upload once, without allowing stale concurrent failures to invalidate a newly recreated container.
+* Preserve backend timestamp precision in orchestration history and client metadata, including export blob names, while retaining existing orchestration replay timestamp behavior.
+* Export entity operations and locks using the .NET-compatible `EventSent`/`EventRaised` message representation instead of Java-native entity event objects.
 * Add the `exporthistory` module for durable, checkpointed export of terminal orchestration history to Azure Blob Storage ([#293](https://github.com/microsoft/durabletask-java/pull/293))
 * Add client APIs to list terminal instance IDs by completion time (`listInstanceIds`) and read orchestration history (`getOrchestrationHistory`) ([#292](https://github.com/microsoft/durabletask-java/pull/292))
 * Add `createReplaySafeLogger` to suppress orchestration log output during replay ([#295](https://github.com/microsoft/durabletask-java/pull/295)).
