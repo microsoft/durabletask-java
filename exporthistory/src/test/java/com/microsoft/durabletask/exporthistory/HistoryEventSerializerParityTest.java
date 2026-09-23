@@ -2,6 +2,11 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.exporthistory;
 
+import com.google.protobuf.StringValue;
+import com.google.protobuf.Value;
+import com.microsoft.durabletask.DataConverter;
+import com.microsoft.durabletask.DurableTaskClient;
+import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
 import com.microsoft.durabletask.FailureDetails;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 import com.microsoft.durabletask.history.ContinueAsNewEvent;
@@ -36,6 +41,13 @@ import com.microsoft.durabletask.history.TaskFailedEvent;
 import com.microsoft.durabletask.history.TaskScheduledEvent;
 import com.microsoft.durabletask.history.TimerCreatedEvent;
 import com.microsoft.durabletask.history.TimerFiredEvent;
+import com.microsoft.durabletask.implementation.protobuf.OrchestratorService;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
+import io.grpc.ManagedChannel;
+import io.grpc.Server;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -49,6 +61,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,6 +112,30 @@ class HistoryEventSerializerParityTest {
     }
 
     @Test
+    void entityInputControlCharactersMatchReferenceEncoding() {
+        StringBuilder controls = new StringBuilder();
+        for (char ch = 0; ch < 0x20; ch++) {
+            controls.append(ch);
+        }
+        HistoryEvent event = new EntityOperationSignaledEvent(
+                1, TS, "req-control", "echo", null, controls.toString(), "@counter@one");
+
+        // Newtonsoft inner-message JSON, wrapped with the reference export's System.Text.Json encoder.
+        String expected = "{\"eventType\":\"EventSent\",\"instanceId\":\"@counter@one\",\"name\":\"op\","
+                + "\"input\":\"{\\u0022op\\u0022:\\u0022echo\\u0022,\\u0022signal\\u0022:true,"
+                + "\\u0022input\\u0022:\\u0022"
+                + "\\\\u0000\\\\u0001\\\\u0002\\\\u0003\\\\u0004\\\\u0005\\\\u0006\\\\u0007"
+                + "\\\\b\\\\t\\\\n\\\\u000b\\\\f\\\\r\\\\u000e\\\\u000f"
+                + "\\\\u0010\\\\u0011\\\\u0012\\\\u0013\\\\u0014\\\\u0015\\\\u0016\\\\u0017"
+                + "\\\\u0018\\\\u0019\\\\u001a\\\\u001b\\\\u001c\\\\u001d\\\\u001e\\\\u001f"
+                + "\\u0022,\\u0022id\\u0022:\\u0022req-control\\u0022}\","
+                + "\"eventId\":1,\"isPlayed\":false,\"timestamp\":\"2026-06-30T12:00:00Z\"}";
+
+        assertEquals(expected + "\n", HistoryEventSerializer.serialize(Collections.singletonList(event), JSONL));
+        assertEquals("[" + expected + "]", HistoryEventSerializer.serialize(Collections.singletonList(event), JSON));
+    }
+
+    @Test
     void entityLockGrantUsesReferenceEventRaisedRepresentation() throws Exception {
         HistoryEvent event = new EntityLockGrantedEvent(3, TS, "cs-1");
         String actual = HistoryEventSerializer.serialize(Collections.singletonList(event), JSONL).trim();
@@ -125,6 +162,60 @@ class HistoryEventSerializerParityTest {
         }
         assertEquals(golden.size(), expectedIndex);
         assertEquals("[" + String.join(",", actual) + "]", HistoryEventSerializer.serialize(events, JSON));
+    }
+
+    @Test
+    void entityFailureFromStreamedHistoryMatchesReference() throws Exception {
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .setStackTrace(StringValue.of("at Foo()"))
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder()
+                        .setErrorType("Inner")
+                        .setErrorMessage("inner")
+                        .setIsNonRetriable(true))
+                .putProperties("code", Value.newBuilder().setNumberValue(42).build())
+                .build();
+        OrchestratorService.HistoryEvent event = OrchestratorService.HistoryEvent.newBuilder()
+                .setEventId(6)
+                .setTimestamp(DataConverter.getTimestampFromInstant(
+                        Instant.parse("2026-06-30T12:00:00.1234567Z")))
+                .setEntityOperationFailed(OrchestratorService.EntityOperationFailedEvent.newBuilder()
+                        .setRequestId("req-failed")
+                        .setFailureDetails(failure))
+                .build();
+        String serverName = InProcessServerBuilder.generateName();
+        Server server = InProcessServerBuilder.forName(serverName)
+                .directExecutor()
+                .addService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
+                    @Override
+                    public void streamInstanceHistory(
+                            OrchestratorService.StreamInstanceHistoryRequest request,
+                            StreamObserver<OrchestratorService.HistoryChunk> responseObserver) {
+                        responseObserver.onNext(OrchestratorService.HistoryChunk.newBuilder()
+                                .addEvents(event)
+                                .build());
+                        responseObserver.onCompleted();
+                    }
+                })
+                .build();
+        ManagedChannel channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
+        try {
+            server.start();
+            try (DurableTaskClient client = new DurableTaskGrpcClientBuilder().grpcChannel(channel).build()) {
+                List<HistoryEvent> history = client.getOrchestrationHistory("instance-1");
+                String expected = readGolden("/golden/reference-entity-history-events.jsonl").get(5);
+
+                assertEquals(1, history.size());
+                assertEquals(expected + "\n", HistoryEventSerializer.serialize(history, JSONL));
+                assertEquals("[" + expected + "]", HistoryEventSerializer.serialize(history, JSON));
+            }
+        } finally {
+            channel.shutdownNow();
+            server.shutdownNow();
+            assertTrue(channel.awaitTermination(5, TimeUnit.SECONDS));
+            assertTrue(server.awaitTermination(5, TimeUnit.SECONDS));
+        }
     }
 
     private static List<HistoryEvent> buildEntityEvents() throws Exception {

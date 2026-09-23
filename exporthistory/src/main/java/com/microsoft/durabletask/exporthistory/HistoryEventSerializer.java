@@ -83,6 +83,7 @@ final class HistoryEventSerializer {
         @Override
         public int[] getEscapeCodesForAscii() {
             int[] escapes = CharacterEscapes.standardAsciiEscapesForJSON();
+            // Short escapes have positive b/t/n/f/r codes; ESCAPE_STANDARD only marks Unicode escapes.
             for (int i = 0; i < 0x20; i++) {
                 if (escapes[i] == CharacterEscapes.ESCAPE_STANDARD) {
                     escapes[i] = CharacterEscapes.ESCAPE_CUSTOM;
