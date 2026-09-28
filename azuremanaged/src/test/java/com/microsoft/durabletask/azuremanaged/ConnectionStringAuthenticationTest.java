@@ -39,6 +39,11 @@ class ConnectionStringAuthenticationTest {
         );
     }
 
+    static Stream<Arguments> authenticationBuilders() {
+        return authenticationTypes().map(arguments ->
+            Arguments.of(arguments.get()[0], arguments.get()[1]));
+    }
+
     @ParameterizedTest
     @MethodSource("authenticationTypes")
     <T> void everyCredentialTypeReceivesDefaultAndExplicitAudiences(
@@ -110,9 +115,9 @@ class ConnectionStringAuthenticationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("authenticationTypes")
+    @MethodSource("authenticationBuilders")
     <T> void regionAndAudienceDoNotConfigureCredentialAuthority(
-            String authentication, Class<T> builderType, Class<? extends TokenCredential> credentialType) {
+            String authentication, Class<T> builderType) {
         try (MockedStatic<ResourceId> defaults = mockStatic(ResourceId.class, CALLS_REAL_METHODS);
              MockedConstruction<T> builders = mockConstruction(builderType,
                  withSettings().defaultAnswer(RETURNS_SELF))) {

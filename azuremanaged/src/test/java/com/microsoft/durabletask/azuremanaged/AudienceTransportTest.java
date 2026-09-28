@@ -66,7 +66,8 @@ class AudienceTransportTest {
             String endpoint = "http://127.0.0.1:" + server.getPort();
             channel = (ManagedChannel) (worker
                 ? new DurableTaskSchedulerWorkerOptions().setEndpointAddress(endpoint)
-                    .setTaskHubName("test-hub").setCredential(credential).createGrpcChannel()
+                    .setAllowInsecureCredentials(true).setTaskHubName("test-hub")
+                    .setCredential(credential).createGrpcChannel()
                 : new DurableTaskSchedulerClientOptions().setEndpointAddress(endpoint)
                     .setAllowInsecureCredentials(true).setTaskHubName("test-hub")
                     .setCredential(credential).createGrpcChannel());
