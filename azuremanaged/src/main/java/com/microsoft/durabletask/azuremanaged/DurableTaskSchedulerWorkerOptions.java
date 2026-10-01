@@ -143,7 +143,7 @@ public class DurableTaskSchedulerWorkerOptions {
 
     /**
      * Sets the token audience URI, independently of the endpoint and credential authority.
-     * Surrounding whitespace, trailing slashes, and one case-insensitive {@code /.default}
+     * Surrounding whitespace (including Unicode whitespace), trailing slashes, and one case-insensitive {@code /.default}
      * suffix are removed. Token requests append {@code /.default} to the result.
      *
      * @param resourceId The audience URI. Null or empty selects {@code https://durabletask.azure.us}

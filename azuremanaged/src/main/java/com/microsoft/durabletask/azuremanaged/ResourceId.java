@@ -30,7 +30,7 @@ final class ResourceId {
             return getDefault();
         }
 
-        String normalized = trimTrailingSlashes(resourceId.trim());
+        String normalized = trimTrailingSlashes(trimWhitespace(resourceId));
         if (normalized.regionMatches(true, normalized.length() - DEFAULT_SCOPE_SUFFIX.length(),
                 DEFAULT_SCOPE_SUFFIX, 0, DEFAULT_SCOPE_SUFFIX.length())) {
             normalized = trimTrailingSlashes(
@@ -42,6 +42,24 @@ final class ResourceId {
                     + "or omit ResourceId to use the region-based default.");
         }
         return normalized;
+    }
+
+    private static String trimWhitespace(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && isWhitespace(value.charAt(start))) {
+            start++;
+        }
+        while (end > start && isWhitespace(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(start, end);
+    }
+
+    private static boolean isWhitespace(char value) {
+        // Preserve trim()'s ASCII behavior and include Unicode spaces, non-breaking spaces, and NEL.
+        return value <= ' ' || value == '\u0085'
+            || Character.isWhitespace(value) || Character.isSpaceChar(value);
     }
 
     private static String trimTrailingSlashes(String value) {

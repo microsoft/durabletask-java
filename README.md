@@ -132,7 +132,8 @@ Set `ResourceId=https://durabletask.io` to retain the public audience in those
 regions. Prefixes, not substrings, are matched: `chinaeast2`, `notusgov`, and
 `notusdod` still use the public default. No audience is inferred from the endpoint.
 
-Explicit values have surrounding whitespace and trailing `/` characters removed,
+Explicit values have surrounding whitespace (including Unicode whitespace such as
+em spaces and non-breaking spaces) and trailing `/` characters removed,
 then one existing `/.default` suffix removed case-insensitively, followed by any
 remaining trailing `/` characters. URI casing is otherwise preserved. For example,
 `https://durabletask.azure.us//.DEFAULT//` requests

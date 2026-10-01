@@ -119,7 +119,7 @@ public class DurableTaskSchedulerConnectionString {
 
     /**
      * Gets the normalized token audience URI, not an Azure Resource Manager resource path.
-     * Surrounding whitespace, trailing slashes, and one case-insensitive {@code /.default}
+     * Surrounding whitespace (including Unicode whitespace), trailing slashes, and one case-insensitive {@code /.default}
      * suffix are removed from explicit values. Null or empty values select
      * {@code https://durabletask.azure.us} when {@code REGION_NAME} starts with
      * {@code usgov} or {@code usdod} (case-insensitively), otherwise {@code https://durabletask.io}.

@@ -47,6 +47,9 @@ class ResourceIdTest {
     private static final String GOVERNMENT = "https://durabletask.azure.us";
     private static final String ENDPOINT = "https://scheduler.example:443";
     private static final String HUB = "test-hub";
+    private static final String UNICODE_WHITESPACE =
+        "\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+            + "\u2028\u2029\u202f\u205f\u3000";
     private static final Metadata.Key<String> AUTHORIZATION =
         Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER);
     static final MethodDescriptor<Empty, Empty> METHOD = MethodDescriptor.<Empty, Empty>newBuilder()
@@ -90,6 +93,10 @@ class ResourceIdTest {
             Arguments.of(null, GOVERNMENT + "/.default", GOVERNMENT),
             Arguments.of(null, GOVERNMENT + "//.DEFAULT//", GOVERNMENT),
             Arguments.of(null, " \t" + GOVERNMENT + "/.default/ \t", GOVERNMENT),
+            Arguments.of(null, "\u2003" + GOVERNMENT + "//.DEFAULT//\u2003", GOVERNMENT),
+            Arguments.of("usgovvirginia", UNICODE_WHITESPACE + PUBLIC + UNICODE_WHITESPACE, PUBLIC),
+            Arguments.of(null, " \t" + UNICODE_WHITESPACE + "api://CustomAudience/resource/.DEFAULT/"
+                + UNICODE_WHITESPACE + "\t ", "api://CustomAudience/resource"),
             Arguments.of("usgovvirginia", "api://CustomAudience/resource/.DEFAULT/",
                 "api://CustomAudience/resource"),
             Arguments.of("westus2", "api://custom/.default/.default", "api://custom/.default")
@@ -129,7 +136,13 @@ class ResourceIdTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {" \t ", "///", "/.default", "/.DEFAULT///", " /.DEFAULT/// "})
+    @ValueSource(strings = {
+        " \t ", "///", "/.default", "/.DEFAULT///", " /.DEFAULT/// ",
+        "\u0085", "\u00a0", "\u1680", "\u2000", "\u2001", "\u2002", "\u2003", "\u2004", "\u2005",
+        "\u2006", "\u2007", "\u2008", "\u2009", "\u200a", "\u2028", "\u2029", "\u202f", "\u205f", "\u3000",
+        UNICODE_WHITESPACE, "\u2003///\u2003", "\u00a0/.DEFAULT///\u202f",
+        " \t" + UNICODE_WHITESPACE + "/.default" + UNICODE_WHITESPACE + "\t "
+    })
     void allPublicPathsRejectInvalidAudiencesEvenWithoutCredentials(String resourceId) {
         try (ChannelCapture channels = new ChannelCapture()) {
             for (Path path : Path.values()) {
