@@ -23,9 +23,12 @@ import com.azure.identity.WorkloadIdentityCredentialBuilder;
 
 /**
  * Represents the constituent parts of a connection string for a Durable Task Scheduler service.
+ * Supports optional {@code ResourceId} (token audience URI) and {@code AuthorityHost}
+ * (credential authority) properties, independent of {@code Endpoint}.
  */
 public class DurableTaskSchedulerConnectionString {
     private final Map<String, String> properties;
+    private final String resourceId;
 
     /**
      * Initializes a new instance of the DurableTaskSchedulerConnectionString class.
@@ -43,6 +46,7 @@ public class DurableTaskSchedulerConnectionString {
         this.getAuthentication();
         this.getTaskHubName();
         this.getEndpoint();
+        this.resourceId = ResourceId.resolve(getValue("ResourceId"));
     }
 
     /**
@@ -113,6 +117,33 @@ public class DurableTaskSchedulerConnectionString {
         return getRequiredValue("TaskHub");
     }
 
+    /**
+     * Gets the normalized token audience URI, not an Azure Resource Manager resource path.
+     * Surrounding whitespace (including Unicode whitespace), trailing slashes, and one case-insensitive {@code /.default}
+     * suffix are removed from explicit values. Null or empty values select
+     * {@code https://durabletask.azure.us} when {@code REGION_NAME} starts with
+     * {@code usgov} or {@code usdod} (case-insensitively), otherwise {@code https://durabletask.io}.
+     * The default is resolved when this connection string is parsed, not at token refresh.
+     *
+     * @return The normalized resource ID.
+     */
+    public String getResourceId() {
+        return resourceId;
+    }
+
+    /**
+     * Gets the optional Microsoft Entra authority host for credentials created by this connection string.
+     * Applies to DefaultAzure, Environment, WorkloadIdentity, and InteractiveBrowser authentication.
+     * When omitted or empty, Azure Identity retains its default behavior, including
+     * {@code AZURE_AUTHORITY_HOST} where supported. Managed identity uses its hosting environment's
+     * identity endpoint; developer-tool credentials require the tools' own cloud configuration.
+     *
+     * @return The authority host, or null if not specified. This does not change the endpoint or audience.
+     */
+    public @Nullable String getAuthorityHost() {
+        return getValue("AuthorityHost");
+    }
+
     private String getValue(String name) {
         return properties.get(name);
     }
@@ -133,7 +164,9 @@ public class DurableTaskSchedulerConnectionString {
             int equalsIndex = pair.indexOf('=');
             if (equalsIndex > 0) {
                 String key = pair.substring(0, equalsIndex).trim();
-                String value = pair.substring(equalsIndex + 1).trim();
+                // Preserve whitespace-only ResourceId values so normalization can reject them.
+                String rawValue = pair.substring(equalsIndex + 1);
+                String value = key.equals("ResourceId") ? rawValue : rawValue.trim();
                 properties.put(key, value);
             }
         }
@@ -149,15 +182,24 @@ public class DurableTaskSchedulerConnectionString {
      */
     public @Nullable TokenCredential getCredential() {
         String authType = getAuthentication();
+        String authorityHost = getAuthorityHost();
+        boolean hasAuthorityHost = authorityHost != null && !authorityHost.isEmpty();
         
         // Parse the supported auth types in a case-insensitive way
         switch (authType.toLowerCase().trim()) {
             case "defaultazure":
-                return new DefaultAzureCredentialBuilder().build(); // CodeQL [SM05141] Use DefaultAzureCredential explicitly for local development and is decided by the user
+                DefaultAzureCredentialBuilder defaultBuilder = new DefaultAzureCredentialBuilder();
+                if (hasAuthorityHost) {
+                    defaultBuilder.authorityHost(authorityHost);
+                }
+                return defaultBuilder.build(); // CodeQL [SM05141] Use DefaultAzureCredential explicitly for local development and is decided by the user
             case "managedidentity":
                 return new ManagedIdentityCredentialBuilder().clientId(getClientId()).build();
             case "workloadidentity":
                 WorkloadIdentityCredentialBuilder builder = new WorkloadIdentityCredentialBuilder();
+                if (hasAuthorityHost) {
+                    builder.authorityHost(authorityHost);
+                }
                 if (getClientId() != null && !getClientId().isEmpty()) {
                     builder.clientId(getClientId());
                 }
@@ -178,7 +220,11 @@ public class DurableTaskSchedulerConnectionString {
 
                 return builder.build();
             case "environment":
-                return new EnvironmentCredentialBuilder().build();
+                EnvironmentCredentialBuilder environmentBuilder = new EnvironmentCredentialBuilder();
+                if (hasAuthorityHost) {
+                    environmentBuilder.authorityHost(authorityHost);
+                }
+                return environmentBuilder.build();
             case "azurecli":
                 return new AzureCliCredentialBuilder().build();
             case "azurepowershell":
@@ -188,7 +234,11 @@ public class DurableTaskSchedulerConnectionString {
             case "intellij":
                 return new IntelliJCredentialBuilder().build();
             case "interactivebrowser":
-                return new InteractiveBrowserCredentialBuilder().build();
+                InteractiveBrowserCredentialBuilder browserBuilder = new InteractiveBrowserCredentialBuilder();
+                if (hasAuthorityHost) {
+                    browserBuilder.authorityHost(authorityHost);
+                }
+                return browserBuilder.build();
             case "none":
                 return null;
             default:

@@ -1,4 +1,6 @@
 ## Unreleased
+* Add normalized token audience configuration through Azure Managed client/worker options, convenience overloads, and connection-string `ResourceId`. Missing or empty audiences now default to `https://durabletask.azure.us` when `REGION_NAME` starts with `usgov` or `usdod` (case-insensitively), otherwise `https://durabletask.io`. Explicit audiences override this default; surrounding Unicode whitespace is trimmed, and whitespace-only or otherwise empty normalized values are rejected.
+* Add optional connection-string `AuthorityHost` forwarding for Azure Identity credentials that support it. Audience selection does not change the service endpoint or credential authority; managed identity and developer-tool cloud configuration remain separate.
 * Add the `exporthistory` module for durable, checkpointed export of terminal orchestration history to Azure Blob Storage ([#293](https://github.com/microsoft/durabletask-java/pull/293))
 * Add client APIs to list terminal instance IDs by completion time (`listInstanceIds`) and read orchestration history (`getOrchestrationHistory`) ([#292](https://github.com/microsoft/durabletask-java/pull/292))
 * Add `createReplaySafeLogger` to suppress orchestration log output during replay ([#295](https://github.com/microsoft/durabletask-java/pull/295)).
