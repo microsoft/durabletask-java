@@ -30,12 +30,15 @@ public class DurableTaskSchedulerWorkerOptions {
     private String taskHubName = "";
 
     private TokenCredential credential;
-    private String resourceId = "https://durabletask.io";
+    private String resourceId = ResourceId.getDefault();
     private boolean allowInsecureCredentials = false;
     private Duration tokenRefreshMargin = Duration.ofMinutes(5);
 
     /**
      * Creates a new instance of DurableTaskSchedulerWorkerOptions.
+     * Resolves the token audience from {@code REGION_NAME} for this instance.
+     *
+     * @see #setResourceId(String)
      */
     public DurableTaskSchedulerWorkerOptions() {
     }
@@ -62,6 +65,8 @@ public class DurableTaskSchedulerWorkerOptions {
         options.setEndpointAddress(connectionString.getEndpoint());
         options.setTaskHubName(connectionString.getTaskHubName());
         options.setCredential(connectionString.getCredential());
+        // The connection string has already resolved and normalized this audience.
+        options.resourceId = connectionString.getResourceId();
         options.setAllowInsecureCredentials(options.getCredential() == null);
         return options;
     }
@@ -118,7 +123,8 @@ public class DurableTaskSchedulerWorkerOptions {
     /**
      * Sets the credential used for authentication.
      * 
-     * @param credential The credential.
+     * @param credential The credential, or null for anonymous access. Configure the authority/cloud
+     *                   on the credential itself; the resource ID does not change its authority.
      * @return This options object.
      */
     public DurableTaskSchedulerWorkerOptions setCredential(TokenCredential credential) {
@@ -127,7 +133,7 @@ public class DurableTaskSchedulerWorkerOptions {
     }
 
     /**
-     * Gets the resource ID.
+     * Gets the normalized token audience URI (not an Azure Resource Manager resource path).
      * 
      * @return The resource ID.
      */
@@ -136,13 +142,19 @@ public class DurableTaskSchedulerWorkerOptions {
     }
 
     /**
-     * Sets the resource ID.
-     * 
-     * @param resourceId The resource ID.
+     * Sets the token audience URI, independently of the endpoint and credential authority.
+     * Surrounding whitespace (including Unicode whitespace), trailing slashes, and one case-insensitive {@code /.default}
+     * suffix are removed. Token requests append {@code /.default} to the result.
+     *
+     * @param resourceId The audience URI. Null or empty selects {@code https://durabletask.azure.us}
+     *                   when {@code REGION_NAME} starts with {@code usgov} or {@code usdod}
+     *                   (case-insensitively), otherwise {@code https://durabletask.io}.
+     *                   The selection is retained for subsequent channels and token refreshes.
      * @return This options object.
+     * @throws IllegalArgumentException if a nonempty value becomes empty after normalization.
      */
     public DurableTaskSchedulerWorkerOptions setResourceId(String resourceId) {
-        this.resourceId = resourceId;
+        this.resourceId = ResourceId.resolve(resourceId);
         return this;
     }
 

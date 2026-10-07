@@ -48,6 +48,29 @@ public final class DurableTaskSchedulerWorkerExtensions {
             String endpoint,
             String taskHubName,
             @Nullable TokenCredential tokenCredential) {
+        useDurableTaskScheduler(builder, endpoint, taskHubName, tokenCredential, null);
+    }
+
+    /**
+     * Configures a worker builder with an explicit token audience.
+     *
+     * @param builder The builder to configure.
+     * @param endpoint The service endpoint, independent of the audience and credential authority.
+     * @param taskHubName The name of the task hub.
+     * @param tokenCredential The credential, with its authority/cloud configured by the caller,
+     *                        or null for anonymous access.
+     * @param resourceId The token audience URI, or null/empty for the region-based default.
+     *                   See {@link DurableTaskSchedulerWorkerOptions#setResourceId(String)}
+     *                   for normalization and default selection.
+     * @throws NullPointerException if builder, endpoint, or taskHubName is null.
+     * @throws IllegalArgumentException if resourceId becomes empty after normalization.
+     */
+    public static void useDurableTaskScheduler(
+            DurableTaskGrpcWorkerBuilder builder,
+            String endpoint,
+            String taskHubName,
+            @Nullable TokenCredential tokenCredential,
+            @Nullable String resourceId) {
         Objects.requireNonNull(builder, "builder must not be null");
         Objects.requireNonNull(endpoint, "endpoint must not be null");
         Objects.requireNonNull(taskHubName, "taskHubName must not be null");
@@ -55,6 +78,7 @@ public final class DurableTaskSchedulerWorkerExtensions {
         configureBuilder(builder, new DurableTaskSchedulerWorkerOptions()
             .setEndpointAddress(endpoint)
             .setTaskHubName(taskHubName)
+            .setResourceId(resourceId)
             .setCredential(tokenCredential));
     }
 
@@ -85,12 +109,35 @@ public final class DurableTaskSchedulerWorkerExtensions {
             String endpoint,
             String taskHubName,
             @Nullable TokenCredential tokenCredential) {
+        return createWorkerBuilder(endpoint, taskHubName, tokenCredential, null);
+    }
+
+    /**
+     * Creates a worker builder with an explicit token audience.
+     *
+     * @param endpoint The service endpoint, independent of the audience and credential authority.
+     * @param taskHubName The name of the task hub.
+     * @param tokenCredential The credential, with its authority/cloud configured by the caller,
+     *                        or null for anonymous access.
+     * @param resourceId The token audience URI, or null/empty for the region-based default.
+     *                   See {@link DurableTaskSchedulerWorkerOptions#setResourceId(String)}
+     *                   for normalization and default selection.
+     * @return A new configured DurableTaskGrpcWorkerBuilder instance.
+     * @throws NullPointerException if endpoint or taskHubName is null.
+     * @throws IllegalArgumentException if resourceId becomes empty after normalization.
+     */
+    public static DurableTaskGrpcWorkerBuilder createWorkerBuilder(
+            String endpoint,
+            String taskHubName,
+            @Nullable TokenCredential tokenCredential,
+            @Nullable String resourceId) {
         Objects.requireNonNull(endpoint, "endpoint must not be null");
         Objects.requireNonNull(taskHubName, "taskHubName must not be null");
         
         return createBuilderFromOptions(new DurableTaskSchedulerWorkerOptions()
             .setEndpointAddress(endpoint)
             .setTaskHubName(taskHubName)
+            .setResourceId(resourceId)
             .setCredential(tokenCredential)
             .setAllowInsecureCredentials(tokenCredential == null));
     }

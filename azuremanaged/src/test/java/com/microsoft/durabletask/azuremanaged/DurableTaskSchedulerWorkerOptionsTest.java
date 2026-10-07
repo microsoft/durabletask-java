@@ -36,7 +36,7 @@ public class DurableTaskSchedulerWorkerOptionsTest {
         assertEquals("", options.getEndpointAddress());
         assertEquals("", options.getTaskHubName());
         assertNull(options.getCredential());
-        assertEquals("https://durabletask.io", options.getResourceId());
+        assertEquals(ResourceId.getDefault(), options.getResourceId());
         assertFalse(options.isAllowInsecureCredentials());
         assertEquals(Duration.ofMinutes(5), options.getTokenRefreshMargin());
     }
