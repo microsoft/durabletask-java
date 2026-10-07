@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.exporthistory;
 
+import com.google.protobuf.ListValue;
+import com.google.protobuf.Struct;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Value;
 import com.microsoft.durabletask.DataConverter;
@@ -176,6 +178,73 @@ class HistoryEventSerializerParityTest {
                         .setIsNonRetriable(true))
                 .putProperties("code", Value.newBuilder().setNumberValue(42).build())
                 .build();
+        List<HistoryEvent> history = streamEntityFailure(failure);
+        String expected = readGolden("/golden/reference-entity-history-events.jsonl").get(5);
+        assertEquals(expected + "\n", HistoryEventSerializer.serialize(history, JSONL));
+        assertEquals("[" + expected + "]", HistoryEventSerializer.serialize(history, JSON));
+    }
+
+    @Test
+    void streamedEntityFailureProjectsDatePropertiesWithoutChangingPublicValues() throws Exception {
+        Value values = Value.newBuilder().setListValue(ListValue.newBuilder()
+                .addValues(propertyString("dt:2026-06-30T12:00:00.0000000Z"))
+                .addValues(propertyString("dt:2026-06-30T12:00:00.1234000Z"))
+                .addValues(propertyString("dt:2026-06-30T12:00:00.0000000"))
+                .addValues(propertyString("dto:2026-06-30T12:00:00.1234567+05:30"))
+                .addValues(propertyString("dto:2026-06-30T12:00:00.0000000+00:00"))
+                .addValues(propertyString("dto:2026-06-30T12:00:00.1200000-07:00"))
+                .addValues(propertyString("ordinary"))
+                .addValues(propertyString("dt:not-a-date"))
+                .addValues(propertyString("dto:2026-02-30T12:00:00+00:00"))
+                .addValues(propertyString("dt:2026-06-30T12:00:00+15:00"))
+                .addValues(propertyString("dto:2026-06-30T12:00:00+00:00[UTC]"))
+                .addValues(Value.newBuilder().setStructValue(Struct.newBuilder()
+                        .putFields("nested", Value.newBuilder().setListValue(ListValue.newBuilder()
+                                .addValues(propertyString("dt:2026-06-30T12:00:00.0000001Z"))
+                                .addValues(Value.newBuilder().setBoolValue(true))
+                                .addValues(Value.newBuilder().setNumberValue(42))
+                                .addValues(Value.newBuilder().setNullValueValue(0))).build())).build()))
+                .build();
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .putProperties("values", values)
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder()
+                        .setErrorType("Inner")
+                        .setErrorMessage("inner")
+                        .putProperties("date", propertyString("dto:2026-06-30T12:00:00.1000000+00:00")))
+                .build();
+        List<HistoryEvent> history = streamEntityFailure(failure);
+        String expectedInput = "{\"result\":\"boom\",\"exceptionType\":\"Outer\",\"failureDetails\":"
+                + "{\"ErrorType\":\"Outer\",\"ErrorMessage\":\"boom\",\"StackTrace\":null,\"InnerFailure\":"
+                + "{\"ErrorType\":\"Inner\",\"ErrorMessage\":\"inner\",\"StackTrace\":null,\"InnerFailure\":null,"
+                + "\"IsNonRetriable\":false,\"Properties\":{\"date\":\"2026-06-30T12:00:00.1+00:00\"}},"
+                + "\"IsNonRetriable\":false,\"Properties\":{\"values\":["
+                + "\"2026-06-30T12:00:00Z\",\"2026-06-30T12:00:00.1234Z\",\"2026-06-30T12:00:00\","
+                + "\"2026-06-30T12:00:00.1234567+05:30\",\"2026-06-30T12:00:00+00:00\","
+                + "\"2026-06-30T12:00:00.12-07:00\",\"ordinary\",\"dt:not-a-date\","
+                + "\"dto:2026-02-30T12:00:00+00:00\",\"dt:2026-06-30T12:00:00+15:00\","
+                + "\"dto:2026-06-30T12:00:00+00:00[UTC]\","
+                + "{\"nested\":[\"2026-06-30T12:00:00.0000001Z\",true,42.0,null]}]}}}";
+        String expected = "{\"eventType\":\"EventRaised\",\"name\":\"req-failed\",\"input\":\""
+                + expectedInput.replace("\"", "\\u0022").replace("+", "\\u002B")
+                + "\",\"eventId\":6,\"isPlayed\":false,\"timestamp\":\"2026-06-30T12:00:00.1234567Z\"}";
+        assertEquals(expected + "\n", HistoryEventSerializer.serialize(history, JSONL));
+        assertEquals("[" + expected + "]", HistoryEventSerializer.serialize(history, JSON));
+
+        FailureDetails publicFailure = ((EntityOperationFailedEvent) history.get(0)).getFailureDetails();
+        assertEquals("dt:2026-06-30T12:00:00.0000000Z",
+                ((List<?>) publicFailure.getProperties().get("values")).get(0));
+        assertEquals("dto:2026-06-30T12:00:00.1000000+00:00",
+                publicFailure.getInnerFailure().getProperties().get("date"));
+    }
+
+    private static Value propertyString(String text) {
+        return Value.newBuilder().setStringValue(text).build();
+    }
+
+    private static List<HistoryEvent> streamEntityFailure(
+            OrchestratorService.TaskFailureDetails failure) throws Exception {
         OrchestratorService.HistoryEvent event = OrchestratorService.HistoryEvent.newBuilder()
                 .setEventId(6)
                 .setTimestamp(DataConverter.getTimestampFromInstant(
@@ -204,11 +273,8 @@ class HistoryEventSerializerParityTest {
             server.start();
             try (DurableTaskClient client = new DurableTaskGrpcClientBuilder().grpcChannel(channel).build()) {
                 List<HistoryEvent> history = client.getOrchestrationHistory("instance-1");
-                String expected = readGolden("/golden/reference-entity-history-events.jsonl").get(5);
-
                 assertEquals(1, history.size());
-                assertEquals(expected + "\n", HistoryEventSerializer.serialize(history, JSONL));
-                assertEquals("[" + expected + "]", HistoryEventSerializer.serialize(history, JSON));
+                return history;
             }
         } finally {
             channel.shutdownNow();

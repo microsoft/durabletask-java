@@ -44,10 +44,17 @@ import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.time.DateTimeException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoField;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -73,6 +80,24 @@ final class HistoryEventSerializer {
 
     private static final DateTimeFormatter DATE_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
+    private static final DateTimeFormatter PROPERTY_DATE_TIME = new DateTimeFormatterBuilder()
+            .appendPattern("uuuu-MM-dd'T'HH:mm:ss")
+            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 7, true)
+            .toFormatter(Locale.ROOT);
+
+    private static final DateTimeFormatter PROPERTY_DATE_TIME_OFFSET = new DateTimeFormatterBuilder()
+            .append(PROPERTY_DATE_TIME)
+            .appendOffset("+HH:MM", "+00:00")
+            .toFormatter(Locale.ROOT);
+
+    private static final DateTimeFormatter PROPERTY_DATE_PARSER = new DateTimeFormatterBuilder()
+            .append(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            .optionalStart()
+            .appendOffset("+HH:MM", "Z")
+            .optionalEnd()
+            .toFormatter(Locale.ROOT)
+            .withResolverStyle(ResolverStyle.STRICT);
 
     private static final JsonFactory FACTORY = new JsonFactory();
 
@@ -502,8 +527,66 @@ final class HistoryEventSerializer {
         result.put("StackTrace", failure.getStackTrace());
         result.put("InnerFailure", entityFailureMap(failure.getInnerFailure()));
         result.put("IsNonRetriable", failure.isNonRetriable());
-        result.put("Properties", failure.getProperties() == null ? Collections.emptyMap() : failure.getProperties());
+        result.put("Properties", failure.getProperties() == null
+                ? Collections.emptyMap() : projectEntityFailureProperty(failure.getProperties()));
         return result;
+    }
+
+    private static Object projectEntityFailureProperty(Object value) {
+        if (value instanceof Map) {
+            Map<Object, Object> projected = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                projected.put(entry.getKey(), projectEntityFailureProperty(entry.getValue()));
+            }
+            return projected;
+        }
+        if (value instanceof List) {
+            List<Object> projected = new ArrayList<>();
+            for (Object item : (List<?>) value) {
+                projected.add(projectEntityFailureProperty(item));
+            }
+            return projected;
+        }
+        if (!(value instanceof String)) {
+            return value;
+        }
+        String text = (String) value;
+        boolean dateTimeOffset = text.startsWith("dto:");
+        if (!dateTimeOffset && !text.startsWith("dt:")) {
+            return text;
+        }
+        try {
+            TemporalAccessor parsed = PROPERTY_DATE_PARSER.parse(
+                    text.substring(dateTimeOffset ? 4 : 3));
+            LocalDateTime date = LocalDateTime.from(parsed);
+            if (date.getYear() < 1 || date.getYear() > 9999) {
+                return text;
+            }
+            ZoneOffset offset = parsed.isSupported(ChronoField.OFFSET_SECONDS)
+                    ? ZoneOffset.from(parsed) : null;
+            if (offset != null && Math.abs(offset.getTotalSeconds()) > 14 * 60 * 60) {
+                return text;
+            }
+            if (dateTimeOffset) {
+                OffsetDateTime offsetDate = offset == null
+                        ? date.atZone(ZoneId.systemDefault()).toOffsetDateTime() : date.atOffset(offset);
+                // .NET DateTimeOffset retains its offset, including +00:00 rather than Z.
+                return PROPERTY_DATE_TIME_OFFSET.format(offsetDate);
+            }
+            if (offset == null) {
+                return PROPERTY_DATE_TIME.format(date);
+            }
+            if (text.endsWith("Z")) {
+                return PROPERTY_DATE_TIME.format(date) + "Z";
+            }
+            // RoundtripKind parses an explicit DateTime offset into the machine's local time zone.
+            OffsetDateTime local = OffsetDateTime.from(parsed).atZoneSameInstant(ZoneId.systemDefault())
+                    .toOffsetDateTime();
+            return PROPERTY_DATE_TIME_OFFSET.format(local);
+        } catch (DateTimeException ex) {
+            // Invalid tags are ordinary property strings in the reference conversion.
+            return text;
+        }
     }
 
     private static String operationEventName(Instant scheduledTime) {
