@@ -112,6 +112,100 @@ The following packages are produced from this repo.
 | [Durable Task - Azure Blob Payloads](azure-blob-payloads/README.md) | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-azure-blob-payloads?label=durabletask-azure-blob-payloads)](https://mvnrepository.com/artifact/com.microsoft/durabletask-azure-blob-payloads) |
 | [Durable Task - Export History](exporthistory/README.md) | [![Maven Central](https://img.shields.io/maven-central/v/com.microsoft/durabletask-exporthistory?label=durabletask-exporthistory)](https://mvnrepository.com/artifact/com.microsoft/durabletask-exporthistory) |
 
+## Azure Durable Task Scheduler authentication
+
+The `com.microsoft:durabletask-azuremanaged` package configures clients and workers
+through `DurableTaskSchedulerClientOptions`, `DurableTaskSchedulerWorkerOptions`,
+or the corresponding `DurableTaskSchedulerClientExtensions` and
+`DurableTaskSchedulerWorkerExtensions` convenience methods.
+
+### Token audience
+
+Set `resourceId` using `setResourceId(...)` on either options class, the optional
+last argument of the `createClientBuilder`, `createWorkerBuilder`, and
+`useDurableTaskScheduler` overloads, or `ResourceId` in a connection string.
+This is a **token audience URI**, not an Azure Resource Manager resource path.
+Existing overloads remain supported.
+
+| Configuration | Selected audience |
+| --- | --- |
+| Explicit nonempty `resourceId` / `ResourceId` | The normalized explicit value |
+| Missing, null, or empty value, with `REGION_NAME` starting with `usgov` or `usdod` (case-insensitive) | `https://durabletask.azure.us` |
+| All other cases | `https://durabletask.io` |
+
+**Default behavior change:** applications running in US Government or DoD regions
+now select the government audience when no explicit audience is provided.
+Set `ResourceId=https://durabletask.io` to retain the public audience in those
+regions. Prefixes, not substrings, are matched: `chinaeast2`, `notusgov`, and
+`notusdod` still use the public default. No audience is inferred from the endpoint.
+
+Explicit values have surrounding whitespace (including Unicode whitespace such as
+em spaces and non-breaking spaces) and trailing `/` characters removed,
+then one existing `/.default` suffix removed case-insensitively, followed by any
+remaining trailing `/` characters. URI casing is otherwise preserved. For example,
+`https://durabletask.azure.us//.DEFAULT//` requests
+`https://durabletask.azure.us/.default`, and `api://CustomAudience/resource/.DEFAULT/`
+requests `api://CustomAudience/resource/.default`. Whitespace-only input, `///`,
+`/.default`, and `/.DEFAULT///` throw `IllegalArgumentException`; use an omitted
+or genuinely empty value for the default.
+
+Defaults are resolved per options instance or parsed connection string, rather
+than at class initialization. Setting a null or empty audience explicitly resolves
+the default again at that point. The selected audience is retained when creating
+channels, refreshing tokens, and reconnecting. Connection-string conversion does
+not normalize the audience again.
+
+### Government-cloud example and credential authority
+
+The **audience**, **credential authority/cloud**, and **service endpoint** are
+independent settings. Neither `resourceId` nor `REGION_NAME` changes the endpoint
+or credential authority. For an already-created `TokenCredential`, configure
+authority on that credential; token requests do not override it.
+
+```java
+import com.azure.core.credential.TokenCredential;
+import com.azure.identity.AzureAuthorityHosts;
+import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
+import com.microsoft.durabletask.DurableTaskGrpcWorkerBuilder;
+import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerClientExtensions;
+import com.microsoft.durabletask.azuremanaged.DurableTaskSchedulerWorkerExtensions;
+
+// Set these to your scheduler's actual endpoint and task hub.
+String endpoint = System.getenv("DTS_ENDPOINT");
+String taskHub = System.getenv("DTS_TASK_HUB");
+TokenCredential credential = new DefaultAzureCredentialBuilder()
+    .authorityHost(AzureAuthorityHosts.AZURE_GOVERNMENT)
+    .build();
+
+DurableTaskGrpcClientBuilder clientBuilder =
+    DurableTaskSchedulerClientExtensions.createClientBuilder(
+        endpoint, taskHub, credential, "https://durabletask.azure.us");
+DurableTaskGrpcWorkerBuilder workerBuilder =
+    DurableTaskSchedulerWorkerExtensions.createWorkerBuilder(
+        endpoint, taskHub, credential, "https://durabletask.azure.us");
+```
+
+When the SDK constructs the credential from a connection string, use the optional
+`AuthorityHost` property:
+
+```text
+Endpoint=<your-scheduler-endpoint>;TaskHub=<your-task-hub>;Authentication=DefaultAzure;ResourceId=https://durabletask.azure.us;AuthorityHost=https://login.microsoftonline.us/
+```
+
+`AuthorityHost` is forwarded to Azure Identity for `DefaultAzure`, `Environment`,
+`WorkloadIdentity`, and `InteractiveBrowser` authentication. Omission or an empty
+value leaves Azure Identity's defaults intact, including `AZURE_AUTHORITY_HOST`
+where supported. It is not an authority override on client or worker options.
+
+Managed identity uses the hosting environment's identity endpoint; an Entra
+authority override does not apply. Developer-tool credentials (`AzureCli`,
+`AzurePowerShell`, `VisualStudioCode`, and `IntelliJ`) use those tools' cloud
+configuration, not the connection string's `AuthorityHost`. Configure them
+separately, including when they are used by `DefaultAzureCredential` (for example,
+`az cloud set --name AzureUSGovernment` before signing in with Azure CLI).
+`Authentication=None` remains anonymous.
+
 ## Getting started with Azure Functions
 
 For information about how to get started with Durable Functions for Java, see the [Azure Functions README.md](/azurefunctions/README.md) content.
