@@ -166,6 +166,25 @@ public class HistoryEventConverterTest {
     }
 
     @Test
+    void historyFailuresPreserveEmptyPropertyMapsWithoutChangingGeneralFailureConversion() {
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder().setErrorType("Inner"))
+                .build();
+        TaskFailedEvent event = (TaskFailedEvent) HistoryEventConverter.fromProto(baseEvent(1)
+                .setTaskFailed(OrchestratorService.TaskFailedEvent.newBuilder().setFailureDetails(failure)).build());
+        FailureDetails converted = event.getFailureDetails();
+
+        assertNotNull(converted.getProperties());
+        assertTrue(converted.getProperties().isEmpty());
+        assertNotNull(converted.getInnerFailure().getProperties());
+        assertTrue(converted.getInnerFailure().getProperties().isEmpty());
+        assertThrows(UnsupportedOperationException.class, () -> converted.getProperties().put("key", "value"));
+        assertNull(new FailureDetails(failure).getProperties());
+        assertNull(new FailureDetails(failure).getInnerFailure().getProperties());
+    }
+
+    @Test
     void convertsTaskCompleted() {
         OrchestratorService.HistoryEvent proto = baseEvent(4)
                 .setTaskCompleted(OrchestratorService.TaskCompletedEvent.newBuilder()

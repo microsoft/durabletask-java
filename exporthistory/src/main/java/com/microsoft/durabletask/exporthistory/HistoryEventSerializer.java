@@ -322,6 +322,7 @@ final class HistoryEventSerializer {
         putIfNotNull(m, "stackTrace", f.getStackTrace());
         putIfNotNull(m, "innerFailure", failureMap(f.getInnerFailure()));
         m.put("isNonRetriable", f.isNonRetriable());
+        putIfNotNull(m, "properties", projectFailureProperty(f.getProperties()));
         return m;
     }
 
@@ -528,22 +529,22 @@ final class HistoryEventSerializer {
         result.put("InnerFailure", entityFailureMap(failure.getInnerFailure()));
         result.put("IsNonRetriable", failure.isNonRetriable());
         result.put("Properties", failure.getProperties() == null
-                ? Collections.emptyMap() : projectEntityFailureProperty(failure.getProperties()));
+                ? Collections.emptyMap() : projectFailureProperty(failure.getProperties()));
         return result;
     }
 
-    private static Object projectEntityFailureProperty(Object value) {
+    private static Object projectFailureProperty(Object value) {
         if (value instanceof Map) {
             Map<Object, Object> projected = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
-                projected.put(entry.getKey(), projectEntityFailureProperty(entry.getValue()));
+                projected.put(entry.getKey(), projectFailureProperty(entry.getValue()));
             }
             return projected;
         }
         if (value instanceof List) {
             List<Object> projected = new ArrayList<>();
             for (Object item : (List<?>) value) {
-                projected.add(projectEntityFailureProperty(item));
+                projected.add(projectFailureProperty(item));
             }
             return projected;
         }

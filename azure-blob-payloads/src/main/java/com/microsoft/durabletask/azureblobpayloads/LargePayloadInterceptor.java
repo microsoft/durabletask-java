@@ -192,16 +192,17 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                 ? "Permanent payload storage failure"
                 : "Transient payload storage failure";
             logger.log(Level.WARNING, prefix + " while externalizing activity response.", ex);
-            // Convert to a failure response so the orchestration sees a failed activity.
-            // Permanent failures are non-retriable; transient failures are retriable so
-            // the sidecar can re-dispatch the work item.
+            if (!permanent) {
+                throw ex;
+            }
+            // Only permanent failures complete the activity; transient failures leave it uncompleted.
             return r.toBuilder()
                 .clearResult()
                 .setFailureDetails(TaskFailureDetails.newBuilder()
                     .setErrorType(ex.getClass().getName())
                     .setErrorMessage(prefix + ": " + ex.getMessage())
                     .setStackTrace(StringValue.of(getStackTraceString(ex)))
-                    .setIsNonRetriable(permanent)
+                    .setIsNonRetriable(true)
                     .build())
                 .build();
         }
@@ -235,9 +236,10 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                 ? "Permanent payload storage failure"
                 : "Transient payload storage failure";
             logger.log(Level.WARNING, prefix + " while externalizing orchestrator response.", ex);
-            // Replace with a single Failed completion.
-            // Permanent failures are non-retriable; transient failures are retriable so
-            // the sidecar can re-dispatch the orchestration.
+            if (!permanent) {
+                throw ex;
+            }
+            // Only permanent failures replace the actions with a terminal failed completion.
             return OrchestratorResponse.newBuilder()
                 .setInstanceId(r.getInstanceId())
                 .setCompletionToken(r.getCompletionToken())
@@ -249,7 +251,7 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                             .setErrorType(ex.getClass().getName())
                             .setErrorMessage(prefix + ": " + ex.getMessage())
                             .setStackTrace(StringValue.of(getStackTraceString(ex)))
-                            .setIsNonRetriable(permanent)
+                            .setIsNonRetriable(true)
                             .build())
                         .build())
                     .build())
@@ -438,18 +440,8 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                 ? "Permanent payload storage failure"
                 : "Transient payload storage failure";
             logger.log(Level.WARNING, prefix + " while externalizing entity batch result.", ex);
-            // Convert to a failure result so the sidecar records the entity failure.
-            // Permanent failures are non-retriable; transient failures are retriable so
-            // the sidecar can re-dispatch the entity work item.
-            return EntityBatchResult.newBuilder()
-                .setCompletionToken(r.getCompletionToken())
-                .setFailureDetails(TaskFailureDetails.newBuilder()
-                    .setErrorType(ex.getClass().getName())
-                    .setErrorMessage(prefix + ": " + ex.getMessage())
-                    .setStackTrace(StringValue.of(getStackTraceString(ex)))
-                    .setIsNonRetriable(permanent)
-                    .build())
-                .build();
+            // .NET propagates all entity upload failures, leaving the batch uncompleted.
+            throw ex;
         }
     }
 

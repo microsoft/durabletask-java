@@ -1,4 +1,8 @@
 ## Unreleased
+* Propagate transient large-payload upload failures without completing work items; preserve .NET's activity, orchestration, and entity error-handling behavior.
+* Ensure the export container exists before every upload, allowing export retries to recover containers deleted between uploads.
+* Preserve custom and empty property objects in exported failure details, including nested failures, matching .NET's history conversion.
+* Capture the default continuous-export completion-time lower bound when creation options are constructed, matching .NET and preserving the window through worker queue delays.
 * Recreate a deleted large-payload container and retry the upload once, without allowing stale concurrent failures to invalidate a newly recreated container.
 * Preserve backend timestamp precision in orchestration history and client metadata, including export blob names, while retaining existing orchestration replay timestamp behavior.
 * Export entity operations and locks using the .NET-compatible `EventSent`/`EventRaised` message representation instead of Java-native entity event objects, preserving missing stack traces in failure details.

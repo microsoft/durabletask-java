@@ -6,6 +6,8 @@ import com.google.protobuf.ListValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Value;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.durabletask.DataConverter;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
@@ -243,6 +245,76 @@ class HistoryEventSerializerParityTest {
         return Value.newBuilder().setStringValue(text).build();
     }
 
+    @Test
+    void ordinaryFailuresFromStreamedHistoryPreserveNestedPropertiesInBothFormats() throws Exception {
+        Value values = Value.newBuilder().setListValue(ListValue.newBuilder()
+                .addValues(Value.newBuilder().setNumberValue(42.5))
+                .addValues(Value.newBuilder().setBoolValue(true))
+                .addValues(Value.newBuilder().setNullValueValue(0))
+                .addValues(Value.newBuilder().setStructValue(Struct.newBuilder()
+                        .putFields("date", propertyString("dt:2026-06-30T12:00:00.1234000Z")))))
+                .build();
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .putProperties("values", values)
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder()
+                        .setErrorType("Inner")
+                        .setErrorMessage("inner")
+                        .putProperties("date", propertyString("dto:2026-06-30T12:00:00.1000000+00:00")))
+                .build();
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode expectedProperties = mapper.readTree(
+                "{\"values\":[42.5,true,null,{\"date\":\"2026-06-30T12:00:00.1234Z\"}]}");
+        JsonNode expectedInnerProperties = mapper.readTree("{\"date\":\"2026-06-30T12:00:00.1+00:00\"}");
+        for (OrchestratorService.HistoryEvent event : ordinaryFailureEvents(failure)) {
+            List<HistoryEvent> history = streamHistoryEvent(event);
+            for (ExportFormat format : Arrays.asList(JSONL, JSON)) {
+                JsonNode serialized = mapper.readTree(HistoryEventSerializer.serialize(history, format));
+                JsonNode exported = format.getKind() == ExportFormatKind.JSON ? serialized.get(0) : serialized;
+                assertEquals(expectedProperties, exported.path("failureDetails").get("properties"));
+                assertEquals(expectedInnerProperties,
+                        exported.path("failureDetails").path("innerFailure").get("properties"));
+            }
+        }
+    }
+
+    @Test
+    void ordinaryFailuresFromStreamedHistoryPreserveEmptyPropertyObjects() throws Exception {
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder().setErrorType("Inner"))
+                .build();
+        ObjectMapper mapper = new ObjectMapper();
+        for (OrchestratorService.HistoryEvent event : ordinaryFailureEvents(failure)) {
+            List<HistoryEvent> history = streamHistoryEvent(event);
+            for (ExportFormat format : Arrays.asList(JSONL, JSON)) {
+                JsonNode serialized = mapper.readTree(HistoryEventSerializer.serialize(history, format));
+                JsonNode exported = format.getKind() == ExportFormatKind.JSON ? serialized.get(0) : serialized;
+                assertEquals(mapper.createObjectNode(), exported.path("failureDetails").get("properties"));
+                assertEquals(mapper.createObjectNode(),
+                        exported.path("failureDetails").path("innerFailure").get("properties"));
+            }
+        }
+    }
+
+    private static List<OrchestratorService.HistoryEvent> ordinaryFailureEvents(
+            OrchestratorService.TaskFailureDetails failure) {
+        OrchestratorService.HistoryEvent.Builder event = OrchestratorService.HistoryEvent.newBuilder()
+                .setEventId(6)
+                .setTimestamp(DataConverter.getTimestampFromInstant(TS));
+        return Arrays.asList(
+                event.clone().setTaskFailed(OrchestratorService.TaskFailedEvent.newBuilder()
+                        .setTaskScheduledId(1).setFailureDetails(failure)).build(),
+                event.clone().setSubOrchestrationInstanceFailed(
+                        OrchestratorService.SubOrchestrationInstanceFailedEvent.newBuilder()
+                                .setTaskScheduledId(1).setFailureDetails(failure)).build(),
+                event.clone().setExecutionCompleted(OrchestratorService.ExecutionCompletedEvent.newBuilder()
+                        .setOrchestrationStatus(OrchestratorService.OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                        .setFailureDetails(failure)).build());
+    }
+
     private static List<HistoryEvent> streamEntityFailure(
             OrchestratorService.TaskFailureDetails failure) throws Exception {
         OrchestratorService.HistoryEvent event = OrchestratorService.HistoryEvent.newBuilder()
@@ -253,6 +325,10 @@ class HistoryEventSerializerParityTest {
                         .setRequestId("req-failed")
                         .setFailureDetails(failure))
                 .build();
+        return streamHistoryEvent(event);
+    }
+
+    private static List<HistoryEvent> streamHistoryEvent(OrchestratorService.HistoryEvent event) throws Exception {
         String serverName = InProcessServerBuilder.generateName();
         Server server = InProcessServerBuilder.forName(serverName)
                 .directExecutor()
