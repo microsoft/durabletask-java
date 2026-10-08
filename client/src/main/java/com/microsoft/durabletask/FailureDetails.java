@@ -82,7 +82,7 @@ public final class FailureDetails {
     FailureDetails(TaskFailureDetails proto) {
         this(proto.getErrorType(),
              proto.getErrorMessage(),
-             proto.getStackTrace().getValue(),
+             proto.hasStackTrace() ? proto.getStackTrace().getValue() : null,
              proto.getIsNonRetriable(),
              proto.hasInnerFailure() ? new FailureDetails(proto.getInnerFailure()) : null,
              convertProtoProperties(proto.getPropertiesMap()));
@@ -111,10 +111,9 @@ public final class FailureDetails {
     }
 
     /**
-     * Gets the stack trace of the exception that caused this failure, or {@code null} if the failure was caused by
-     * a non-exception error.
+     * Gets the stack trace of the exception that caused this failure, or {@code null} if no stack trace was provided.
      *
-     * @return the stack trace of the failure exception or {@code null} if the failure was not caused by an exception
+     * @return the stack trace of the failure exception or {@code null} if no stack trace was provided
      */
     @Nullable
     public String getStackTrace() {
@@ -210,6 +209,7 @@ public final class FailureDetails {
 
     /**
      * Converts this failure to its protocol representation.
+     * Missing stack traces remain absent; explicitly empty stack traces remain present.
      *
      * @return the protocol representation of this failure
      */
@@ -218,8 +218,11 @@ public final class FailureDetails {
         TaskFailureDetails.Builder builder = TaskFailureDetails.newBuilder()
                 .setErrorType(this.getErrorType())
                 .setErrorMessage(this.getErrorMessage())
-                .setStackTrace(StringValue.of(this.getStackTrace() != null ? this.getStackTrace() : ""))
                 .setIsNonRetriable(this.isNonRetriable);
+
+        if (this.stackTrace != null) {
+            builder.setStackTrace(StringValue.of(this.stackTrace));
+        }
 
         if (this.innerFailure != null) {
             builder.setInnerFailure(this.innerFailure.toProto());
