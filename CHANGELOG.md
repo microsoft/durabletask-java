@@ -1,4 +1,7 @@
 ## Unreleased
+
+## v1.10.0
+* Enable custom exception providers for Durable Functions Java activities ([#294](https://github.com/microsoft/durabletask-java/pull/294))
 * Recreate a deleted large-payload container and retry the upload once, without allowing stale concurrent failures to invalidate a newly recreated container.
 * Preserve backend timestamp precision in orchestration history and client metadata, including export blob names, while retaining existing orchestration replay timestamp behavior.
 * Export entity operations and locks using the .NET-compatible `EventSent`/`EventRaised` message representation instead of Java-native entity event objects, preserving missing stack traces in failure details.
@@ -6,8 +9,10 @@
 * Add optional connection-string `AuthorityHost` forwarding for Azure Identity credentials that support it. Audience selection does not change the service endpoint or credential authority; managed identity and developer-tool cloud configuration remain separate.
 * Add the `exporthistory` module for durable, checkpointed export of terminal orchestration history to Azure Blob Storage ([#293](https://github.com/microsoft/durabletask-java/pull/293))
 * Add client APIs to list terminal instance IDs by completion time (`listInstanceIds`) and read orchestration history (`getOrchestrationHistory`) ([#292](https://github.com/microsoft/durabletask-java/pull/292))
-* Add `createReplaySafeLogger` to suppress orchestration log output during replay ([#295](https://github.com/microsoft/durabletask-java/pull/295)).
+* Add `createReplaySafeLogger` to suppress orchestration log output during replay ([#295](https://github.com/microsoft/durabletask-java/pull/295))
 * Add `getParentInstance()` API to `TaskOrchestrationContext` for discovering parent orchestration info ([#284](https://github.com/microsoft/durabletask-java/pull/284))
+* Add the `azure-blob-payloads` module for externalizing large orchestration payloads to Azure Blob Storage ([#280](https://github.com/microsoft/durabletask-java/pull/280))
+* Add inner failure details and custom exception properties to `FailureDetails` ([#263](https://github.com/microsoft/durabletask-java/pull/263))
 
 ## v1.9.0
 * Fix entity locking deserialization and add Jackson support for EntityInstanceId/EntityMetadata ([#281](https://github.com/microsoft/durabletask-java/pull/281))

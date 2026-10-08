@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.microsoft'
-version = '0.1.0'
+version = '1.10.0-preview.1'
 archivesBaseName = 'durabletask-exporthistory'
 
 def grpcVersion = '1.78.0'
