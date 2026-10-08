@@ -28,6 +28,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     ExceptionPropertiesProvider exceptionPropertiesProvider;
     int maxConcurrentEntityWorkItems = 1;
     int maxWorkItemThreads;
+    boolean emitTraceSpans = true;
     private WorkItemFilter workItemFilter;
     private boolean autoGenerateWorkItemFilters;
     final List<ClientInterceptor> interceptors = new ArrayList<>();
@@ -449,6 +450,22 @@ public final class DurableTaskGrpcWorkerBuilder {
                     + DEFAULT_MAX_CHUNK_SIZE_BYTES + "), inclusive.");
         }
         this.maxChunkSizeBytes = maxChunkSizeBytes;
+        return this;
+    }
+
+    /**
+     * Sets whether this worker emits its own OpenTelemetry spans for orchestrations, activities, and
+     * entities. Defaults to {@code true}.
+     * <p>
+     * Set to {@code false} when running under a host that already emits Durable Task spans (for
+     * example, the Azure Functions Durable extension, which emits {@code DurableTask.Core} spans), to
+     * avoid a duplicate worker-side span layer. Trace-context propagation is unaffected either way.
+     *
+     * @param emitTraceSpans whether the worker emits its own spans
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder setEmitTraceSpans(boolean emitTraceSpans) {
+        this.emitTraceSpans = emitTraceSpans;
         return this;
     }
 

@@ -16,6 +16,7 @@ import io.opentelemetry.api.trace.TraceStateBuilder;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Field;
@@ -75,6 +76,13 @@ final class TracingHelper {
     static final String ATTR_TASK_ID = "durabletask.task.task_id";
     static final String ATTR_FIRE_AT = "durabletask.fire_at";
     static final String ATTR_EVENT_TARGET_INSTANCE_ID = "durabletask.event.target_instance_id";
+
+    // Entity span constants matching .NET SDK schema. Entity spans deliberately do NOT set
+    // durabletask.task.name/version/task_id; the entity name already appears in the span name.
+    static final String TYPE_ENTITY = "entity";
+    static final String OP_SIGNAL_ENTITY = "signal_entity";
+    static final String ATTR_OPERATION = "durabletask.task.operation";
+    static final String ATTR_SCHEDULED_TIME = "durabletask.task.scheduled_time";
 
     private TracingHelper() {
         // Static utility class
@@ -231,6 +239,13 @@ final class TracingHelper {
         }
 
         return Context.current().with(Span.wrap(remoteContext));
+    }
+
+    /** Makes a propagated trace context current until the returned scope is closed. */
+    @Nullable
+    static Scope makeTraceContextCurrent(@Nullable TraceContext traceContext) {
+        Context context = extractTraceContext(traceContext);
+        return context != null ? context.makeCurrent() : null;
     }
 
     /**
@@ -476,4 +491,89 @@ final class TracingHelper {
 
         spanBuilder.startSpan().end();
     }
+
+    // region Entity spans
+
+    /** Builds an entity span name: {@code entity:<entityName>:<operation>}. */
+    static String createEntitySpanName(String entityName, String operation) {
+        return TYPE_ENTITY + ":" + entityName + ":" + operation;
+    }
+
+    /** Builds an entity-starts-orchestration span name: {@code <entityName>:create_orchestration}. */
+    static String createEntityStartOrchestrationSpanName(String entityName) {
+        return entityName + ":" + TYPE_CREATE_ORCHESTRATION;
+    }
+
+    /**
+     * Starts a {@link SpanKind#PRODUCER} span for signaling an entity. Used by orchestration signals,
+     * entity-to-entity signals, and the external client signal path. Returns {@code null} when the
+     * parent context is absent or invalid. Short-lived callers end the span immediately; the client
+     * path ends it in a {@code finally} block after the gRPC call.
+     */
+    @Nullable
+    static Span startEntitySignalProducerSpan(
+            String targetEntityName,
+            String operation,
+            String targetEntityInstanceId,
+            @Nullable String sourceEntityInstanceId,
+            @Nullable TraceContext parentContext,
+            @Nullable java.time.Instant startTime,
+            @Nullable String scheduledTime) {
+        Context parentCtx = extractTraceContext(parentContext);
+        if (parentCtx == null) {
+            return null;
+        }
+        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
+        SpanBuilder spanBuilder = tracer.spanBuilder(createEntitySpanName(targetEntityName, operation))
+                .setSpanKind(SpanKind.PRODUCER)
+                .setParent(parentCtx)
+                .setAttribute(ATTR_TYPE, TYPE_ENTITY)
+                .setAttribute(ATTR_OPERATION, OP_SIGNAL_ENTITY)
+                .setAttribute(ATTR_EVENT_TARGET_INSTANCE_ID, targetEntityInstanceId);
+        if (sourceEntityInstanceId != null) {
+            spanBuilder.setAttribute(ATTR_INSTANCE_ID, sourceEntityInstanceId);
+        }
+        if (scheduledTime != null) {
+            spanBuilder.setAttribute(ATTR_SCHEDULED_TIME, scheduledTime);
+        }
+        if (startTime != null) {
+            spanBuilder.setStartTimestamp(startTime);
+        }
+        return spanBuilder.startSpan();
+    }
+
+    /**
+     * Starts a {@link SpanKind#PRODUCER} span for an entity starting an orchestration. The span name
+     * is {@code <entityName>:create_orchestration}. Returns {@code null} when the parent context is
+     * absent or invalid.
+     */
+    @Nullable
+    static Span startEntityStartOrchestrationSpan(
+            String sourceEntityName,
+            String sourceEntityInstanceId,
+            String targetOrchestrationInstanceId,
+            @Nullable TraceContext parentContext,
+            @Nullable java.time.Instant startTime,
+            @Nullable String scheduledTime) {
+        Context parentCtx = extractTraceContext(parentContext);
+        if (parentCtx == null) {
+            return null;
+        }
+        Tracer tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME);
+        SpanBuilder spanBuilder = tracer.spanBuilder(createEntityStartOrchestrationSpanName(sourceEntityName))
+                .setSpanKind(SpanKind.PRODUCER)
+                .setParent(parentCtx)
+                .setAttribute(ATTR_TYPE, TYPE_ENTITY)
+                .setAttribute(ATTR_EVENT_TARGET_INSTANCE_ID, targetOrchestrationInstanceId)
+                .setAttribute(ATTR_INSTANCE_ID, sourceEntityInstanceId);
+        if (scheduledTime != null) {
+            spanBuilder.setAttribute(ATTR_SCHEDULED_TIME, scheduledTime);
+        }
+        if (startTime != null) {
+            spanBuilder.setStartTimestamp(startTime);
+        }
+        return spanBuilder.startSpan();
+    }
+
+    // endregion
 }

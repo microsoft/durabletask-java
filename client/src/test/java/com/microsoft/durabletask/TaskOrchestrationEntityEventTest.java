@@ -310,6 +310,39 @@ public class TaskOrchestrationEntityEventTest {
     // region signalEntity tests
 
     @Test
+    void signalEntity_legacyPath_propagatesParentTraceContextInJson() throws Exception {
+        final String orchestratorName = "SignalEntityTraceOrchestration";
+        EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
+
+        TaskOrchestrationExecutor executor = createExecutor(orchestratorName, ctx -> {
+            ctx.signalEntity(entityId, "add", 5);
+            ctx.complete("done");
+        });
+
+        String traceParent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        TraceContext orchCtx = TraceContext.newBuilder().setTraceParent(traceParent).build();
+
+        List<HistoryEvent> pastEvents = Arrays.asList(
+                orchestratorStarted(),
+                executionStarted(orchestratorName, "null"));
+        List<HistoryEvent> newEvents = Collections.singletonList(orchestratorCompleted());
+
+        TaskOrchestratorResult result = executor.execute(pastEvents, newEvents, orchCtx);
+
+        boolean found = false;
+        for (OrchestratorAction action : result.getActions()) {
+            if (action.hasSendEvent()
+                    && action.getSendEvent().getInstance().getInstanceId().contains("@counter@c1")) {
+                JsonNode json = JSON_MAPPER.readTree(action.getSendEvent().getData().getValue());
+                assertTrue(json.has("parentTraceContext"), "expected parentTraceContext in signal JSON");
+                assertEquals(traceParent, json.get("parentTraceContext").get("TraceParent").asText());
+                found = true;
+            }
+        }
+        assertTrue(found, "expected a SendEvent signal action carrying parentTraceContext");
+    }
+
+    @Test
     void signalEntity_producesSendEventAction() throws Exception {
         final String orchestratorName = "SignalEntityOrchestration";
         EntityInstanceId entityId = new EntityInstanceId("Counter", "c1");
