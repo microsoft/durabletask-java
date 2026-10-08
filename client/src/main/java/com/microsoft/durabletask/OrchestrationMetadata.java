@@ -50,8 +50,8 @@ public final class OrchestrationMetadata {
         this.name = state.getName();
         this.instanceId = state.getInstanceId();
         this.runtimeStatus = OrchestrationRuntimeStatus.fromProtobuf(state.getOrchestrationStatus());
-        this.createdAt = DataConverter.getInstantFromTimestamp(state.getCreatedTimestamp());
-        this.lastUpdatedAt = DataConverter.getInstantFromTimestamp(state.getLastUpdatedTimestamp());
+        this.createdAt = Helpers.getPreciseInstantFromTimestamp(state.getCreatedTimestamp());
+        this.lastUpdatedAt = Helpers.getPreciseInstantFromTimestamp(state.getLastUpdatedTimestamp());
         this.serializedInput = state.getInput().getValue();
         this.serializedOutput = state.getOutput().getValue();
         this.serializedCustomStatus = state.getCustomStatus().getValue();
@@ -84,7 +84,7 @@ public final class OrchestrationMetadata {
     }
 
     /**
-     * Gets the orchestration instance's creation time in UTC.
+     * Gets the orchestration instance's creation time in UTC, preserving the backend's timestamp precision.
      * @return the orchestration instance's creation time in UTC
      */
     public Instant getCreatedAt() {
@@ -92,7 +92,7 @@ public final class OrchestrationMetadata {
     }
 
     /**
-     * Gets the orchestration instance's last updated time in UTC.
+     * Gets the orchestration instance's last updated time in UTC, preserving the backend's timestamp precision.
      * @return the orchestration instance's last updated time in UTC
      */
     public Instant getLastUpdatedAt() {

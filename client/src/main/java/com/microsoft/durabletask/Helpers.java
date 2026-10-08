@@ -2,9 +2,12 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask;
 
+import com.google.protobuf.Timestamp;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.time.Duration;
+import java.time.Instant;
 
 final class Helpers {
     final static Duration maxDuration = Duration.ofSeconds(Long.MAX_VALUE, 999999999L);
@@ -58,6 +61,11 @@ final class Helpers {
 
     static boolean isNullOrEmpty(String s) {
         return s == null || s.isEmpty();
+    }
+
+    // History and metadata retain precision without changing DataConverter's replay-time conversion.
+    static @Nullable Instant getPreciseInstantFromTimestamp(@Nullable Timestamp timestamp) {
+        return timestamp == null ? null : Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
     }
 
     // Cannot be instantiated

@@ -62,6 +62,15 @@ class ExportBlobNamingTest {
         assertEquals("2026-06-30T12:00:00.0000000+00:00", ExportBlobNaming.formatTimestamp(TS));
         assertEquals("2026-06-30T12:00:00.1230000+00:00",
                 ExportBlobNaming.formatTimestamp(Instant.parse("2026-06-30T12:00:00.123Z")));
+        assertEquals("2026-06-30T12:00:00.1234567+00:00",
+                ExportBlobNaming.formatTimestamp(Instant.parse("2026-06-30T12:00:00.123456789Z")));
+    }
+
+    @Test
+    void blobFileName_matchesFullPrecisionReferenceHash() {
+        assertEquals("8d8ce6e13a2dbef356275361521d0c3da44b809a81474169cd41732e82ecd2e4.jsonl.gz",
+                ExportBlobNaming.blobFileName(
+                        Instant.parse("2026-09-15T12:34:56.1234567Z"), "instance-1", JSONL));
     }
 
     @Test
