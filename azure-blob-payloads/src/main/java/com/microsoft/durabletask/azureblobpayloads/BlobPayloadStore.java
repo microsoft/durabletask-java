@@ -8,6 +8,7 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobDownloadResponse;
+import com.azure.storage.blob.models.BlobErrorCode;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.azure.storage.blob.models.BlobRequestConditions;
 import com.azure.storage.blob.models.BlobStorageException;
@@ -20,9 +21,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -32,6 +32,7 @@ import java.util.zip.GZIPOutputStream;
  * <p>
  * Stores payloads as blobs and returns opaque tokens in the form {@code blob:v1:<container>:<blobName>}.
  * Supports optional gzip compression. The blob container is created automatically on first upload.
+ * If the container is subsequently deleted, a new upload recreates it and retries once.
  */
 public final class BlobPayloadStore extends PayloadStore {
 
@@ -48,12 +49,9 @@ public final class BlobPayloadStore extends PayloadStore {
     private final BlobContainerClient containerClient;
     private final LargePayloadStorageOptions options;
 
-    // Container-creation guard. The first thread to call ensureContainerExists() creates the
-    // latch and performs the RPC. Concurrent callers await the latch so they don't race ahead
-    // and upload to a container that hasn't been created yet. On failure the reference is
-    // reset to null so a subsequent call can retry.
-    private final AtomicReference<CountDownLatch> containerLatch = new AtomicReference<>();
-    private volatile boolean containerVerified;
+    private final ReentrantLock containerInitializationLock = new ReentrantLock();
+    // A stale upload failure must not invalidate a container another upload has already recreated.
+    private final AtomicReference<Object> containerGeneration = new AtomicReference<>();
 
     /**
      * Creates a new {@code BlobPayloadStore} from the given options.
@@ -123,118 +121,87 @@ public final class BlobPayloadStore extends PayloadStore {
 
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
 
-        // Ensure container exists before uploading. Thread-safe: the first caller creates
-        // the container while concurrent callers wait for it to complete.
-        ensureContainerExists();
+        boolean retryAfterContainerNotFound = true;
+        while (true) {
+            Object generation = ensureContainerExists();
+            try {
+                uploadBlob(blob, payloadBytes);
+                return encodeToken(this.containerClient.getBlobContainerName(), blobName);
+            } catch (BlobStorageException e) {
+                if (retryAfterContainerNotFound
+                        && e.getStatusCode() == 404
+                        && BlobErrorCode.CONTAINER_NOT_FOUND.equals(e.getErrorCode())) {
+                    this.containerGeneration.compareAndSet(generation, null);
+                    retryAfterContainerNotFound = false;
+                    continue;
+                }
 
-        try {
-            // Defense-in-depth: require the blob to not already exist (If-None-Match: *).
-            // Blob names are random UUIDs so collisions are astronomically unlikely, but this
-            // guards against future regressions (e.g. a caller-supplied PayloadStore that
-            // generates deterministic names or a refactor that reuses names) by failing loudly
-            // instead of silently overwriting someone else's payload.
-            BlobRequestConditions conditions = new BlobRequestConditions().setIfNoneMatch("*");
-            if (this.options.isCompressionEnabled()) {
-                ByteArrayOutputStream compressedBuffer = new ByteArrayOutputStream();
-                try (GZIPOutputStream gzip = new GZIPOutputStream(compressedBuffer)) {
-                    gzip.write(payloadBytes);
+                if (e.getStatusCode() == 409 || e.getStatusCode() == 412) {
+                    throw new PayloadStorageException(
+                        "Payload blob '" + blobName + "' already exists in container '"
+                            + this.containerClient.getBlobContainerName()
+                            + "'. Refusing to overwrite. This should not happen with random UUID blob names "
+                            + "and likely indicates a bug in a custom PayloadStore implementation.", e);
                 }
-                byte[] compressedBytes = compressedBuffer.toByteArray();
-                BlobHttpHeaders headers = new BlobHttpHeaders().setContentEncoding(CONTENT_ENCODING_GZIP);
-                try (InputStream stream = new ByteArrayInputStream(compressedBytes)) {
-                    blob.uploadWithResponse(
-                        stream,
-                        compressedBytes.length,
-                        null,       // parallelTransferOptions
-                        headers,
-                        null,       // metadata
-                        null,       // tier
-                        conditions, // requestConditions
-                        null,       // timeout
-                        Context.NONE);
-                }
-            } else {
-                try (InputStream stream = new ByteArrayInputStream(payloadBytes)) {
-                    blob.uploadWithResponse(
-                        stream,
-                        payloadBytes.length,
-                        null,       // parallelTransferOptions
-                        null,       // headers
-                        null,       // metadata
-                        null,       // tier
-                        conditions, // requestConditions
-                        null,       // timeout
-                        Context.NONE);
-                }
+                throw new PayloadStorageException("Failed to upload payload blob '" + blobName + "'.", e);
+            } catch (IOException e) {
+                throw new PayloadStorageException("Failed to upload payload blob '" + blobName + "'.", e);
             }
-        } catch (BlobStorageException e) {
-            // 409 BlobAlreadyExists and 412 ConditionNotMet (from If-None-Match: *) both indicate
-            // a name collision on upload — treat as a hard failure rather than silently overwriting.
-            if (e.getStatusCode() == 409 || e.getStatusCode() == 412) {
-                throw new PayloadStorageException(
-                    "Payload blob '" + blobName + "' already exists in container '"
-                        + this.containerClient.getBlobContainerName()
-                        + "'. Refusing to overwrite. This should not happen with random UUID blob names "
-                        + "and likely indicates a bug in a custom PayloadStore implementation.", e);
-            }
-            throw new PayloadStorageException("Failed to upload payload blob '" + blobName + "'.", e);
-        } catch (IOException e) {
-            throw new PayloadStorageException("Failed to upload payload blob '" + blobName + "'.", e);
         }
-
-        return encodeToken(this.containerClient.getBlobContainerName(), blobName);
     }
 
-    /**
-     * Ensures the blob container exists, creating it if necessary. Thread-safe: the first
-     * caller performs the RPC while concurrent callers wait for it to complete. On success
-     * the check is skipped on all future calls. On failure the guard is reset so a later
-     * call can retry.
-     */
-    private void ensureContainerExists() {
-        if (this.containerVerified) {
-            return;
+    private void uploadBlob(BlobClient blob, byte[] payloadBytes) throws IOException {
+        BlobRequestConditions conditions = new BlobRequestConditions().setIfNoneMatch("*");
+        if (this.options.isCompressionEnabled()) {
+            ByteArrayOutputStream compressedBuffer = new ByteArrayOutputStream();
+            try (GZIPOutputStream gzip = new GZIPOutputStream(compressedBuffer)) {
+                gzip.write(payloadBytes);
+            }
+            byte[] compressedBytes = compressedBuffer.toByteArray();
+            BlobHttpHeaders headers = new BlobHttpHeaders().setContentEncoding(CONTENT_ENCODING_GZIP);
+            try (InputStream stream = new ByteArrayInputStream(compressedBytes)) {
+                blob.uploadWithResponse(
+                    stream, compressedBytes.length, null, headers, null, null, conditions, null, Context.NONE);
+            }
+        } else {
+            try (InputStream stream = new ByteArrayInputStream(payloadBytes)) {
+                blob.uploadWithResponse(
+                    stream, payloadBytes.length, null, null, null, null, conditions, null, Context.NONE);
+            }
+        }
+    }
+
+    private Object ensureContainerExists() {
+        Object generation = this.containerGeneration.get();
+        if (generation != null) {
+            return generation;
         }
 
-        CountDownLatch latch = new CountDownLatch(1);
-        if (!this.containerLatch.compareAndSet(null, latch)) {
-            CountDownLatch existing = this.containerLatch.get();
-            if (existing == null) {
-                // Rare race: the creating thread already reset the latch (failure path).
-                // Retry on the next upload call rather than proceeding without a container.
-                return;
-            }
-            // Another thread is already creating the container — wait for it.
-            try {
-                existing.await();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new PayloadStorageException("Interrupted while waiting for container creation.", e);
-            }
-            // If the creating thread failed, containerVerified is still false; the next
-            // upload attempt will retry. For now, return and let the upload proceed
-            // (it will fail fast with a clear error if the container doesn't exist).
-            return;
-        }
-
-        // This thread is responsible for creating the container.
         try {
-            this.containerClient.createIfNotExists();
-            this.containerVerified = true;
-        } catch (BlobStorageException e) {
-            if (e.getStatusCode() == 409) {
-                // 409 Conflict means it already exists — safe to ignore.
-                this.containerVerified = true;
-            } else {
-                this.containerLatch.set(null); // allow a future call to retry
-                throw new PayloadStorageException(
-                    "Failed to create blob container '" + this.containerClient.getBlobContainerName() + "'.", e);
+            this.containerInitializationLock.lockInterruptibly();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PayloadStorageException("Interrupted while waiting for container creation.", e);
+        }
+
+        try {
+            generation = this.containerGeneration.get();
+            if (generation == null) {
+                try {
+                    this.containerClient.createIfNotExists();
+                } catch (BlobStorageException e) {
+                    if (e.getStatusCode() != 409
+                            || !BlobErrorCode.CONTAINER_ALREADY_EXISTS.equals(e.getErrorCode())) {
+                        throw new PayloadStorageException(
+                            "Failed to create blob container '" + this.containerClient.getBlobContainerName() + "'.", e);
+                    }
+                }
+                generation = new Object();
+                this.containerGeneration.set(generation);
             }
-        } catch (RuntimeException e) {
-            this.containerLatch.set(null); // allow a future call to retry
-            throw e;
+            return generation;
         } finally {
-            latch.countDown(); // unblock waiting threads
+            this.containerInitializationLock.unlock();
         }
     }
 

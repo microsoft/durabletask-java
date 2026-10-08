@@ -25,7 +25,7 @@ final class HistoryEventConverter {
      */
     static HistoryEvent fromProto(OrchestratorService.HistoryEvent proto) {
         int id = proto.getEventId();
-        Instant ts = DataConverter.getInstantFromTimestamp(proto.getTimestamp());
+        Instant ts = Helpers.getPreciseInstantFromTimestamp(proto.getTimestamp());
         switch (proto.getEventTypeCase()) {
             case EXECUTIONSTARTED: {
                 OrchestratorService.ExecutionStartedEvent p = proto.getExecutionStarted();
@@ -36,7 +36,7 @@ final class HistoryEventConverter {
                         p.hasOrchestrationInstance() ? toInstance(p.getOrchestrationInstance()) : null,
                         p.hasParentInstance() ? toParentInfo(p.getParentInstance()) : null,
                         p.hasScheduledStartTimestamp()
-                                ? DataConverter.getInstantFromTimestamp(p.getScheduledStartTimestamp()) : null,
+                                ? Helpers.getPreciseInstantFromTimestamp(p.getScheduledStartTimestamp()) : null,
                         p.hasParentTraceContext() ? toTrace(p.getParentTraceContext()) : null,
                         stringOrNull(p.hasOrchestrationSpanID(), p.getOrchestrationSpanID()),
                         p.getTagsMap());
@@ -93,11 +93,11 @@ final class HistoryEventConverter {
             }
             case TIMERCREATED: {
                 OrchestratorService.TimerCreatedEvent p = proto.getTimerCreated();
-                return new TimerCreatedEvent(id, ts, DataConverter.getInstantFromTimestamp(p.getFireAt()));
+                return new TimerCreatedEvent(id, ts, Helpers.getPreciseInstantFromTimestamp(p.getFireAt()));
             }
             case TIMERFIRED: {
                 OrchestratorService.TimerFiredEvent p = proto.getTimerFired();
-                return new TimerFiredEvent(id, ts, DataConverter.getInstantFromTimestamp(p.getFireAt()), p.getTimerId());
+                return new TimerFiredEvent(id, ts, Helpers.getPreciseInstantFromTimestamp(p.getFireAt()), p.getTimerId());
             }
             case ORCHESTRATORSTARTED:
                 return new OrchestratorStartedEvent(id, ts);
@@ -138,7 +138,7 @@ final class HistoryEventConverter {
                 return new EntityOperationSignaledEvent(id, ts,
                         p.getRequestId(),
                         p.getOperation(),
-                        p.hasScheduledTime() ? DataConverter.getInstantFromTimestamp(p.getScheduledTime()) : null,
+                        p.hasScheduledTime() ? Helpers.getPreciseInstantFromTimestamp(p.getScheduledTime()) : null,
                         stringOrNull(p.hasInput(), p.getInput()),
                         stringOrNull(p.hasTargetInstanceId(), p.getTargetInstanceId()));
             }
@@ -147,7 +147,7 @@ final class HistoryEventConverter {
                 return new EntityOperationCalledEvent(id, ts,
                         p.getRequestId(),
                         p.getOperation(),
-                        p.hasScheduledTime() ? DataConverter.getInstantFromTimestamp(p.getScheduledTime()) : null,
+                        p.hasScheduledTime() ? Helpers.getPreciseInstantFromTimestamp(p.getScheduledTime()) : null,
                         stringOrNull(p.hasInput(), p.getInput()),
                         stringOrNull(p.hasParentInstanceId(), p.getParentInstanceId()),
                         stringOrNull(p.hasParentExecutionId(), p.getParentExecutionId()),
@@ -231,10 +231,10 @@ final class HistoryEventConverter {
                 stringOrNull(p.hasVersion(), p.getVersion()),
                 OrchestrationRuntimeStatus.fromProtobuf(p.getOrchestrationStatus()),
                 p.hasScheduledStartTimestamp()
-                        ? DataConverter.getInstantFromTimestamp(p.getScheduledStartTimestamp()) : null,
-                p.hasCreatedTimestamp() ? DataConverter.getInstantFromTimestamp(p.getCreatedTimestamp()) : null,
-                p.hasLastUpdatedTimestamp() ? DataConverter.getInstantFromTimestamp(p.getLastUpdatedTimestamp()) : null,
-                p.hasCompletedTimestamp() ? DataConverter.getInstantFromTimestamp(p.getCompletedTimestamp()) : null,
+                        ? Helpers.getPreciseInstantFromTimestamp(p.getScheduledStartTimestamp()) : null,
+                p.hasCreatedTimestamp() ? Helpers.getPreciseInstantFromTimestamp(p.getCreatedTimestamp()) : null,
+                p.hasLastUpdatedTimestamp() ? Helpers.getPreciseInstantFromTimestamp(p.getLastUpdatedTimestamp()) : null,
+                p.hasCompletedTimestamp() ? Helpers.getPreciseInstantFromTimestamp(p.getCompletedTimestamp()) : null,
                 stringOrNull(p.hasInput(), p.getInput()),
                 stringOrNull(p.hasOutput(), p.getOutput()),
                 stringOrNull(p.hasCustomStatus(), p.getCustomStatus()),

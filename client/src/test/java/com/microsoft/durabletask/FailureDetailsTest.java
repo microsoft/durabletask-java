@@ -8,6 +8,9 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Value;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.TaskFailureDetails;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -20,6 +23,33 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for {@link FailureDetails} proto serialization and provider logic.
  */
 public class FailureDetailsTest {
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"at App.run(App.java:5)"})
+    void protoRoundTrip_preservesStackTracePresence(String stackTrace) {
+        TaskFailureDetails.Builder inner = TaskFailureDetails.newBuilder()
+                .setErrorType("Inner")
+                .setErrorMessage("inner failure");
+        TaskFailureDetails.Builder outer = TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("outer failure");
+        if (stackTrace != null) {
+            inner.setStackTrace(StringValue.of(stackTrace));
+            outer.setStackTrace(StringValue.of(stackTrace));
+        }
+        TaskFailureDetails proto = outer.setInnerFailure(inner).build();
+
+        FailureDetails details = new FailureDetails(proto);
+
+        assertEquals(stackTrace, details.getStackTrace());
+        assertNotNull(details.getInnerFailure());
+        assertEquals(stackTrace, details.getInnerFailure().getStackTrace());
+        TaskFailureDetails roundTripped = details.toProto();
+        assertEquals(stackTrace != null, roundTripped.hasStackTrace());
+        assertEquals(stackTrace != null, roundTripped.getInnerFailure().hasStackTrace());
+        assertEquals(proto, roundTripped);
+    }
 
     @Test
     void constructFromProto_withInnerFailureAndProperties() {

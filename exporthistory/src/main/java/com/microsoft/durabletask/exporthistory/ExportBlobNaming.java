@@ -43,8 +43,7 @@ final class ExportBlobNaming {
      * Formats an instant as {@code yyyy-MM-ddTHH:mm:ss.fffffff+00:00} (seven fractional digits, explicit UTC
      * offset). The instant is treated as UTC.
      * <p>
-     * Note: instance timestamps are truncated to milliseconds upstream, so the sub-millisecond fractional digits
-     * are always zero here.
+     * Preserves sub-millisecond precision up to 100-nanosecond ticks, matching the reference export format.
      *
      * @param instant the timestamp (treated as UTC)
      * @return the formatted timestamp string
