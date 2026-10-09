@@ -20,7 +20,7 @@ Configure the same storage location for every client and worker that exchanges e
 LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
     .setConnectionString(System.getenv("PAYLOAD_STORAGE_CONNECTION_STRING"))
     .setContainerName("durabletask-payloads")
-    .setThresholdBytes(900_000);
+    .setThresholdBytes(256 * 1024);
 
 PayloadStore payloadStore = new BlobPayloadStore(payloadOptions);
 
@@ -43,7 +43,7 @@ LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
 
 ## Defaults and limits
 
-- Payloads of at least 900,000 bytes are externalized by default.
+- Payloads of at least 256 KiB (262,144 bytes) are externalized by default.
 - The threshold can be configured up to 1 MiB.
 - The default maximum externalized payload size is 10 MiB.
 - Payloads are gzip-compressed by default.
@@ -57,7 +57,20 @@ The storage identity needs permission to create the container and read and write
 Transient upload failures (including HTTP 408, 429, and 5xx responses) propagate without sending a worker
 completion, allowing the work item to be retried rather than recording a task failure. Permanent activity and
 orchestration upload failures become non-retriable failure completions. Entity upload failures propagate without
-completing the batch, matching .NET.
+completing the batch, matching .NET. The worker logs failed completions and abandons the affected work item for
+scheduler redelivery without terminating its polling thread.
+
+## Integration tests
+
+With the DTS emulator on port 4001 and Azurite Blob Storage on port 10000, run:
+
+```text
+./gradlew :azure-blob-payloads:integrationTest -PskipSigning
+```
+
+The suite exercises payload round trips, activity and sub-orchestration outputs, events, queries, custom status,
+and payload limits. It also injects a transient worker upload failure and verifies actual scheduler redelivery
+and successful completion for both activity and orchestration outputs.
 
 ## Sample
 

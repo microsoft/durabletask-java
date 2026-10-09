@@ -104,6 +104,11 @@ surfaces (matching .NET).
 
 Locally, with the DTS emulator and Azurite:
 
+Run the automated suite with `./gradlew :exporthistory:integrationTest -PskipSigning` after starting the backends.
+It checks batch export, JSON and gzipped JSONL failure properties, resolved large-payload history, container
+recreation after deletion, and continuous export of an orchestration completed between options construction
+and job creation.
+
 1. Start the backends:
    ```
    docker run --name durabletask-emulator -p 4001:8080 -d mcr.microsoft.com/dts/dts-emulator:latest

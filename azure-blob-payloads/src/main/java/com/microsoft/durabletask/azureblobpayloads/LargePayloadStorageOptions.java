@@ -31,7 +31,7 @@ public final class LargePayloadStorageOptions {
 
     private static final int ONE_MIB = 1024 * 1024;
 
-    private int thresholdBytes = 900_000;
+    private int thresholdBytes = 256 * 1024;
     private int maxPayloadBytes = 10 * ONE_MIB;
     private String connectionString;
     private URI accountUri;
@@ -41,7 +41,7 @@ public final class LargePayloadStorageOptions {
 
     /**
      * Gets the threshold in bytes at which payloads are externalized to blob storage.
-     * Payloads smaller than this threshold are sent inline. Default is 900,000 bytes.
+     * Payloads smaller than this threshold are sent inline. Default is 256 KiB (262,144 bytes).
      *
      * @return the threshold in bytes
      */

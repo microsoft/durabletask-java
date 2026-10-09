@@ -1,5 +1,6 @@
 ## Unreleased
-* Propagate transient large-payload upload failures without completing work items; preserve .NET's activity, orchestration, and entity error-handling behavior.
+* Change the default large-payload externalization threshold from 900,000 bytes to 256 KiB, matching .NET.
+* Propagate transient large-payload upload failures without completing work items; abandon failed activity and orchestration completions for scheduler redelivery instead of terminating the worker polling thread.
 * Ensure the export container exists before every upload, allowing export retries to recover containers deleted between uploads.
 * Preserve custom and empty property objects in exported failure details, including nested failures, matching .NET's history conversion.
 * Capture the default continuous-export completion-time lower bound when creation options are constructed, matching .NET and preserving the window through worker queue delays.
