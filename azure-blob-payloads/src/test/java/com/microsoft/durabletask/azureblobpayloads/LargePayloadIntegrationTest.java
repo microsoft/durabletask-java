@@ -14,8 +14,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -71,12 +74,12 @@ public class LargePayloadIntegrationTest {
 
     @Test
     void roundTrip_largeInput_activityEchoesBack() throws TimeoutException {
-        // Arrange: create a 1.5 MB payload that exceeds the default 900KB threshold
+        // Arrange: create a 1.5 MB payload that exceeds the default 256 KiB threshold
         String largePayload = generatePayload(1_500_000);
 
         LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
             .setConnectionString(AZURITE_CONNECTION_STRING)
-            .setThresholdBytes(900_000);
+            .setThresholdBytes(256 * 1024);
 
         PayloadStore store = new BlobPayloadStore(payloadOptions);
 
@@ -129,7 +132,7 @@ public class LargePayloadIntegrationTest {
 
         LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
             .setConnectionString(AZURITE_CONNECTION_STRING)
-            .setThresholdBytes(900_000);
+            .setThresholdBytes(256 * 1024);
 
         PayloadStore store = new BlobPayloadStore(payloadOptions);
 
@@ -171,7 +174,7 @@ public class LargePayloadIntegrationTest {
 
         LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
             .setConnectionString(AZURITE_CONNECTION_STRING)
-            .setThresholdBytes(900_000);
+            .setThresholdBytes(256 * 1024);
 
         PayloadStore store = new BlobPayloadStore(payloadOptions);
 
@@ -506,7 +509,7 @@ public class LargePayloadIntegrationTest {
 
         LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
             .setConnectionString(AZURITE_CONNECTION_STRING)
-            .setThresholdBytes(900_000)
+            .setThresholdBytes(256 * 1024)
             .setCompressionEnabled(false);
 
         PayloadStore store = new BlobPayloadStore(payloadOptions);
@@ -775,12 +778,93 @@ public class LargePayloadIntegrationTest {
         assertEquals(veryLargePayload.length(), instance.readOutputAs(Integer.class));
     }
 
+    @Test
+    void transientActivityUploadFailure_isRedeliveredAndCompletes() throws TimeoutException {
+        verifyTransientUploadRecovery(true);
+    }
+
+    @Test
+    void transientOrchestrationUploadFailure_isRedeliveredAndCompletes() throws TimeoutException {
+        verifyTransientUploadRecovery(false);
+    }
+
+    private void verifyTransientUploadRecovery(boolean activityOutput) throws TimeoutException {
+        String payload = generatePayload(1_500_000);
+        LargePayloadStorageOptions options = createDefaultPayloadOptions();
+        PayloadStore realStore = new BlobPayloadStore(options);
+        AtomicInteger uploadAttempts = new AtomicInteger();
+        AtomicInteger executions = new AtomicInteger();
+        PayloadStore failingOnceStore = new PayloadStore() {
+            @Override
+            public String upload(String value) {
+                if (uploadAttempts.incrementAndGet() == 1) {
+                    throw new UncheckedIOException(new IOException("Injected transient upload failure"));
+                }
+                return realStore.upload(value);
+            }
+
+            @Override
+            public String download(String token) {
+                return realStore.download(token);
+            }
+
+            @Override
+            public boolean isKnownPayloadToken(String value) {
+                return realStore.isKnownPayloadToken(value);
+            }
+        };
+        String name = activityOutput ? "RetryActivityUpload" : "RetryOrchestrationUpload";
+        DurableTaskGrpcWorkerBuilder workerBuilder = createWorkerBuilder();
+        LargePayloadWorkerExtensions.useExternalizedPayloads(workerBuilder, failingOnceStore, options);
+        workerBuilder.addOrchestration(new TaskOrchestrationFactory() {
+            @Override
+            public String getName() { return name; }
+
+            @Override
+            public TaskOrchestration create() {
+                return ctx -> {
+                    if (activityOutput) {
+                        ctx.complete(ctx.callActivity(name, null, String.class).await());
+                    } else {
+                        executions.incrementAndGet();
+                        ctx.complete(payload);
+                    }
+                };
+            }
+        });
+        workerBuilder.addActivity(new TaskActivityFactory() {
+            @Override
+            public String getName() { return name; }
+
+            @Override
+            public TaskActivity create() {
+                return ctx -> {
+                    executions.incrementAndGet();
+                    return payload;
+                };
+            }
+        });
+        worker = workerBuilder.build();
+        worker.start();
+        DurableTaskGrpcClientBuilder clientBuilder = createClientBuilder();
+        LargePayloadClientExtensions.useExternalizedPayloads(clientBuilder, realStore, options);
+        client = clientBuilder.build();
+
+        String instanceId = client.scheduleNewOrchestrationInstance(name);
+        OrchestrationMetadata result = client.waitForInstanceCompletion(instanceId, Duration.ofSeconds(90), true);
+
+        assertEquals(OrchestrationRuntimeStatus.COMPLETED, result.getRuntimeStatus());
+        assertEquals(payload, result.readOutputAs(String.class));
+        assertTrue(uploadAttempts.get() >= 2, "Failed upload must be retried");
+        assertTrue(executions.get() >= 2, "Scheduler must redeliver the uncompleted work item");
+    }
+
     // ==================== Helpers ====================
 
     private LargePayloadStorageOptions createDefaultPayloadOptions() {
         return new LargePayloadStorageOptions()
             .setConnectionString(AZURITE_CONNECTION_STRING)
-            .setThresholdBytes(900_000);
+            .setThresholdBytes(256 * 1024);
     }
 
     private DurableTaskGrpcWorkerBuilder createWorkerBuilder() {

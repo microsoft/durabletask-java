@@ -344,7 +344,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                     .setCompletionToken(workItem.getCompletionToken())
                                     .build();
 
-                            this.completeOrchestratorTaskWithChunking(response);
+                            this.completeOrchestratorTaskOrAbandon(response);
                         } else {
                             switch(versioningOptions.getFailureStrategy()) {
                                 case FAIL:
@@ -366,7 +366,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                                         .addActions(action)
                                         .build();
 
-                                    this.completeOrchestratorTaskWithChunking(response);
+                                    this.completeOrchestratorTaskOrAbandon(response);
                                     break;
                                 // Reject and default share the same behavior as it does not change the orchestration to a terminal state.
                                 case REJECT:
@@ -425,7 +425,18 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                             responseBuilder.setFailureDetails(failureDetails);
                         }
 
-                        this.sidecarClient.completeActivityTask(responseBuilder.build());
+                        try {
+                            this.sidecarClient.completeActivityTask(responseBuilder.build());
+                        } catch (StatusRuntimeException e) {
+                            throw e;
+                        } catch (RuntimeException e) {
+                            logger.log(Level.WARNING,
+                                    "Failed to complete activity for '" + activityInstanceId
+                                            + "'. Abandoning work item.", e);
+                            this.sidecarClient.abandonTaskActivityWorkItem(AbandonActivityTaskRequest.newBuilder()
+                                    .setCompletionToken(workItem.getCompletionToken())
+                                    .build());
+                        }
                     } else if (requestType == RequestCase.ENTITYREQUEST) {
                         EntityBatchRequest entityRequest = workItem.getEntityRequest();
                         this.workItemExecutor.submit(() -> {
@@ -556,6 +567,21 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                     break;
                 }
             }
+        }
+    }
+
+    private void completeOrchestratorTaskOrAbandon(OrchestratorResponse response) {
+        try {
+            this.completeOrchestratorTaskWithChunking(response);
+        } catch (StatusRuntimeException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            logger.log(Level.WARNING,
+                    "Failed to complete orchestrator for '" + response.getInstanceId()
+                            + "'. Abandoning work item.", e);
+            this.sidecarClient.abandonTaskOrchestratorWorkItem(AbandonOrchestrationTaskRequest.newBuilder()
+                    .setCompletionToken(response.getCompletionToken())
+                    .build());
         }
     }
 

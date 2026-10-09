@@ -59,6 +59,8 @@ System.out.println(d.getStatus() + " exported=" + d.getExportedInstances());
 - **BATCH** — exports a fixed completion-time window and completes. Requires `completedTimeFrom` and
   `completedTimeTo` (the upper bound must not be in the future).
 - **CONTINUOUS** — tails newly-completed terminal instances on a 1-minute idle loop until the job is deleted.
+  When `completedTimeFrom` is omitted, the lower bound is captured when `ExportJobCreationOptions` is constructed,
+  matching .NET. It is preserved through job submission, so worker queue delays do not move the window forward.
 
 ### Terminal statuses only
 
@@ -74,6 +76,9 @@ supplied, all three are exported.
 - **Permissions** — the storage credential needs blob write on the container; the DTS credential needs
   orchestration read.
 
+The worker ensures the export container exists before every upload, recreating it if it was deleted between
+exports. The storage credential therefore also needs permission to create the container.
+
 ## Export format
 
 Each blob holds the instance's full history using .NET-style history-event JSON. Golden fixtures cover core event serialization and the legacy entity-message encoding produced by the .NET SDK and `Microsoft.Azure.DurableTask.Core`:
@@ -82,6 +87,8 @@ Each blob holds the instance's full history using .NET-style history-event JSON.
 - Each event is `{"eventType": "...", <type-specific fields>, "eventId": N, "isPlayed": false, "timestamp": "..."}`.
 - camelCase field names, null event fields omitted, empty maps as `{}`, enum values in PascalCase (e.g. `"Completed"`), timestamps as trimmed ISO-8601 ending in `Z`, and HTML-safe string escaping (`"` → `\u0022`, `& < > ' +` and all non-ASCII → `\uXXXX`).
 - Sub-millisecond timestamps are preserved when reading history and metadata. Exported timestamps and blob-name timestamps use .NET's 100-nanosecond precision; orchestration replay timestamp behavior is unchanged.
+- Ordinary and nested failure details retain custom `properties`, including nested values and date tags projected
+  to .NET-style timestamps. Failure details read from streamed history retain empty property objects as `{}`.
 - Entity operations and locks are exported as `EventSent`/`EventRaised` events. Their `input` contains the reference SDK's JSON-encoded entity request or response, including parent orchestration context and nested failure details. This replaces the earlier Java-native `Entity...` event format; consumers of that preview format must update their event handling. The public history API continues returning typed Java entity events.
 - JSONL uses LF line endings. Identical compressed bytes or identical fields across all SDK versions are not guaranteed.
 
@@ -96,6 +103,11 @@ surfaces (matching .NET).
 ## Validating the export
 
 Locally, with the DTS emulator and Azurite:
+
+Run the automated suite with `./gradlew :exporthistory:integrationTest -PskipSigning` after starting the backends.
+It checks batch export, JSON and gzipped JSONL failure properties, resolved large-payload history, container
+recreation after deletion, and continuous export of an orchestration completed between options construction
+and job creation.
 
 1. Start the backends:
    ```

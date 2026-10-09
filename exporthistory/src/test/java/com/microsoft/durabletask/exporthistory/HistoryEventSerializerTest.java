@@ -3,6 +3,7 @@
 package com.microsoft.durabletask.exporthistory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.microsoft.durabletask.FailureDetails;
 import com.microsoft.durabletask.history.EntityLockRequestedEvent;
 import com.microsoft.durabletask.history.EntityOperationCalledEvent;
 import com.microsoft.durabletask.history.EntityOperationFailedEvent;
@@ -13,6 +14,7 @@ import com.microsoft.durabletask.history.GenericEvent;
 import com.microsoft.durabletask.history.HistoryEvent;
 import com.microsoft.durabletask.history.OrchestrationInstance;
 import com.microsoft.durabletask.history.TaskCompletedEvent;
+import com.microsoft.durabletask.history.TaskFailedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -60,6 +62,21 @@ class HistoryEventSerializerTest {
                 Arrays.asList((HistoryEvent) new GenericEvent(1, TS, null)), format);
         assertFalse(result.contains("\"data\""));
         assertTrue(result.contains("\"eventId\":1"));
+    }
+
+    @Test
+    void failurePropertiesFromExceptionArePreservedAndNullPropertiesRemainOmitted() {
+        FailureDetails withProperties = FailureDetails.fromException(
+                new IllegalStateException("boom"), exception -> Collections.singletonMap("code", 42));
+        FailureDetails withoutProperties = FailureDetails.fromException(new IllegalStateException("boom"), null);
+        ExportFormat format = new ExportFormat(ExportFormatKind.JSONL, "1.0");
+
+        String with = HistoryEventSerializer.serialize(
+                Collections.singletonList(new TaskFailedEvent(2, TS, 1, withProperties)), format);
+        assertTrue(with.contains("\"properties\":{\"code\":42}"));
+        String without = HistoryEventSerializer.serialize(
+                Collections.singletonList(new TaskFailedEvent(2, TS, 1, withoutProperties)), format);
+        assertFalse(without.contains("\"properties\""));
     }
 
     @Test

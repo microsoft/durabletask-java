@@ -2,8 +2,10 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.exporthistory;
 
+import com.microsoft.durabletask.JacksonDataConverter;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -12,9 +14,12 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * Unit tests for {@link ExportJobCreationOptions}.
@@ -26,6 +31,7 @@ class ExportJobCreationOptionsTest {
         ExportJobCreationOptions options = new ExportJobCreationOptions("job-1");
         assertEquals("job-1", options.getJobId());
         assertEquals(ExportMode.BATCH, options.getMode());
+        assertNull(options.getCompletedTimeFrom());
         assertEquals(100, options.getMaxInstancesPerBatch());
         assertEquals(ExportFormatKind.JSONL, options.getFormat().getKind());
         assertEquals(
@@ -34,6 +40,66 @@ class ExportJobCreationOptionsTest {
                         OrchestrationRuntimeStatus.FAILED,
                         OrchestrationRuntimeStatus.TERMINATED),
                 options.getRuntimeStatus());
+    }
+
+    @Test
+    void continuousDefault_isCapturedAtConstructionAndPreservedByCopyAndSerialization() {
+        Instant constructedAt = Instant.parse("2026-07-01T10:00:00Z");
+        Instant queuedAt = constructedAt.plusSeconds(300);
+        JacksonDataConverter converter = new JacksonDataConverter();
+        try (MockedStatic<Instant> clock = mockStatic(Instant.class, CALLS_REAL_METHODS)) {
+            clock.when(Instant::now).thenReturn(constructedAt);
+            ExportJobCreationOptions options = new ExportJobCreationOptions("job-1");
+
+            clock.when(Instant::now).thenReturn(queuedAt);
+            options.setMode(ExportMode.CONTINUOUS);
+            assertEquals(constructedAt, options.getCompletedTimeFrom());
+            ExportJobCreationOptions copy = options.copy();
+            assertEquals(constructedAt, copy.getCompletedTimeFrom());
+
+            String serialized = converter.serialize(copy);
+            assertFalse(serialized.contains("optionsCreatedAt"));
+            ExportJobCreationOptions restored = converter.deserialize(serialized, ExportJobCreationOptions.class);
+            assertEquals(ExportMode.CONTINUOUS, restored.getMode());
+            assertEquals(constructedAt, restored.getCompletedTimeFrom());
+            assertEquals(constructedAt, restored.copy().getCompletedTimeFrom());
+        }
+    }
+
+    @Test
+    void continuousDefault_doesNotSupplyTheRequiredBatchLowerBound() {
+        ExportJobCreationOptions options = new ExportJobCreationOptions("job-1")
+                .setMode(ExportMode.CONTINUOUS);
+        assertNotNull(options.getCompletedTimeFrom());
+        options.setMode(ExportMode.BATCH).setCompletedTimeTo(Instant.now().minusSeconds(60));
+        assertNull(options.getCompletedTimeFrom());
+        assertThrows(IllegalArgumentException.class, options::validateForCreate);
+    }
+
+    @Test
+    void continuousExplicitLowerBound_canBeClearedToTheConstructionDefault() {
+        ExportJobCreationOptions options = new ExportJobCreationOptions("job-1")
+                .setMode(ExportMode.CONTINUOUS);
+        Instant defaultFrom = options.getCompletedTimeFrom();
+        Instant explicit = Instant.parse("2026-06-01T00:00:00Z");
+        options.setCompletedTimeFrom(explicit);
+        assertEquals(explicit, options.getCompletedTimeFrom());
+        assertEquals(explicit, options.copy().getCompletedTimeFrom());
+        options.setCompletedTimeFrom(null);
+        assertEquals(defaultFrom, options.getCompletedTimeFrom());
+    }
+
+    @Test
+    void continuousExplicitLowerBound_beforeModeSelection_survivesSerialization() {
+        Instant explicit = Instant.parse("2026-06-01T00:00:00Z");
+        ExportJobCreationOptions options = new ExportJobCreationOptions("job-1")
+                .setCompletedTimeFrom(explicit)
+                .setMode(ExportMode.CONTINUOUS);
+        JacksonDataConverter converter = new JacksonDataConverter();
+        ExportJobCreationOptions restored = converter.deserialize(
+                converter.serialize(options.copy()), ExportJobCreationOptions.class);
+        assertEquals(explicit, options.getCompletedTimeFrom());
+        assertEquals(explicit, restored.getCompletedTimeFrom());
     }
 
     @Test

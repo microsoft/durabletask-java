@@ -80,12 +80,21 @@ public final class FailureDetails {
     }
 
     FailureDetails(TaskFailureDetails proto) {
+        this(proto, false);
+    }
+
+    private FailureDetails(TaskFailureDetails proto, boolean preserveEmptyProperties) {
         this(proto.getErrorType(),
              proto.getErrorMessage(),
              proto.hasStackTrace() ? proto.getStackTrace().getValue() : null,
              proto.getIsNonRetriable(),
-             proto.hasInnerFailure() ? new FailureDetails(proto.getInnerFailure()) : null,
-             convertProtoProperties(proto.getPropertiesMap()));
+             proto.hasInnerFailure() ? new FailureDetails(proto.getInnerFailure(), preserveEmptyProperties) : null,
+             convertProtoProperties(proto.getPropertiesMap(), preserveEmptyProperties));
+    }
+
+    static FailureDetails fromHistoryProto(TaskFailureDetails proto) {
+        // The .NET history converter retains empty property dictionaries, including on inner failures.
+        return new FailureDetails(proto, true);
     }
 
     /**
@@ -268,9 +277,10 @@ public final class FailureDetails {
     }
 
     @Nullable
-    private static Map<String, Object> convertProtoProperties(Map<String, Value> protoProperties) {
+    private static Map<String, Object> convertProtoProperties(
+            Map<String, Value> protoProperties, boolean preserveEmptyProperties) {
         if (protoProperties == null || protoProperties.isEmpty()) {
-            return null;
+            return preserveEmptyProperties ? Collections.emptyMap() : null;
         }
 
         Map<String, Object> result = new HashMap<>();

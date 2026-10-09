@@ -46,7 +46,7 @@ final class HistoryEventConverter {
                 return new ExecutionCompletedEvent(id, ts,
                         OrchestrationRuntimeStatus.fromProtobuf(p.getOrchestrationStatus()),
                         stringOrNull(p.hasResult(), p.getResult()),
-                        p.hasFailureDetails() ? new FailureDetails(p.getFailureDetails()) : null);
+                        p.hasFailureDetails() ? FailureDetails.fromHistoryProto(p.getFailureDetails()) : null);
             }
             case EXECUTIONTERMINATED: {
                 OrchestratorService.ExecutionTerminatedEvent p = proto.getExecutionTerminated();
@@ -68,7 +68,7 @@ final class HistoryEventConverter {
             case TASKFAILED: {
                 OrchestratorService.TaskFailedEvent p = proto.getTaskFailed();
                 return new TaskFailedEvent(id, ts, p.getTaskScheduledId(),
-                        p.hasFailureDetails() ? new FailureDetails(p.getFailureDetails()) : null);
+                        p.hasFailureDetails() ? FailureDetails.fromHistoryProto(p.getFailureDetails()) : null);
             }
             case SUBORCHESTRATIONINSTANCECREATED: {
                 OrchestratorService.SubOrchestrationInstanceCreatedEvent p = proto.getSubOrchestrationInstanceCreated();
@@ -89,7 +89,7 @@ final class HistoryEventConverter {
             case SUBORCHESTRATIONINSTANCEFAILED: {
                 OrchestratorService.SubOrchestrationInstanceFailedEvent p = proto.getSubOrchestrationInstanceFailed();
                 return new SubOrchestrationInstanceFailedEvent(id, ts, p.getTaskScheduledId(),
-                        p.hasFailureDetails() ? new FailureDetails(p.getFailureDetails()) : null);
+                        p.hasFailureDetails() ? FailureDetails.fromHistoryProto(p.getFailureDetails()) : null);
             }
             case TIMERCREATED: {
                 OrchestratorService.TimerCreatedEvent p = proto.getTimerCreated();
@@ -161,7 +161,7 @@ final class HistoryEventConverter {
             case ENTITYOPERATIONFAILED: {
                 OrchestratorService.EntityOperationFailedEvent p = proto.getEntityOperationFailed();
                 return new EntityOperationFailedEvent(id, ts, p.getRequestId(),
-                        p.hasFailureDetails() ? new FailureDetails(p.getFailureDetails()) : null);
+                        p.hasFailureDetails() ? FailureDetails.fromHistoryProto(p.getFailureDetails()) : null);
             }
             case ENTITYLOCKREQUESTED: {
                 OrchestratorService.EntityLockRequestedEvent p = proto.getEntityLockRequested();
@@ -238,7 +238,7 @@ final class HistoryEventConverter {
                 stringOrNull(p.hasInput(), p.getInput()),
                 stringOrNull(p.hasOutput(), p.getOutput()),
                 stringOrNull(p.hasCustomStatus(), p.getCustomStatus()),
-                p.hasFailureDetails() ? new FailureDetails(p.getFailureDetails()) : null,
+                p.hasFailureDetails() ? FailureDetails.fromHistoryProto(p.getFailureDetails()) : null,
                 stringOrNull(p.hasExecutionId(), p.getExecutionId()),
                 stringOrNull(p.hasParentInstanceId(), p.getParentInstanceId()),
                 p.getTagsMap());
