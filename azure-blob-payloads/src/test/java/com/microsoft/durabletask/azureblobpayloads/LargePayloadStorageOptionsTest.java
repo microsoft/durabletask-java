@@ -14,7 +14,7 @@ class LargePayloadStorageOptionsTest {
     @Test
     void defaults_areCorrect() {
         LargePayloadStorageOptions options = new LargePayloadStorageOptions();
-        assertEquals(900_000, options.getThresholdBytes());
+        assertEquals(256 * 1024, options.getThresholdBytes());
         assertEquals(10 * 1024 * 1024, options.getMaxPayloadBytes());
         assertNull(options.getConnectionString());
         assertNull(options.getAccountUri());

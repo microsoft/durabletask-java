@@ -18,24 +18,18 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPOutputStream;
 
 /**
  * Writes serialized orchestration history to Azure Blob Storage.
  * <p>
  * Built once from {@link ExportHistoryStorageOptions} (connection-string or identity auth) and reused across export
- * activities. The target container is taken from each {@link ExportDestination}; the container is created on first
- * use.
+ * activities. The target container is taken from each {@link ExportDestination}; its existence is ensured before
+ * every upload.
  */
 final class BlobExportWriter {
 
     private final BlobServiceClient serviceClient;
-
-    // Containers already ensured this process-lifetime, so createIfNotExists runs once per container
-    // rather than once per uploaded blob. The end state is identical; only redundant REST calls are avoided.
-    private final Set<String> ensuredContainers = ConcurrentHashMap.newKeySet();
 
     /**
      * Creates a {@code BlobExportWriter} from storage options.
@@ -103,10 +97,7 @@ final class BlobExportWriter {
             throw new IllegalArgumentException("Blob path must not be null or empty.");
         }
         BlobContainerClient containerClient = this.serviceClient.getBlobContainerClient(containerName);
-        if (!this.ensuredContainers.contains(containerName)) {
-            containerClient.createIfNotExists();
-            this.ensuredContainers.add(containerName);
-        }
+        containerClient.createIfNotExists();
 
         BlobClient blobClient = containerClient.getBlobClient(blobPath);
 
