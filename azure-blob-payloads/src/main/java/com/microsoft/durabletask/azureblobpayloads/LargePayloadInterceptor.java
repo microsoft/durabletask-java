@@ -847,6 +847,16 @@ public final class LargePayloadInterceptor implements ClientInterceptor {
                     }
                 }
                 break;
+            case ENTITYOPERATIONFAILED:
+                if (e.hasEntityOperationFailed() && e.getEntityOperationFailed().hasFailureDetails()) {
+                    EntityOperationFailedEvent efailed = e.getEntityOperationFailed();
+                    TaskFailureDetails fd = resolveFailureDetails(efailed.getFailureDetails());
+                    if (fd != efailed.getFailureDetails()) {
+                        return e.toBuilder().setEntityOperationFailed(
+                            efailed.toBuilder().setFailureDetails(fd)).build();
+                    }
+                }
+                break;
             case HISTORYSTATE:
                 if (e.hasHistoryState()) {
                     HistoryStateEvent hs = e.getHistoryState();

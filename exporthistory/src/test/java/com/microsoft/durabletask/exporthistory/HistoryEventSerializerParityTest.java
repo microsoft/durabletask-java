@@ -299,6 +299,26 @@ class HistoryEventSerializerParityTest {
         }
     }
 
+    @Test
+    void entityOperationFailureExportsResolvedStackTracesInBothFormats() throws Exception {
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .setStackTrace(StringValue.of("outer stack"))
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder()
+                        .setErrorType("Inner")
+                        .setErrorMessage("inner")
+                        .setStackTrace(StringValue.of("inner stack")))
+                .build();
+        List<HistoryEvent> history = streamEntityFailure(failure);
+        for (ExportFormat format : Arrays.asList(JSONL, JSON)) {
+            String serialized = HistoryEventSerializer.serialize(history, format);
+            assertTrue(serialized.contains("outer stack"));
+            assertTrue(serialized.contains("inner stack"));
+            assertTrue(!serialized.contains("blob:v1:"));
+        }
+    }
+
     private static List<OrchestratorService.HistoryEvent> ordinaryFailureEvents(
             OrchestratorService.TaskFailureDetails failure) {
         OrchestratorService.HistoryEvent.Builder event = OrchestratorService.HistoryEvent.newBuilder()

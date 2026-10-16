@@ -88,6 +88,12 @@ public class OrchestratorChunkingTest {
     // ==================== validateActionsSize tests ====================
 
     @Test
+    void workerBuilder_defaultLargePayloadThreshold_matchesStorageDefault() {
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
+        assertEquals(256 * 1024, builder.largePayloadThresholdBytes);
+    }
+
+    @Test
     void validateActionsSize_actionUnderLimit_returnsNull() throws Exception {
         OrchestratorAction smallAction = OrchestratorAction.newBuilder()
             .setScheduleTask(ScheduleTaskAction.newBuilder()

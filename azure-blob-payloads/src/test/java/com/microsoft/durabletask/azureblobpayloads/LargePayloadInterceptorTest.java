@@ -471,6 +471,40 @@ class LargePayloadInterceptorTest {
         verifyEventResolution(HistoryEvent.newBuilder()
             .setEntityOperationCompleted(EntityOperationCompletedEvent.newBuilder()
                 .setOutput(StringValue.of("blob:v1:c:n")).build()).build());
+        verifyEventResolution(HistoryEvent.newBuilder()
+            .setEntityOperationFailed(EntityOperationFailedEvent.newBuilder()
+                .setFailureDetails(TaskFailureDetails.newBuilder()
+                    .setErrorType("EntityFailure")
+                    .setStackTrace(StringValue.of("blob:v1:c:n"))).build()).build());
+    }
+
+    @Test
+    void resolve_HistoryChunk_entityOperationFailed_resolvesNestedFailureStackTraces() {
+        when(mockStore.download("blob:v1:container:outer")).thenReturn("outer stack");
+        when(mockStore.download("blob:v1:container:inner")).thenReturn("inner stack");
+
+        TaskFailureDetails inner = TaskFailureDetails.newBuilder()
+            .setErrorType("Inner")
+            .setStackTrace(StringValue.of("blob:v1:container:inner"))
+            .build();
+        TaskFailureDetails outer = TaskFailureDetails.newBuilder()
+            .setErrorType("Outer")
+            .setStackTrace(StringValue.of("blob:v1:container:outer"))
+            .setInnerFailure(inner)
+            .build();
+        HistoryChunk chunk = HistoryChunk.newBuilder()
+            .addEvents(HistoryEvent.newBuilder()
+                .setEntityOperationFailed(EntityOperationFailedEvent.newBuilder()
+                    .setFailureDetails(outer)))
+            .build();
+
+        Object result = invokeResolve(chunk);
+
+        assertTrue(result instanceof HistoryChunk);
+        TaskFailureDetails resolved = ((HistoryChunk) result).getEvents(0)
+            .getEntityOperationFailed().getFailureDetails();
+        assertEquals("outer stack", resolved.getStackTrace().getValue());
+        assertEquals("inner stack", resolved.getInnerFailure().getStackTrace().getValue());
     }
 
     @Test

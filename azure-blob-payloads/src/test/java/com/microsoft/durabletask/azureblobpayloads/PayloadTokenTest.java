@@ -57,6 +57,13 @@ class PayloadTokenTest {
     }
 
     @Test
+    void isKnownPayloadToken_rootContainer_returnsTrue() {
+        BlobPayloadStore store = createStoreWithDefaults();
+        assertTrue(store.isKnownPayloadToken(
+            "blob:v1:$root:0123456789abcdef0123456789abcdef"));
+    }
+
+    @Test
     void isKnownPayloadToken_prefixOnly_returnsFalse() {
         BlobPayloadStore store = createStoreWithDefaults();
         assertFalse(store.isKnownPayloadToken("blob:v1:arbitrary-user-content"));
