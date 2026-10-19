@@ -192,29 +192,27 @@ public final class BlobPayloadStore extends PayloadStore {
     }
 
     private static boolean blobContentMatches(BlobClient blob, byte[] expectedBytes, String expectedContentEncoding) {
-        try {
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            BlobDownloadResponse response = blob.downloadStreamWithResponse(
-                output,
-                null,
-                null,
-                null,
-                false,
-                null,
-                Context.NONE);
-            BlobDownloadHeaders headers = response.getDeserializedHeaders();
-            String actualEncoding = headers == null ? null : headers.getContentEncoding();
-            if (expectedContentEncoding == null) {
-                if (actualEncoding != null && !actualEncoding.isEmpty()) {
-                    return false;
-                }
-            } else if (!expectedContentEncoding.equalsIgnoreCase(actualEncoding)) {
+        // Verification failures must propagate with their own status/cause. In particular,
+        // a transient GET failure must not turn the ambiguous PUT into a permanent 412.
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        BlobDownloadResponse response = blob.downloadStreamWithResponse(
+            output,
+            null,
+            null,
+            null,
+            false,
+            null,
+            Context.NONE);
+        BlobDownloadHeaders headers = response.getDeserializedHeaders();
+        String actualEncoding = headers == null ? null : headers.getContentEncoding();
+        if (expectedContentEncoding == null) {
+            if (actualEncoding != null && !actualEncoding.isEmpty()) {
                 return false;
             }
-            return Arrays.equals(expectedBytes, output.toByteArray());
-        } catch (RuntimeException e) {
+        } else if (!expectedContentEncoding.equalsIgnoreCase(actualEncoding)) {
             return false;
         }
+        return Arrays.equals(expectedBytes, output.toByteArray());
     }
 
     private Object ensureContainerExists() {

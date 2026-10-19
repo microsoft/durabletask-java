@@ -3,6 +3,8 @@
 package com.microsoft.durabletask.azureblobpayloads;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -61,6 +63,21 @@ class PayloadTokenTest {
         BlobPayloadStore store = createStoreWithDefaults();
         assertTrue(store.isKnownPayloadToken(
             "blob:v1:$root:0123456789abcdef0123456789abcdef"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "blob:v1:$ROOT:0123456789abcdef0123456789abcdef",
+        "blob:v1:$root-extra:0123456789abcdef0123456789abcdef",
+        "blob:v1:$logs:0123456789abcdef0123456789abcdef",
+        "blob:v1:$root:0123456789abcdef0123456789abcde",
+        "blob:v1:$root:0123456789abcdef0123456789abcdeg",
+        "blob:v1:$root:0123456789abcdef0123456789abcdef:extra",
+        "blob:v1:$root:0123456789abcdef0123456789abcdef\n",
+        "\"blob:v1:$root:0123456789abcdef0123456789abcdef\""
+    })
+    void isKnownPayloadToken_rootLookingLiteral_returnsFalse(String literal) {
+        assertFalse(createStoreWithDefaults().isKnownPayloadToken(literal));
     }
 
     @Test

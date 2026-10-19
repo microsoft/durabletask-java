@@ -94,6 +94,32 @@ public class OrchestratorChunkingTest {
     }
 
     @Test
+    void chunking_defaultThreshold_doesNotRejectAggregateMediumPayloadFields() throws Exception {
+        int chunkLimit = 1_048_576;
+        String mediumPayload = "X".repeat(400_000);
+        CompleteOrchestrationAction completion = CompleteOrchestrationAction.newBuilder()
+            .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED)
+            .setResult(StringValue.of(mediumPayload))
+            .setDetails(StringValue.of(mediumPayload))
+            .addCarryoverEvents(HistoryEvent.newBuilder()
+                .setEventRaised(EventRaisedEvent.newBuilder().setInput(StringValue.of(mediumPayload))))
+            .build();
+        OrchestratorResponse response = OrchestratorResponse.newBuilder()
+            .setInstanceId("medium-fields")
+            .setCompletionToken("token")
+            .addActions(OrchestratorAction.newBuilder().setCompleteOrchestration(completion))
+            .build();
+        assertTrue(response.getActions(0).getSerializedSize() > chunkLimit);
+        try (DurableTaskGrpcWorker worker = buildWorkerWithChannel(true, chunkLimit)) {
+            invokeChunkingMethod(worker, response);
+        }
+
+        assertEquals(1, capturedResponses.size());
+        assertEquals(completion, capturedResponses.get(0).getActions(0).getCompleteOrchestration(),
+            "Fields between 256 KiB and 900 KB will be externalized, not rejected as oversized");
+    }
+
+    @Test
     void validateActionsSize_actionUnderLimit_returnsNull() throws Exception {
         OrchestratorAction smallAction = OrchestratorAction.newBuilder()
             .setScheduleTask(ScheduleTaskAction.newBuilder()

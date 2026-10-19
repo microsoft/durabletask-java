@@ -13,6 +13,9 @@ import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
 import com.microsoft.durabletask.FailureDetails;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
+import com.microsoft.durabletask.azureblobpayloads.LargePayloadClientExtensions;
+import com.microsoft.durabletask.azureblobpayloads.LargePayloadStorageOptions;
+import com.microsoft.durabletask.azureblobpayloads.PayloadStore;
 import com.microsoft.durabletask.history.ContinueAsNewEvent;
 import com.microsoft.durabletask.history.EntityLockGrantedEvent;
 import com.microsoft.durabletask.history.EntityLockRequestedEvent;
@@ -301,22 +304,47 @@ class HistoryEventSerializerParityTest {
 
     @Test
     void entityOperationFailureExportsResolvedStackTracesInBothFormats() throws Exception {
+        String outerToken = "blob:v1:$root:0123456789abcdef0123456789abcdef";
+        String innerToken = "blob:v1:$root:fedcba9876543210fedcba9876543210";
+        String outerTrace = "outer stack\n".repeat(200);
+        String innerTrace = "inner stack\n".repeat(200);
+        PayloadStore store = org.mockito.Mockito.mock(PayloadStore.class);
+        org.mockito.Mockito.when(store.isKnownPayloadToken(outerToken)).thenReturn(true);
+        org.mockito.Mockito.when(store.isKnownPayloadToken(innerToken)).thenReturn(true);
+        org.mockito.Mockito.when(store.download(outerToken)).thenReturn(outerTrace);
+        org.mockito.Mockito.when(store.download(innerToken)).thenReturn(innerTrace);
         OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
                 .setErrorType("Outer")
                 .setErrorMessage("boom")
-                .setStackTrace(StringValue.of("outer stack"))
+                .setStackTrace(StringValue.of(outerToken))
                 .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder()
                         .setErrorType("Inner")
                         .setErrorMessage("inner")
-                        .setStackTrace(StringValue.of("inner stack")))
+                        .setStackTrace(StringValue.of(innerToken)))
                 .build();
-        List<HistoryEvent> history = streamEntityFailure(failure);
+        OrchestratorService.HistoryEvent event = OrchestratorService.HistoryEvent.newBuilder()
+                .setEventId(6)
+                .setTimestamp(DataConverter.getTimestampFromInstant(TS))
+                .setEntityOperationFailed(OrchestratorService.EntityOperationFailedEvent.newBuilder()
+                        .setRequestId("req-failed").setFailureDetails(failure))
+                .build();
+        List<HistoryEvent> history = streamHistoryEvent(event, store);
+        ObjectMapper mapper = new ObjectMapper();
         for (ExportFormat format : Arrays.asList(JSONL, JSON)) {
             String serialized = HistoryEventSerializer.serialize(history, format);
-            assertTrue(serialized.contains("outer stack"));
-            assertTrue(serialized.contains("inner stack"));
-            assertTrue(!serialized.contains("blob:v1:"));
+            JsonNode document = mapper.readTree(serialized);
+            JsonNode exported = format.getKind() == ExportFormatKind.JSON ? document.get(0) : document;
+            assertEquals("EventRaised", exported.path("eventType").asText());
+            JsonNode response = mapper.readTree(exported.path("input").asText());
+            JsonNode details = response.path("failureDetails");
+            assertEquals("Outer", details.path("ErrorType").asText());
+            assertEquals("boom", details.path("ErrorMessage").asText());
+            assertEquals(outerTrace, details.path("StackTrace").asText());
+            assertEquals(innerTrace, details.path("InnerFailure").path("StackTrace").asText());
+            assertTrue(!serialized.contains("blob:v1:"), "No unresolved trace references may reach the archive");
         }
+        org.mockito.Mockito.verify(store).download(outerToken);
+        org.mockito.Mockito.verify(store).download(innerToken);
     }
 
     private static List<OrchestratorService.HistoryEvent> ordinaryFailureEvents(
@@ -349,6 +377,11 @@ class HistoryEventSerializerParityTest {
     }
 
     private static List<HistoryEvent> streamHistoryEvent(OrchestratorService.HistoryEvent event) throws Exception {
+        return streamHistoryEvent(event, null);
+    }
+
+    private static List<HistoryEvent> streamHistoryEvent(
+            OrchestratorService.HistoryEvent event, PayloadStore store) throws Exception {
         String serverName = InProcessServerBuilder.generateName();
         Server server = InProcessServerBuilder.forName(serverName)
                 .directExecutor()
@@ -367,7 +400,12 @@ class HistoryEventSerializerParityTest {
         ManagedChannel channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
         try {
             server.start();
-            try (DurableTaskClient client = new DurableTaskGrpcClientBuilder().grpcChannel(channel).build()) {
+            DurableTaskGrpcClientBuilder builder = new DurableTaskGrpcClientBuilder().grpcChannel(channel);
+            if (store != null) {
+                LargePayloadClientExtensions.useExternalizedPayloads(builder, store,
+                        new LargePayloadStorageOptions().setThresholdBytes(1024));
+            }
+            try (DurableTaskClient client = builder.build()) {
                 List<HistoryEvent> history = client.getOrchestrationHistory("instance-1");
                 assertEquals(1, history.size());
                 return history;

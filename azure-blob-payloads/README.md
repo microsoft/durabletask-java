@@ -60,6 +60,23 @@ orchestration upload failures become non-retriable failure completions. Entity u
 completing the batch, matching .NET. The worker logs failed completions and abandons the affected work item for
 scheduler redelivery without terminating its polling thread.
 
+Uploads use conditional creation to prevent overwriting an existing payload. If a PUT commits but its response is
+lost, a retried PUT can return HTTP 412. The store recovers only after verifying that the stored bytes and content
+encoding exactly match the attempted upload. A verification download failure propagates with its own status so
+transient failures remain retryable. Payload tokens also support Azure's `$root` container.
+
+## Offline regression tests
+
+```text
+./gradlew :azure-blob-payloads:test :exporthistory:test :client:test -PskipSigning
+```
+
+These tests do not require Azure or emulators. The blob-upload regressions run the real Azure SDK against an
+in-memory HTTP transport that commits a PUT and loses its response, exercising SDK retries with compression on
+and off. In-process gRPC tests cover `$root` tokens through client, worker, and streamed history paths and resolved
+nested failure traces in decoded JSON and JSONL exports. An orchestration replay regression also verifies that
+entity callers receive the original nested failure diagnostics after work-item payload resolution.
+
 ## Integration tests
 
 With the DTS emulator on port 4001 and Azurite Blob Storage on port 10000, run:

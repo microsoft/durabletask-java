@@ -4,9 +4,15 @@ package com.microsoft.durabletask.azureblobpayloads;
 
 import com.azure.core.http.HttpResponse;
 import com.azure.storage.blob.models.BlobStorageException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Empty;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
+import com.microsoft.durabletask.EntityInstanceId;
+import com.microsoft.durabletask.EntityOperationFailedException;
+import com.microsoft.durabletask.FailureDetails;
+import com.microsoft.durabletask.OrchestrationRunner;
+import com.microsoft.durabletask.TaskOrchestration;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -21,6 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -478,8 +485,9 @@ class LargePayloadInterceptorTest {
                     .setStackTrace(StringValue.of("blob:v1:c:n"))).build()).build());
     }
 
-    @Test
-    void resolve_HistoryChunk_entityOperationFailed_resolvesNestedFailureStackTraces() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void resolve_entityOperationFailed_resolvesNestedFailureStackTraces(boolean streamedHistory) {
         when(mockStore.download("blob:v1:container:outer")).thenReturn("outer stack");
         when(mockStore.download("blob:v1:container:inner")).thenReturn("inner stack");
 
@@ -492,19 +500,93 @@ class LargePayloadInterceptorTest {
             .setStackTrace(StringValue.of("blob:v1:container:outer"))
             .setInnerFailure(inner)
             .build();
-        HistoryChunk chunk = HistoryChunk.newBuilder()
-            .addEvents(HistoryEvent.newBuilder()
-                .setEntityOperationFailed(EntityOperationFailedEvent.newBuilder()
-                    .setFailureDetails(outer)))
+        HistoryEvent event = HistoryEvent.newBuilder()
+            .setEntityOperationFailed(EntityOperationFailedEvent.newBuilder().setFailureDetails(outer))
             .build();
-
-        Object result = invokeResolve(chunk);
-
-        assertTrue(result instanceof HistoryChunk);
-        TaskFailureDetails resolved = ((HistoryChunk) result).getEvents(0)
-            .getEntityOperationFailed().getFailureDetails();
+        TaskFailureDetails resolved;
+        if (streamedHistory) {
+            HistoryChunk chunk = (HistoryChunk) invokeResolve(HistoryChunk.newBuilder().addEvents(event).build());
+            resolved = chunk.getEvents(0).getEntityOperationFailed().getFailureDetails();
+        } else {
+            WorkItem workItem = (WorkItem) invokeResolve(WorkItem.newBuilder()
+                .setOrchestratorRequest(OrchestratorRequest.newBuilder()
+                    .addPastEvents(event).addNewEvents(event)).build());
+            resolved = workItem.getOrchestratorRequest().getNewEvents(0)
+                .getEntityOperationFailed().getFailureDetails();
+            assertEquals(resolved, workItem.getOrchestratorRequest().getPastEvents(0)
+                .getEntityOperationFailed().getFailureDetails());
+        }
         assertEquals("outer stack", resolved.getStackTrace().getValue());
         assertEquals("inner stack", resolved.getInnerFailure().getStackTrace().getValue());
+    }
+
+    @Test
+    void externalizedEntityFailure_reachesCallerWithOriginalNestedDiagnostics() throws Exception {
+        options.setThresholdBytes(1024);
+        interceptor = new LargePayloadInterceptor(mockStore, options);
+        String outerTrace = "outer trace\n".repeat(200);
+        String innerTrace = "inner trace\n".repeat(200);
+        when(mockStore.upload(outerTrace)).thenReturn("blob:v1:container:outer");
+        when(mockStore.upload(innerTrace)).thenReturn("blob:v1:container:inner");
+        when(mockStore.download("blob:v1:container:outer")).thenReturn(outerTrace);
+        when(mockStore.download("blob:v1:container:inner")).thenReturn(innerTrace);
+        TaskFailureDetails failure = TaskFailureDetails.newBuilder()
+            .setErrorType("Outer").setErrorMessage("operation failed")
+            .setStackTrace(StringValue.of(outerTrace))
+            .setInnerFailure(TaskFailureDetails.newBuilder().setErrorType("Inner")
+                .setErrorMessage("inner cause").setStackTrace(StringValue.of(innerTrace)))
+            .build();
+        EntityBatchResult externalized = (EntityBatchResult) invokeExternalize(EntityBatchResult.newBuilder()
+            .addResults(OperationResult.newBuilder().setFailure(
+                OperationResultFailure.newBuilder().setFailureDetails(failure))).build());
+        TaskFailureDetails storedFailure = externalized.getResults(0).getFailure().getFailureDetails();
+        assertEquals("blob:v1:container:outer", storedFailure.getStackTrace().getValue());
+        assertEquals("blob:v1:container:inner", storedFailure.getInnerFailure().getStackTrace().getValue());
+
+        AtomicReference<FailureDetails> caught = new AtomicReference<>();
+        TaskOrchestration orchestration = ctx -> {
+            try {
+                ctx.callEntity(new EntityInstanceId("Counter", "one"), "get", null, Integer.class).await();
+                ctx.complete("unexpected success");
+            } catch (EntityOperationFailedException e) {
+                caught.set(e.getFailureDetails());
+                ctx.complete("caught");
+            }
+        };
+        HistoryEvent started = HistoryEvent.newBuilder()
+            .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance()).build();
+        HistoryEvent execution = HistoryEvent.newBuilder()
+            .setExecutionStarted(ExecutionStartedEvent.newBuilder().setName("Caller")
+                .setOrchestrationInstance(OrchestrationInstance.newBuilder().setInstanceId("caller"))).build();
+        HistoryEvent completed = HistoryEvent.newBuilder()
+            .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance()).build();
+        OrchestratorRequest initial = OrchestratorRequest.newBuilder().setInstanceId("caller")
+            .addPastEvents(started).addPastEvents(execution).addNewEvents(completed).build();
+        OrchestratorResponse first = OrchestratorResponse.parseFrom(
+            OrchestrationRunner.loadAndRun(initial.toByteArray(), orchestration));
+        String requestId = new ObjectMapper().readTree(first.getActions(0).getSendEvent().getData().getValue())
+            .path("id").asText();
+        assertFalse(requestId.isEmpty());
+        WorkItem replay = WorkItem.newBuilder().setOrchestratorRequest(initial.toBuilder()
+            .clearNewEvents()
+            .addPastEvents(HistoryEvent.newBuilder().setEventId(0)
+                .setEventSent(EventSentEvent.getDefaultInstance()))
+            .addPastEvents(completed)
+            .addNewEvents(started)
+            .addNewEvents(HistoryEvent.newBuilder().setEntityOperationFailed(
+                EntityOperationFailedEvent.newBuilder().setRequestId(requestId).setFailureDetails(storedFailure)))
+            .addNewEvents(completed)).build();
+        WorkItem resolved = (WorkItem) invokeResolve(replay);
+        OrchestratorResponse result = OrchestratorResponse.parseFrom(
+            OrchestrationRunner.loadAndRun(resolved.getOrchestratorRequest().toByteArray(), orchestration));
+
+        assertNotNull(caught.get(), "The actual entity caller must receive the failure");
+        assertEquals("Outer", caught.get().getErrorType());
+        assertEquals("operation failed", caught.get().getErrorMessage());
+        assertEquals(outerTrace, caught.get().getStackTrace());
+        assertEquals(innerTrace, caught.get().getInnerFailure().getStackTrace());
+        assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED,
+            result.getActions(0).getCompleteOrchestration().getOrchestrationStatus());
     }
 
     @Test

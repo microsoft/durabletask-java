@@ -121,6 +121,7 @@ class BlobPayloadStoreTest {
         doThrow(preconditionFailed).when(mockBlobClient).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(),
             any(BlobHttpHeaders.class), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+        mockDownloadResponse("different stored content".getBytes(StandardCharsets.UTF_8), "gzip");
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         PayloadStorageException ex = assertThrows(PayloadStorageException.class,
