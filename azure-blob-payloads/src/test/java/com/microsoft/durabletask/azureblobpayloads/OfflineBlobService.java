@@ -36,6 +36,8 @@ final class OfflineBlobService implements HttpClient {
     boolean loseFirstPutResponse;
     boolean changeStoredBytes;
     boolean changeStoredEncoding;
+    int duplicatePutStatus = 412;
+    String duplicatePutErrorCode = "ConditionNotMet";
     int downloadStatus = 200;
     int downloads;
 
@@ -65,7 +67,7 @@ final class OfflineBlobService implements HttpClient {
             putUrls.add(url);
             putBodies.add(body);
             if (blobs.containsKey(path)) {
-                return response(request, 412, new byte[0], "ConditionNotMet");
+                return response(request, duplicatePutStatus, new byte[0], duplicatePutErrorCode);
             }
             blobs.put(path, changeStoredBytes ? "collision".getBytes(StandardCharsets.UTF_8) : body);
             String encoding = request.getHeaders().getValue("x-ms-blob-content-encoding");

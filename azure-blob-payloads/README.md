@@ -61,7 +61,8 @@ completing the batch, matching .NET. The worker logs failed completions and aban
 scheduler redelivery without terminating its polling thread.
 
 Uploads use conditional creation to prevent overwriting an existing payload. If a PUT commits but its response is
-lost, a retried PUT can return HTTP 412. The store recovers only after verifying that the stored bytes and content
+lost, a retried PUT can return HTTP 412 or HTTP 409 `BlobAlreadyExists`. Other HTTP 409 errors are not recovered.
+The store recovers only after verifying that the stored bytes and content
 encoding exactly match the attempted upload. A verification download failure propagates with its own status so
 transient failures remain retryable. Payload tokens also support Azure's `$root` container.
 

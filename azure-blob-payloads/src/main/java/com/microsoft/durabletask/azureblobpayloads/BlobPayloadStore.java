@@ -166,7 +166,7 @@ public final class BlobPayloadStore extends PayloadStore {
                     blob.uploadWithResponse(
                         stream, compressedBytes.length, null, headers, null, null, conditions, null, Context.NONE);
                 } catch (BlobStorageException e) {
-                    if (isPreconditionFailure(e) && blobContentMatches(blob, compressedBytes, CONTENT_ENCODING_GZIP)) {
+                    if (isPossibleCommittedUpload(e) && blobContentMatches(blob, compressedBytes, CONTENT_ENCODING_GZIP)) {
                         return;
                     }
                     throw e;
@@ -178,7 +178,7 @@ public final class BlobPayloadStore extends PayloadStore {
                     blob.uploadWithResponse(
                         stream, payloadBytes.length, null, null, null, null, conditions, null, Context.NONE);
                 } catch (BlobStorageException e) {
-                    if (isPreconditionFailure(e) && blobContentMatches(blob, payloadBytes, null)) {
+                    if (isPossibleCommittedUpload(e) && blobContentMatches(blob, payloadBytes, null)) {
                         return;
                     }
                     throw e;
@@ -187,13 +187,14 @@ public final class BlobPayloadStore extends PayloadStore {
         }
     }
 
-    private static boolean isPreconditionFailure(BlobStorageException e) {
-        return e.getStatusCode() == 412;
+    private static boolean isPossibleCommittedUpload(BlobStorageException e) {
+        return e.getStatusCode() == 412
+            || (e.getStatusCode() == 409 && BlobErrorCode.BLOB_ALREADY_EXISTS.equals(e.getErrorCode()));
     }
 
     private static boolean blobContentMatches(BlobClient blob, byte[] expectedBytes, String expectedContentEncoding) {
         // Verification failures must propagate with their own status/cause. In particular,
-        // a transient GET failure must not turn the ambiguous PUT into a permanent 412.
+        // a transient GET failure must not turn the ambiguous PUT into a permanent conflict.
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         BlobDownloadResponse response = blob.downloadStreamWithResponse(
             output,
