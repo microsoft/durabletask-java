@@ -2,12 +2,32 @@
 // Licensed under the MIT License.
 package com.microsoft.durabletask.azureblobpayloads;
 
+import com.azure.core.http.HttpResponse;
 import com.azure.storage.blob.models.BlobStorageException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.Empty;
+import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
+import com.microsoft.durabletask.EntityInstanceId;
+import com.microsoft.durabletask.EntityOperationFailedException;
+import com.microsoft.durabletask.FailureDetails;
+import com.microsoft.durabletask.OrchestrationRunner;
+import com.microsoft.durabletask.TaskOrchestration;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.MethodDescriptor;
+import io.grpc.protobuf.ProtoUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -188,6 +208,51 @@ class LargePayloadInterceptorTest {
         assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED,
             r.getActions(0).getCompleteOrchestration().getOrchestrationStatus());
         assertTrue(r.getActions(0).getCompleteOrchestration().getFailureDetails().getIsNonRetriable());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {408, 429, 503})
+    void transientWorkerUploadFailures_propagateWithoutSendingACompletion(int status) {
+        BlobStorageException storageFailure = storageFailure(status);
+        for (RuntimeException failure : new RuntimeException[] {
+                storageFailure, new PayloadStorageException("Storage upload failed", storageFailure)}) {
+            assertWorkerCompletionsNotSent(failure);
+        }
+    }
+
+    @Test
+    void unexpectedWorkerUploadFailures_propagateWithoutSendingACompletion() {
+        assertWorkerCompletionsNotSent(new UncheckedIOException(new IOException("Connection reset")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {401, 403, 404})
+    void permanentUploadFailures_completeActivitiesAndOrchestrationsButNotEntities(int status) {
+        BlobStorageException storageFailure = storageFailure(status);
+        for (RuntimeException failure : new RuntimeException[] {
+                storageFailure, new PayloadStorageException("Storage upload failed", storageFailure)}) {
+            doThrow(failure).when(mockStore).upload(anyString());
+            ActivityResponse activity = (ActivityResponse) invokeExternalize(ActivityResponse.newBuilder()
+                    .setResult(StringValue.of("large-activity-result")).build());
+            assertTrue(activity.getFailureDetails().getIsNonRetriable());
+            assertFalse(activity.hasResult());
+            OrchestratorResponse orchestration = (OrchestratorResponse) invokeExternalize(
+                    OrchestratorResponse.newBuilder()
+                            .setCustomStatus(StringValue.of("large-custom-status")).build());
+            assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_FAILED,
+                    orchestration.getActions(0).getCompleteOrchestration().getOrchestrationStatus());
+            assertTrue(orchestration.getActions(0).getCompleteOrchestration()
+                    .getFailureDetails().getIsNonRetriable());
+            assertRequestNotSent(EntityBatchResult.newBuilder()
+                    .setEntityState(StringValue.of("large-entity-state")).build(), failure);
+        }
+    }
+
+    @Test
+    void permanentEntityPayloadSizeFailure_propagatesWithoutSendingACompletion() {
+        assertRequestNotSentWithFailure(EntityBatchResult.newBuilder()
+                .setEntityState(StringValue.of("large-entity-state")).build(),
+                new PayloadStorageException("Payload too large"));
     }
 
     @Test
@@ -413,6 +478,115 @@ class LargePayloadInterceptorTest {
         verifyEventResolution(HistoryEvent.newBuilder()
             .setEntityOperationCompleted(EntityOperationCompletedEvent.newBuilder()
                 .setOutput(StringValue.of("blob:v1:c:n")).build()).build());
+        verifyEventResolution(HistoryEvent.newBuilder()
+            .setEntityOperationFailed(EntityOperationFailedEvent.newBuilder()
+                .setFailureDetails(TaskFailureDetails.newBuilder()
+                    .setErrorType("EntityFailure")
+                    .setStackTrace(StringValue.of("blob:v1:c:n"))).build()).build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void resolve_entityOperationFailed_resolvesNestedFailureStackTraces(boolean streamedHistory) {
+        when(mockStore.download("blob:v1:container:outer")).thenReturn("outer stack");
+        when(mockStore.download("blob:v1:container:inner")).thenReturn("inner stack");
+
+        TaskFailureDetails inner = TaskFailureDetails.newBuilder()
+            .setErrorType("Inner")
+            .setStackTrace(StringValue.of("blob:v1:container:inner"))
+            .build();
+        TaskFailureDetails outer = TaskFailureDetails.newBuilder()
+            .setErrorType("Outer")
+            .setStackTrace(StringValue.of("blob:v1:container:outer"))
+            .setInnerFailure(inner)
+            .build();
+        HistoryEvent event = HistoryEvent.newBuilder()
+            .setEntityOperationFailed(EntityOperationFailedEvent.newBuilder().setFailureDetails(outer))
+            .build();
+        TaskFailureDetails resolved;
+        if (streamedHistory) {
+            HistoryChunk chunk = (HistoryChunk) invokeResolve(HistoryChunk.newBuilder().addEvents(event).build());
+            resolved = chunk.getEvents(0).getEntityOperationFailed().getFailureDetails();
+        } else {
+            WorkItem workItem = (WorkItem) invokeResolve(WorkItem.newBuilder()
+                .setOrchestratorRequest(OrchestratorRequest.newBuilder()
+                    .addPastEvents(event).addNewEvents(event)).build());
+            resolved = workItem.getOrchestratorRequest().getNewEvents(0)
+                .getEntityOperationFailed().getFailureDetails();
+            assertEquals(resolved, workItem.getOrchestratorRequest().getPastEvents(0)
+                .getEntityOperationFailed().getFailureDetails());
+        }
+        assertEquals("outer stack", resolved.getStackTrace().getValue());
+        assertEquals("inner stack", resolved.getInnerFailure().getStackTrace().getValue());
+    }
+
+    @Test
+    void externalizedEntityFailure_reachesCallerWithOriginalNestedDiagnostics() throws Exception {
+        options.setThresholdBytes(1024);
+        interceptor = new LargePayloadInterceptor(mockStore, options);
+        String outerTrace = "outer trace\n".repeat(200);
+        String innerTrace = "inner trace\n".repeat(200);
+        when(mockStore.upload(outerTrace)).thenReturn("blob:v1:container:outer");
+        when(mockStore.upload(innerTrace)).thenReturn("blob:v1:container:inner");
+        when(mockStore.download("blob:v1:container:outer")).thenReturn(outerTrace);
+        when(mockStore.download("blob:v1:container:inner")).thenReturn(innerTrace);
+        TaskFailureDetails failure = TaskFailureDetails.newBuilder()
+            .setErrorType("Outer").setErrorMessage("operation failed")
+            .setStackTrace(StringValue.of(outerTrace))
+            .setInnerFailure(TaskFailureDetails.newBuilder().setErrorType("Inner")
+                .setErrorMessage("inner cause").setStackTrace(StringValue.of(innerTrace)))
+            .build();
+        EntityBatchResult externalized = (EntityBatchResult) invokeExternalize(EntityBatchResult.newBuilder()
+            .addResults(OperationResult.newBuilder().setFailure(
+                OperationResultFailure.newBuilder().setFailureDetails(failure))).build());
+        TaskFailureDetails storedFailure = externalized.getResults(0).getFailure().getFailureDetails();
+        assertEquals("blob:v1:container:outer", storedFailure.getStackTrace().getValue());
+        assertEquals("blob:v1:container:inner", storedFailure.getInnerFailure().getStackTrace().getValue());
+
+        AtomicReference<FailureDetails> caught = new AtomicReference<>();
+        TaskOrchestration orchestration = ctx -> {
+            try {
+                ctx.callEntity(new EntityInstanceId("Counter", "one"), "get", null, Integer.class).await();
+                ctx.complete("unexpected success");
+            } catch (EntityOperationFailedException e) {
+                caught.set(e.getFailureDetails());
+                ctx.complete("caught");
+            }
+        };
+        HistoryEvent started = HistoryEvent.newBuilder()
+            .setOrchestratorStarted(OrchestratorStartedEvent.getDefaultInstance()).build();
+        HistoryEvent execution = HistoryEvent.newBuilder()
+            .setExecutionStarted(ExecutionStartedEvent.newBuilder().setName("Caller")
+                .setOrchestrationInstance(OrchestrationInstance.newBuilder().setInstanceId("caller"))).build();
+        HistoryEvent completed = HistoryEvent.newBuilder()
+            .setOrchestratorCompleted(OrchestratorCompletedEvent.getDefaultInstance()).build();
+        OrchestratorRequest initial = OrchestratorRequest.newBuilder().setInstanceId("caller")
+            .addPastEvents(started).addPastEvents(execution).addNewEvents(completed).build();
+        OrchestratorResponse first = OrchestratorResponse.parseFrom(
+            OrchestrationRunner.loadAndRun(initial.toByteArray(), orchestration));
+        String requestId = new ObjectMapper().readTree(first.getActions(0).getSendEvent().getData().getValue())
+            .path("id").asText();
+        assertFalse(requestId.isEmpty());
+        WorkItem replay = WorkItem.newBuilder().setOrchestratorRequest(initial.toBuilder()
+            .clearNewEvents()
+            .addPastEvents(HistoryEvent.newBuilder().setEventId(0)
+                .setEventSent(EventSentEvent.getDefaultInstance()))
+            .addPastEvents(completed)
+            .addNewEvents(started)
+            .addNewEvents(HistoryEvent.newBuilder().setEntityOperationFailed(
+                EntityOperationFailedEvent.newBuilder().setRequestId(requestId).setFailureDetails(storedFailure)))
+            .addNewEvents(completed)).build();
+        WorkItem resolved = (WorkItem) invokeResolve(replay);
+        OrchestratorResponse result = OrchestratorResponse.parseFrom(
+            OrchestrationRunner.loadAndRun(resolved.getOrchestratorRequest().toByteArray(), orchestration));
+
+        assertNotNull(caught.get(), "The actual entity caller must receive the failure");
+        assertEquals("Outer", caught.get().getErrorType());
+        assertEquals("operation failed", caught.get().getErrorMessage());
+        assertEquals(outerTrace, caught.get().getStackTrace());
+        assertEquals(innerTrace, caught.get().getInnerFailure().getStackTrace());
+        assertEquals(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED,
+            result.getActions(0).getCompleteOrchestration().getOrchestrationStatus());
     }
 
     @Test
@@ -452,6 +626,64 @@ class LargePayloadInterceptorTest {
     }
 
     // ==================== Helpers ====================
+
+    private static BlobStorageException storageFailure(int status) {
+        HttpResponse response = mock(HttpResponse.class);
+        when(response.getStatusCode()).thenReturn(status);
+        return new BlobStorageException("Storage upload failed", response, null);
+    }
+
+    private void assertWorkerCompletionsNotSent(RuntimeException failure) {
+        TaskFailureDetails details = TaskFailureDetails.newBuilder()
+                .setErrorType("OriginalError")
+                .setStackTrace(StringValue.of("large-failure-stack-trace"))
+                .build();
+        Message[] requests = {
+                ActivityResponse.newBuilder().setResult(StringValue.of("large-activity-result")).build(),
+                ActivityResponse.newBuilder().setFailureDetails(details).build(),
+                OrchestratorResponse.newBuilder().setCustomStatus(StringValue.of("large-custom-status")).build(),
+                OrchestratorResponse.newBuilder().addActions(OrchestratorAction.newBuilder()
+                        .setScheduleTask(ScheduleTaskAction.newBuilder()
+                                .setInput(StringValue.of("large-activity-input")))).build(),
+                OrchestratorResponse.newBuilder().addActions(OrchestratorAction.newBuilder()
+                        .setCompleteOrchestration(CompleteOrchestrationAction.newBuilder()
+                                .setFailureDetails(details))).build(),
+                EntityBatchResult.newBuilder().setEntityState(StringValue.of("large-entity-state")).build(),
+                EntityBatchResult.newBuilder().addResults(OperationResult.newBuilder()
+                        .setSuccess(OperationResultSuccess.newBuilder()
+                                .setResult(StringValue.of("large-entity-result")))).build(),
+                EntityBatchResult.newBuilder().addActions(OperationAction.newBuilder()
+                        .setSendSignal(SendSignalAction.newBuilder()
+                                .setInput(StringValue.of("large-entity-signal")))).build(),
+                EntityBatchResult.newBuilder().setFailureDetails(details).build(),
+                EntityBatchResult.newBuilder().addResults(OperationResult.newBuilder()
+                        .setFailure(OperationResultFailure.newBuilder().setFailureDetails(details))).build()
+        };
+        for (Message request : requests) {
+            assertRequestNotSentWithFailure(request, failure);
+        }
+    }
+
+    private <ReqT extends Message> void assertRequestNotSentWithFailure(ReqT request, RuntimeException failure) {
+        doThrow(failure).when(mockStore).upload(anyString());
+        assertRequestNotSent(request, failure);
+    }
+
+    private <ReqT extends Message> void assertRequestNotSent(ReqT request, RuntimeException failure) {
+        MethodDescriptor<ReqT, Empty> method = MethodDescriptor.<ReqT, Empty>newBuilder()
+                .setType(MethodDescriptor.MethodType.UNARY)
+                .setFullMethodName("test/CompleteTask")
+                .setRequestMarshaller(ProtoUtils.marshaller(request))
+                .setResponseMarshaller(ProtoUtils.marshaller(Empty.getDefaultInstance()))
+                .build();
+        ClientCall<ReqT, Empty> delegate = mock();
+        Channel channel = mock(Channel.class);
+        when(channel.newCall(method, CallOptions.DEFAULT)).thenReturn(delegate);
+        ClientCall<ReqT, Empty> call = interceptor.interceptCall(method, CallOptions.DEFAULT, channel);
+
+        assertSame(failure, assertThrows(RuntimeException.class, () -> call.sendMessage(request)));
+        verify(delegate, never()).sendMessage(any());
+    }
 
     /**
      * Uses reflection to invoke the private externalizeRequestPayloads method.

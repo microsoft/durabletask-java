@@ -47,10 +47,10 @@ public final class DurableTaskGrpcWorkerBuilder {
     public static final int DEFAULT_MAX_CHUNK_SIZE_BYTES = 4_089_446;
 
     int maxChunkSizeBytes = DEFAULT_MAX_CHUNK_SIZE_BYTES;
-    // Default threshold matches LargePayloadStorageOptions default (900_000 bytes).
+    // Default threshold matches LargePayloadStorageOptions default (256 KiB).
     // Used by the worker to estimate post-externalization action sizes during
     // pre-send validation when supportsLargePayloads=true.
-    int largePayloadThresholdBytes = 900_000;
+    int largePayloadThresholdBytes = 256 * 1024;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -409,7 +409,7 @@ public final class DurableTaskGrpcWorkerBuilder {
      * post-externalization action sizes during pre-send validation.
      * <p>
      * This should match the {@code thresholdBytes} configured on the large-payload
-     * interceptor. The default is 900,000 bytes. Fields whose UTF-8 byte length meets
+     * interceptor. The default is 256 KiB (262,144 bytes). Fields whose UTF-8 byte length meets
      * or exceeds this threshold are assumed to be replaced with a small blob-token
      * reference by the interceptor.
      *

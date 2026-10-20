@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,6 +37,7 @@ public class OrchestratorChunkingTest {
      */
     private final List<OrchestratorResponse> capturedResponses =
         Collections.synchronizedList(new ArrayList<>());
+    private final List<String> abandonedTokens = new ArrayList<>();
 
     private Server inProcessServer;
     private ManagedChannel inProcessChannel;
@@ -53,6 +55,15 @@ public class OrchestratorChunkingTest {
                         StreamObserver<CompleteTaskResponse> responseObserver) {
                     capturedResponses.add(request);
                     responseObserver.onNext(CompleteTaskResponse.getDefaultInstance());
+                    responseObserver.onCompleted();
+                }
+
+                @Override
+                public void abandonTaskOrchestratorWorkItem(
+                        AbandonOrchestrationTaskRequest request,
+                        StreamObserver<AbandonOrchestrationTaskResponse> responseObserver) {
+                    abandonedTokens.add(request.getCompletionToken());
+                    responseObserver.onNext(AbandonOrchestrationTaskResponse.getDefaultInstance());
                     responseObserver.onCompleted();
                 }
             })
@@ -75,6 +86,38 @@ public class OrchestratorChunkingTest {
     }
 
     // ==================== validateActionsSize tests ====================
+
+    @Test
+    void workerBuilder_defaultLargePayloadThreshold_matchesStorageDefault() {
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder();
+        assertEquals(256 * 1024, builder.largePayloadThresholdBytes);
+    }
+
+    @Test
+    void chunking_defaultThreshold_doesNotRejectAggregateMediumPayloadFields() throws Exception {
+        int chunkLimit = 1_048_576;
+        String mediumPayload = "X".repeat(400_000);
+        CompleteOrchestrationAction completion = CompleteOrchestrationAction.newBuilder()
+            .setOrchestrationStatus(OrchestrationStatus.ORCHESTRATION_STATUS_COMPLETED)
+            .setResult(StringValue.of(mediumPayload))
+            .setDetails(StringValue.of(mediumPayload))
+            .addCarryoverEvents(HistoryEvent.newBuilder()
+                .setEventRaised(EventRaisedEvent.newBuilder().setInput(StringValue.of(mediumPayload))))
+            .build();
+        OrchestratorResponse response = OrchestratorResponse.newBuilder()
+            .setInstanceId("medium-fields")
+            .setCompletionToken("token")
+            .addActions(OrchestratorAction.newBuilder().setCompleteOrchestration(completion))
+            .build();
+        assertTrue(response.getActions(0).getSerializedSize() > chunkLimit);
+        try (DurableTaskGrpcWorker worker = buildWorkerWithChannel(true, chunkLimit)) {
+            invokeChunkingMethod(worker, response);
+        }
+
+        assertEquals(1, capturedResponses.size());
+        assertEquals(completion, capturedResponses.get(0).getActions(0).getCompleteOrchestration(),
+            "Fields between 256 KiB and 900 KB will be externalized, not rejected as oversized");
+    }
 
     @Test
     void validateActionsSize_actionUnderLimit_returnsNull() throws Exception {
@@ -486,6 +529,64 @@ public class OrchestratorChunkingTest {
         assertFalse(request.getCapabilitiesList().contains(
             WorkerCapability.WORKER_CAPABILITY_LARGE_PAYLOADS),
             "Should NOT include WORKER_CAPABILITY_LARGE_PAYLOADS when LP is disabled");
+    }
+
+    @Test
+    void completionRuntimeFailure_abandonsOriginalWorkItem() throws Exception {
+        try (DurableTaskGrpcWorker worker = buildWithCompletionFailure(new IllegalStateException("Upload failed"))) {
+            invokeCompletionRecovery(worker);
+            assertEquals(Collections.singletonList("completion-token"), abandonedTokens);
+            assertTrue(capturedResponses.isEmpty());
+        }
+    }
+
+    @Test
+    void completionGrpcFailure_propagatesToExistingReconnectLoop() throws Exception {
+        StatusRuntimeException failure = Status.UNAVAILABLE.withDescription("Disconnected").asRuntimeException();
+        try (DurableTaskGrpcWorker worker = buildWithCompletionFailure(failure)) {
+            InvocationTargetException thrown = assertThrows(InvocationTargetException.class,
+                    () -> invokeCompletionRecovery(worker));
+            assertSame(failure, thrown.getCause());
+            assertTrue(abandonedTokens.isEmpty());
+            assertTrue(capturedResponses.isEmpty());
+        }
+    }
+
+    @Test
+    void completionSuccess_doesNotAbandon() throws Exception {
+        try (DurableTaskGrpcWorker worker = buildWorkerWithChannel(false, 4_089_446)) {
+            invokeCompletionRecovery(worker);
+            assertEquals(1, capturedResponses.size());
+            assertTrue(abandonedTokens.isEmpty());
+        }
+    }
+
+    private DurableTaskGrpcWorker buildWithCompletionFailure(RuntimeException failure) {
+        return new DurableTaskGrpcWorkerBuilder().grpcChannel(inProcessChannel)
+                .addInterceptor(new ClientInterceptor() {
+                    @Override
+                    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                            MethodDescriptor<ReqT, RespT> method, CallOptions options, Channel next) {
+                        return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
+                                next.newCall(method, options)) {
+                            @Override
+                            public void sendMessage(ReqT message) {
+                                if (method.getFullMethodName().endsWith("/CompleteOrchestratorTask")) {
+                                    throw failure;
+                                }
+                                super.sendMessage(message);
+                            }
+                        };
+                    }
+                }).build();
+    }
+
+    private void invokeCompletionRecovery(DurableTaskGrpcWorker worker) throws Exception {
+        Method method = DurableTaskGrpcWorker.class.getDeclaredMethod(
+                "completeOrchestratorTaskOrAbandon", OrchestratorResponse.class);
+        method.setAccessible(true);
+        method.invoke(worker, OrchestratorResponse.newBuilder()
+                .setInstanceId("completion-instance").setCompletionToken("completion-token").build());
     }
 
     // ==================== Helpers ====================

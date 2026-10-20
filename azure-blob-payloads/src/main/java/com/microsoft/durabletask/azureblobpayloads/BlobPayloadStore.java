@@ -8,6 +8,7 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobDownloadResponse;
+import com.azure.storage.blob.models.BlobDownloadHeaders;
 import com.azure.storage.blob.models.BlobErrorCode;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.azure.storage.blob.models.BlobRequestConditions;
@@ -20,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
@@ -41,10 +43,10 @@ public final class BlobPayloadStore extends PayloadStore {
 
     // Blob name is UUID.randomUUID().toString().replace("-", ""): exactly 32 lowercase hex chars.
     // Container name follows Azure rules: 3-63 chars, lowercase alphanumerics and single hyphens,
-    // must start and end with alphanumeric (see isValidContainerName).
+    // must start and end with alphanumeric, or the special $root container.
     // Full token grammar: blob:v1:<container>:<32-lowercase-hex>
     private static final Pattern TOKEN_PATTERN = Pattern.compile(
-        "^blob:v1:[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){1,61}[a-z0-9]:[0-9a-f]{32}$");
+        "^blob:v1:(?:\\$root|[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){1,61}[a-z0-9]):[0-9a-f]{32}$");
 
     private final BlobContainerClient containerClient;
     private final LargePayloadStorageOptions options;
@@ -160,15 +162,58 @@ public final class BlobPayloadStore extends PayloadStore {
             byte[] compressedBytes = compressedBuffer.toByteArray();
             BlobHttpHeaders headers = new BlobHttpHeaders().setContentEncoding(CONTENT_ENCODING_GZIP);
             try (InputStream stream = new ByteArrayInputStream(compressedBytes)) {
-                blob.uploadWithResponse(
-                    stream, compressedBytes.length, null, headers, null, null, conditions, null, Context.NONE);
+                try {
+                    blob.uploadWithResponse(
+                        stream, compressedBytes.length, null, headers, null, null, conditions, null, Context.NONE);
+                } catch (BlobStorageException e) {
+                    if (isPossibleCommittedUpload(e) && blobContentMatches(blob, compressedBytes, CONTENT_ENCODING_GZIP)) {
+                        return;
+                    }
+                    throw e;
+                }
             }
         } else {
             try (InputStream stream = new ByteArrayInputStream(payloadBytes)) {
-                blob.uploadWithResponse(
-                    stream, payloadBytes.length, null, null, null, null, conditions, null, Context.NONE);
+                try {
+                    blob.uploadWithResponse(
+                        stream, payloadBytes.length, null, null, null, null, conditions, null, Context.NONE);
+                } catch (BlobStorageException e) {
+                    if (isPossibleCommittedUpload(e) && blobContentMatches(blob, payloadBytes, null)) {
+                        return;
+                    }
+                    throw e;
+                }
             }
         }
+    }
+
+    private static boolean isPossibleCommittedUpload(BlobStorageException e) {
+        return e.getStatusCode() == 412
+            || (e.getStatusCode() == 409 && BlobErrorCode.BLOB_ALREADY_EXISTS.equals(e.getErrorCode()));
+    }
+
+    private static boolean blobContentMatches(BlobClient blob, byte[] expectedBytes, String expectedContentEncoding) {
+        // Verification failures must propagate with their own status/cause. In particular,
+        // a transient GET failure must not turn the ambiguous PUT into a permanent conflict.
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        BlobDownloadResponse response = blob.downloadStreamWithResponse(
+            output,
+            null,
+            null,
+            null,
+            false,
+            null,
+            Context.NONE);
+        BlobDownloadHeaders headers = response.getDeserializedHeaders();
+        String actualEncoding = headers == null ? null : headers.getContentEncoding();
+        if (expectedContentEncoding == null) {
+            if (actualEncoding != null && !actualEncoding.isEmpty()) {
+                return false;
+            }
+        } else if (!expectedContentEncoding.equalsIgnoreCase(actualEncoding)) {
+            return false;
+        }
+        return Arrays.equals(expectedBytes, output.toByteArray());
     }
 
     private Object ensureContainerExists() {

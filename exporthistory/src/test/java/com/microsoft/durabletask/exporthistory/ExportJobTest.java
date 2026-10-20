@@ -3,16 +3,18 @@
 package com.microsoft.durabletask.exporthistory;
 
 import com.microsoft.durabletask.AbstractTaskEntity;
+import com.microsoft.durabletask.JacksonDataConverter;
 import com.microsoft.durabletask.TaskEntityContext;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * Unit tests for the {@link ExportJob} entity's {@code create} operation.
@@ -20,22 +22,24 @@ import static org.mockito.Mockito.mock;
 class ExportJobTest {
 
     @Test
-    void create_continuousWithoutCompletedTimeFrom_defaultsToCreationInstant() throws Exception {
+    void create_delayedContinuousJob_preservesTheSubmittedLowerBound() throws Exception {
         ExportJob entity = newEntityWithPendingState();
+        Instant submittedAt = Instant.parse("2026-07-01T10:00:00Z");
+        Instant processedAt = submittedAt.plusSeconds(300);
+        JacksonDataConverter converter = new JacksonDataConverter();
+        try (MockedStatic<Instant> clock = mockStatic(Instant.class, CALLS_REAL_METHODS)) {
+            clock.when(Instant::now).thenReturn(submittedAt);
+            ExportJobCreationOptions options = new ExportJobCreationOptions("job-continuous")
+                    .setMode(ExportMode.CONTINUOUS)
+                    .setDestination(new ExportDestination("container"));
+            String request = converter.serialize(options.copy());
 
-        Instant before = Instant.now();
-        entity.create(new ExportJobCreationOptions("job-continuous")
-                .setMode(ExportMode.CONTINUOUS)
-                .setDestination(new ExportDestination("container")));
-        Instant after = Instant.now();
+            clock.when(Instant::now).thenReturn(processedAt);
+            entity.create(converter.deserialize(request, ExportJobCreationOptions.class));
 
-        Instant completedTimeFrom = entity.get().getConfig().getFilter().getCompletedTimeFrom();
-        assertNotNull(completedTimeFrom,
-                "CONTINUOUS create must default completedTimeFrom so it does not re-export the whole task hub");
-        assertFalse(completedTimeFrom.isBefore(before), "defaulted completedTimeFrom must be at/after job creation");
-        assertFalse(completedTimeFrom.isAfter(after), "defaulted completedTimeFrom must be at/before job creation");
-
-        assertEquals(entity.get().getCreatedAt(), completedTimeFrom);
+            assertEquals(submittedAt, entity.get().getConfig().getFilter().getCompletedTimeFrom());
+            assertEquals(processedAt, entity.get().getCreatedAt());
+        }
     }
 
     @Test
