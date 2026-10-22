@@ -2,6 +2,14 @@
 
 ## v1.10.0
 * Enable custom exception providers for Durable Functions Java activities ([#294](https://github.com/microsoft/durabletask-java/pull/294))
+* Recover verified ambiguous payload uploads on HTTP 409 `BlobAlreadyExists` as well as HTTP 412, while rejecting unrelated conflicts.
+* Change the default large-payload externalization threshold from 900,000 bytes to 256 KiB, matching .NET.
+* Align the large-payload worker estimator threshold with the 256 KiB storage default, resolve externalized entity-operation failure traces, recover verified ambiguous blob uploads, and recognize `$root` payload tokens.
+* Preserve transient verification-download failures during ambiguous blob-upload recovery instead of reporting the original permanent precondition failure.
+* Propagate transient large-payload upload failures without completing work items; abandon failed activity and orchestration completions for scheduler redelivery instead of terminating the worker polling thread.
+* Ensure the export container exists before every upload, allowing export retries to recover containers deleted between uploads.
+* Preserve custom and empty property objects in exported failure details, including nested failures, matching .NET's history conversion.
+* Capture the default continuous-export completion-time lower bound when creation options are constructed, matching .NET and preserving the window through worker queue delays.
 * Recreate a deleted large-payload container and retry the upload once, without allowing stale concurrent failures to invalidate a newly recreated container.
 * Preserve backend timestamp precision in orchestration history and client metadata, including export blob names, while retaining existing orchestration replay timestamp behavior.
 * Export entity operations and locks using the .NET-compatible `EventSent`/`EventRaised` message representation instead of Java-native entity event objects, preserving missing stack traces in failure details.

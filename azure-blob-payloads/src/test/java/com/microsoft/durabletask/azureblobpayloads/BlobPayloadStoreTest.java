@@ -121,12 +121,46 @@ class BlobPayloadStoreTest {
         doThrow(preconditionFailed).when(mockBlobClient).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(),
             any(BlobHttpHeaders.class), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+        mockDownloadResponse("different stored content".getBytes(StandardCharsets.UTF_8), "gzip");
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         PayloadStorageException ex = assertThrows(PayloadStorageException.class,
             () -> store.upload("test payload"));
         assertTrue(ex.getMessage().contains("already exists"),
             "Exception message should indicate a blob-name collision: " + ex.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void upload_preconditionFailedAfterCommittedPut_recoversWhenStoredContentMatches(boolean compressed) {
+        options.setCompressionEnabled(compressed);
+        BlobStorageException preconditionFailed = mock(BlobStorageException.class);
+        when(preconditionFailed.getStatusCode()).thenReturn(412);
+        final byte[][] attemptedUpload = new byte[1][];
+        doAnswer(invocation -> {
+            InputStream stream = invocation.getArgument(0);
+            attemptedUpload[0] = stream.readAllBytes();
+            throw preconditionFailed;
+        }).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(),
+            nullable(BlobHttpHeaders.class), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+        doAnswer(invocation -> {
+            OutputStream out = invocation.getArgument(0);
+            out.write(attemptedUpload[0]);
+            BlobDownloadHeaders downloadHeaders = mock(BlobDownloadHeaders.class);
+            when(downloadHeaders.getContentEncoding()).thenReturn(compressed ? "gzip" : null);
+            BlobDownloadResponse downloadResponse = mock(BlobDownloadResponse.class);
+            when(downloadResponse.getDeserializedHeaders()).thenReturn(downloadHeaders);
+            return downloadResponse;
+        }).when(mockBlobClient).downloadStreamWithResponse(
+            any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
+
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        String token = store.upload("payload committed before retry");
+
+        assertTrue(store.isKnownPayloadToken(token));
+        verify(mockBlobClient).downloadStreamWithResponse(
+            any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
     }
 
     @Test
@@ -140,6 +174,30 @@ class BlobPayloadStoreTest {
         assertEquals("durabletask-payloads", parts[0]);
         // Blob name should be a UUID without dashes (32 hex chars)
         assertTrue(parts[1].matches("[0-9a-f]{32}"), "Blob name should be a GUID without dashes: " + parts[1]);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void upload_download_roundTrip_rootContainerTokenIsRecognized(boolean compressed) throws Exception {
+        when(mockContainerClient.getBlobContainerName()).thenReturn("$root");
+        options.setCompressionEnabled(compressed);
+        String originalPayload = "root container payload";
+        final byte[][] capturedBytes = new byte[1][];
+        doAnswer(inv -> {
+            InputStream stream = inv.getArgument(0);
+            capturedBytes[0] = stream.readAllBytes();
+            return null;
+        }).when(mockBlobClient).uploadWithResponse(
+            any(InputStream.class), anyLong(), isNull(),
+            nullable(BlobHttpHeaders.class), isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
+
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        String token = store.upload(originalPayload);
+
+        assertTrue(token.startsWith("blob:v1:$root:"));
+        assertTrue(store.isKnownPayloadToken(token));
+        mockDownloadResponse(capturedBytes[0], compressed ? "gzip" : null);
+        assertEquals(originalPayload, store.download(token));
     }
 
     @Test
@@ -452,6 +510,13 @@ class BlobPayloadStoreTest {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         assertTrue(store.isKnownPayloadToken(
             "blob:v1:container:0123456789abcdef0123456789abcdef"));
+    }
+
+    @Test
+    void isKnownPayloadToken_rootContainer_returnsTrue() {
+        BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
+        assertTrue(store.isKnownPayloadToken(
+            "blob:v1:$root:0123456789abcdef0123456789abcdef"));
     }
 
     @Test

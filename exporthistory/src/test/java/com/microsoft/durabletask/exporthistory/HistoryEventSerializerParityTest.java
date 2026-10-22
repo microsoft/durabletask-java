@@ -6,11 +6,16 @@ import com.google.protobuf.ListValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Value;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.durabletask.DataConverter;
 import com.microsoft.durabletask.DurableTaskClient;
 import com.microsoft.durabletask.DurableTaskGrpcClientBuilder;
 import com.microsoft.durabletask.FailureDetails;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
+import com.microsoft.durabletask.azureblobpayloads.LargePayloadClientExtensions;
+import com.microsoft.durabletask.azureblobpayloads.LargePayloadStorageOptions;
+import com.microsoft.durabletask.azureblobpayloads.PayloadStore;
 import com.microsoft.durabletask.history.ContinueAsNewEvent;
 import com.microsoft.durabletask.history.EntityLockGrantedEvent;
 import com.microsoft.durabletask.history.EntityLockRequestedEvent;
@@ -243,6 +248,121 @@ class HistoryEventSerializerParityTest {
         return Value.newBuilder().setStringValue(text).build();
     }
 
+    @Test
+    void ordinaryFailuresFromStreamedHistoryPreserveNestedPropertiesInBothFormats() throws Exception {
+        Value values = Value.newBuilder().setListValue(ListValue.newBuilder()
+                .addValues(Value.newBuilder().setNumberValue(42.5))
+                .addValues(Value.newBuilder().setBoolValue(true))
+                .addValues(Value.newBuilder().setNullValueValue(0))
+                .addValues(Value.newBuilder().setStructValue(Struct.newBuilder()
+                        .putFields("date", propertyString("dt:2026-06-30T12:00:00.1234000Z")))))
+                .build();
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .putProperties("values", values)
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder()
+                        .setErrorType("Inner")
+                        .setErrorMessage("inner")
+                        .putProperties("date", propertyString("dto:2026-06-30T12:00:00.1000000+00:00")))
+                .build();
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode expectedProperties = mapper.readTree(
+                "{\"values\":[42.5,true,null,{\"date\":\"2026-06-30T12:00:00.1234Z\"}]}");
+        JsonNode expectedInnerProperties = mapper.readTree("{\"date\":\"2026-06-30T12:00:00.1+00:00\"}");
+        for (OrchestratorService.HistoryEvent event : ordinaryFailureEvents(failure)) {
+            List<HistoryEvent> history = streamHistoryEvent(event);
+            for (ExportFormat format : Arrays.asList(JSONL, JSON)) {
+                JsonNode serialized = mapper.readTree(HistoryEventSerializer.serialize(history, format));
+                JsonNode exported = format.getKind() == ExportFormatKind.JSON ? serialized.get(0) : serialized;
+                assertEquals(expectedProperties, exported.path("failureDetails").get("properties"));
+                assertEquals(expectedInnerProperties,
+                        exported.path("failureDetails").path("innerFailure").get("properties"));
+            }
+        }
+    }
+
+    @Test
+    void ordinaryFailuresFromStreamedHistoryPreserveEmptyPropertyObjects() throws Exception {
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder().setErrorType("Inner"))
+                .build();
+        ObjectMapper mapper = new ObjectMapper();
+        for (OrchestratorService.HistoryEvent event : ordinaryFailureEvents(failure)) {
+            List<HistoryEvent> history = streamHistoryEvent(event);
+            for (ExportFormat format : Arrays.asList(JSONL, JSON)) {
+                JsonNode serialized = mapper.readTree(HistoryEventSerializer.serialize(history, format));
+                JsonNode exported = format.getKind() == ExportFormatKind.JSON ? serialized.get(0) : serialized;
+                assertEquals(mapper.createObjectNode(), exported.path("failureDetails").get("properties"));
+                assertEquals(mapper.createObjectNode(),
+                        exported.path("failureDetails").path("innerFailure").get("properties"));
+            }
+        }
+    }
+
+    @Test
+    void entityOperationFailureExportsResolvedStackTracesInBothFormats() throws Exception {
+        String outerToken = "blob:v1:$root:0123456789abcdef0123456789abcdef";
+        String innerToken = "blob:v1:$root:fedcba9876543210fedcba9876543210";
+        String outerTrace = "outer stack\n".repeat(200);
+        String innerTrace = "inner stack\n".repeat(200);
+        PayloadStore store = org.mockito.Mockito.mock(PayloadStore.class);
+        org.mockito.Mockito.when(store.isKnownPayloadToken(outerToken)).thenReturn(true);
+        org.mockito.Mockito.when(store.isKnownPayloadToken(innerToken)).thenReturn(true);
+        org.mockito.Mockito.when(store.download(outerToken)).thenReturn(outerTrace);
+        org.mockito.Mockito.when(store.download(innerToken)).thenReturn(innerTrace);
+        OrchestratorService.TaskFailureDetails failure = OrchestratorService.TaskFailureDetails.newBuilder()
+                .setErrorType("Outer")
+                .setErrorMessage("boom")
+                .setStackTrace(StringValue.of(outerToken))
+                .setInnerFailure(OrchestratorService.TaskFailureDetails.newBuilder()
+                        .setErrorType("Inner")
+                        .setErrorMessage("inner")
+                        .setStackTrace(StringValue.of(innerToken)))
+                .build();
+        OrchestratorService.HistoryEvent event = OrchestratorService.HistoryEvent.newBuilder()
+                .setEventId(6)
+                .setTimestamp(DataConverter.getTimestampFromInstant(TS))
+                .setEntityOperationFailed(OrchestratorService.EntityOperationFailedEvent.newBuilder()
+                        .setRequestId("req-failed").setFailureDetails(failure))
+                .build();
+        List<HistoryEvent> history = streamHistoryEvent(event, store);
+        ObjectMapper mapper = new ObjectMapper();
+        for (ExportFormat format : Arrays.asList(JSONL, JSON)) {
+            String serialized = HistoryEventSerializer.serialize(history, format);
+            JsonNode document = mapper.readTree(serialized);
+            JsonNode exported = format.getKind() == ExportFormatKind.JSON ? document.get(0) : document;
+            assertEquals("EventRaised", exported.path("eventType").asText());
+            JsonNode response = mapper.readTree(exported.path("input").asText());
+            JsonNode details = response.path("failureDetails");
+            assertEquals("Outer", details.path("ErrorType").asText());
+            assertEquals("boom", details.path("ErrorMessage").asText());
+            assertEquals(outerTrace, details.path("StackTrace").asText());
+            assertEquals(innerTrace, details.path("InnerFailure").path("StackTrace").asText());
+            assertTrue(!serialized.contains("blob:v1:"), "No unresolved trace references may reach the archive");
+        }
+        org.mockito.Mockito.verify(store).download(outerToken);
+        org.mockito.Mockito.verify(store).download(innerToken);
+    }
+
+    private static List<OrchestratorService.HistoryEvent> ordinaryFailureEvents(
+            OrchestratorService.TaskFailureDetails failure) {
+        OrchestratorService.HistoryEvent.Builder event = OrchestratorService.HistoryEvent.newBuilder()
+                .setEventId(6)
+                .setTimestamp(DataConverter.getTimestampFromInstant(TS));
+        return Arrays.asList(
+                event.clone().setTaskFailed(OrchestratorService.TaskFailedEvent.newBuilder()
+                        .setTaskScheduledId(1).setFailureDetails(failure)).build(),
+                event.clone().setSubOrchestrationInstanceFailed(
+                        OrchestratorService.SubOrchestrationInstanceFailedEvent.newBuilder()
+                                .setTaskScheduledId(1).setFailureDetails(failure)).build(),
+                event.clone().setExecutionCompleted(OrchestratorService.ExecutionCompletedEvent.newBuilder()
+                        .setOrchestrationStatus(OrchestratorService.OrchestrationStatus.ORCHESTRATION_STATUS_FAILED)
+                        .setFailureDetails(failure)).build());
+    }
+
     private static List<HistoryEvent> streamEntityFailure(
             OrchestratorService.TaskFailureDetails failure) throws Exception {
         OrchestratorService.HistoryEvent event = OrchestratorService.HistoryEvent.newBuilder()
@@ -253,6 +373,15 @@ class HistoryEventSerializerParityTest {
                         .setRequestId("req-failed")
                         .setFailureDetails(failure))
                 .build();
+        return streamHistoryEvent(event);
+    }
+
+    private static List<HistoryEvent> streamHistoryEvent(OrchestratorService.HistoryEvent event) throws Exception {
+        return streamHistoryEvent(event, null);
+    }
+
+    private static List<HistoryEvent> streamHistoryEvent(
+            OrchestratorService.HistoryEvent event, PayloadStore store) throws Exception {
         String serverName = InProcessServerBuilder.generateName();
         Server server = InProcessServerBuilder.forName(serverName)
                 .directExecutor()
@@ -271,7 +400,12 @@ class HistoryEventSerializerParityTest {
         ManagedChannel channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
         try {
             server.start();
-            try (DurableTaskClient client = new DurableTaskGrpcClientBuilder().grpcChannel(channel).build()) {
+            DurableTaskGrpcClientBuilder builder = new DurableTaskGrpcClientBuilder().grpcChannel(channel);
+            if (store != null) {
+                LargePayloadClientExtensions.useExternalizedPayloads(builder, store,
+                        new LargePayloadStorageOptions().setThresholdBytes(1024));
+            }
+            try (DurableTaskClient client = builder.build()) {
                 List<HistoryEvent> history = client.getOrchestrationHistory("instance-1");
                 assertEquals(1, history.size());
                 return history;

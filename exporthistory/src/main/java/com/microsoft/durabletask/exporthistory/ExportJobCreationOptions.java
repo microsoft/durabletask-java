@@ -3,6 +3,7 @@
 package com.microsoft.durabletask.exporthistory;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.microsoft.durabletask.OrchestrationRuntimeStatus;
 
@@ -44,6 +45,8 @@ public final class ExportJobCreationOptions {
                     OrchestrationRuntimeStatus.TERMINATED));
 
     private final String jobId;
+    @JsonIgnore
+    private final Instant optionsCreatedAt;
     private ExportMode mode = ExportMode.BATCH;
     private Instant completedTimeFrom;
     private Instant completedTimeTo;
@@ -59,7 +62,12 @@ public final class ExportJobCreationOptions {
      */
     @JsonCreator
     public ExportJobCreationOptions(@JsonProperty("jobId") @Nullable String jobId) {
+        this(jobId, Instant.now());
+    }
+
+    private ExportJobCreationOptions(@Nullable String jobId, Instant optionsCreatedAt) {
         this.jobId = (jobId == null || jobId.isEmpty()) ? UUID.randomUUID().toString().replace("-", "") : jobId;
+        this.optionsCreatedAt = optionsCreatedAt;
     }
 
     /** @return the export job ID. */
@@ -86,17 +94,22 @@ public final class ExportJobCreationOptions {
         return this;
     }
 
-    /** @return the inclusive completion-time lower bound, or {@code null} if not set. */
+    /**
+     * @return the inclusive completion-time lower bound; defaults to options construction time for
+     *         {@link ExportMode#CONTINUOUS}, or {@code null} if unset for {@link ExportMode#BATCH}
+     */
     @Nullable
     public Instant getCompletedTimeFrom() {
-        return this.completedTimeFrom;
+        return this.completedTimeFrom == null && this.mode == ExportMode.CONTINUOUS
+                ? this.optionsCreatedAt
+                : this.completedTimeFrom;
     }
 
     /**
      * Sets the inclusive completion-time lower bound. Required for {@link ExportMode#BATCH}; for
-     * {@link ExportMode#CONTINUOUS} it defaults to the job creation time when omitted.
+     * {@link ExportMode#CONTINUOUS} it defaults to options construction time when omitted, matching .NET.
      *
-     * @param completedTimeFrom the lower bound, or {@code null} to clear
+     * @param completedTimeFrom the lower bound, or {@code null} to restore the mode-specific default
      * @return this options object
      */
     public ExportJobCreationOptions setCompletedTimeFrom(@Nullable Instant completedTimeFrom) {
@@ -252,7 +265,7 @@ public final class ExportJobCreationOptions {
      * @return a copy of these options
      */
     ExportJobCreationOptions copy() {
-        ExportJobCreationOptions c = new ExportJobCreationOptions(this.jobId);
+        ExportJobCreationOptions c = new ExportJobCreationOptions(this.jobId, this.optionsCreatedAt);
         c.mode = this.mode;
         c.completedTimeFrom = this.completedTimeFrom;
         c.completedTimeTo = this.completedTimeTo;
