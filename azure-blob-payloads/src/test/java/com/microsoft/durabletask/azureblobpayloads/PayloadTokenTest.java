@@ -42,7 +42,6 @@ class PayloadTokenTest {
         "blob:v2:file:///payloads/0123456789abcdef0123456789abcdef",
         "blob:v2:ftp://account/payloads/0123456789abcdef0123456789abcdef",
         "blob:v2:https://account/payloads/",
-        "blob:v2:https://account/payloads/not-a-guid",
         "blob:v2:https://account/payloads/0123456789abcdef0123456789abcdef\n",
         "blob:v2:https://account:65536/payloads/0123456789abcdef0123456789abcdef"
     })
@@ -108,9 +107,6 @@ class PayloadTokenTest {
         "blob:v1:$ROOT:0123456789abcdef0123456789abcdef",
         "blob:v1:$root-extra:0123456789abcdef0123456789abcdef",
         "blob:v1:$logs:0123456789abcdef0123456789abcdef",
-        "blob:v1:$root:0123456789abcdef0123456789abcde",
-        "blob:v1:$root:0123456789abcdef0123456789abcdeg",
-        "blob:v1:$root:0123456789abcdef0123456789abcdef:extra",
         "blob:v1:$root:0123456789abcdef0123456789abcdef\n",
         "\"blob:v1:$root:0123456789abcdef0123456789abcdef\""
     })

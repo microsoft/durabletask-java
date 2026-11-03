@@ -63,18 +63,12 @@ class BlobPayloadStoreBoundaryTest {
         "blob:v2:https://configured.invalid.evil.invalid/payloads/0123456789abcdef0123456789abcdef",
         "blob:v2:https://configured.invalid/payloads/../other-container/0123456789abcdef0123456789abcdef",
         "blob:v2:https://configured.invalid/payloads/%2e%2e/other-container/0123456789abcdef0123456789abcdef",
-        "blob:v2:https://configured.invalid/%70ayloads/0123456789abcdef0123456789abcdef",
+        "blob:v2:https://configured.invalid/pay%2floads/0123456789abcdef0123456789abcdef",
         "blob:v2:https://user@configured.invalid/payloads/0123456789abcdef0123456789abcdef",
-        "blob:v2:https://configured.invalid/payloads/0123456789abcdef0123456789abcdef?sig=example",
-        "blob:v2:https://configured.invalid/payloads/0123456789abcdef0123456789abcdef#fragment",
         "blob:v1:payloads:../other-container/0123456789abcdef0123456789abcdef",
         "blob:v1:payloads:../../account-b/payloads/0123456789abcdef0123456789abcdef",
-        "blob:v1:payloads:%2e%2e/other-container/0123456789abcdef0123456789abcdef",
         "blob:v1:payloads:..\\other-container\\0123456789abcdef0123456789abcdef",
-        "blob:v1:payloads:https://other.invalid/payloads/0123456789abcdef0123456789abcdef",
-        "blob:v1:payloads://other.invalid/payloads/0123456789abcdef0123456789abcdef",
-        "blob:v1:payloads:0123456789abcdef0123456789abcdef?comp=metadata",
-        "blob:v1:payloads:0123456789abcdef0123456789abcdef#fragment"
+        "blob:v2:https://other.invalid/payloads/0123456789abcdef0123456789abcdef?sig=example#ignored"
     })
     void outOfLocationOrMalformedToken_rejectsBeforeCredentialsOrHttp(String token) throws Exception {
         for (String endpoint : new String[] {
@@ -164,7 +158,7 @@ class BlobPayloadStoreBoundaryTest {
         verify(credential, atLeastOnce()).getToken(any());
     }
 
-    private static List<Object> responsesWithToken(String token) {
+    static List<Object> responsesWithToken(String token) {
         StringValue value = StringValue.of(token);
         HistoryEvent started = HistoryEvent.newBuilder()
             .setExecutionStarted(ExecutionStartedEvent.newBuilder().setInput(value)).build();
@@ -173,13 +167,23 @@ class BlobPayloadStoreBoundaryTest {
         HistoryEvent completed = HistoryEvent.newBuilder()
             .setTaskCompleted(TaskCompletedEvent.newBuilder().setResult(value)).build();
         OrchestrationState state = OrchestrationState.newBuilder()
-            .setInput(value).setOutput(value).setCustomStatus(value).build();
+            .setInput(value).setOutput(value).setCustomStatus(value)
+            .setFailureDetails(TaskFailureDetails.newBuilder().setStackTrace(value)
+                .setInnerFailure(TaskFailureDetails.newBuilder().setStackTrace(value))).build();
+        EntityMetadata entity = EntityMetadata.newBuilder().setSerializedState(value).build();
         return Arrays.asList(
             WorkItem.newBuilder().setActivityRequest(ActivityRequest.newBuilder().setInput(value)).build(),
             WorkItem.newBuilder().setOrchestratorRequest(OrchestratorRequest.newBuilder()
                 .addPastEvents(started).addNewEvents(raised).addNewEvents(completed)).build(),
             HistoryChunk.newBuilder().addEvents(started).addEvents(raised).addEvents(completed).build(),
             GetInstanceResponse.newBuilder().setOrchestrationState(state).build(),
-            QueryInstancesResponse.newBuilder().addOrchestrationState(state).build());
+            QueryInstancesResponse.newBuilder().addOrchestrationState(state).build(),
+            GetEntityResponse.newBuilder().setEntity(entity).build(),
+            QueryEntitiesResponse.newBuilder().addEntities(entity).build(),
+            WorkItem.newBuilder().setEntityRequest(EntityBatchRequest.newBuilder().setEntityState(value)
+                .addOperations(OperationRequest.newBuilder().setInput(value))).build(),
+            WorkItem.newBuilder().setEntityRequestV2(EntityRequest.newBuilder().setEntityState(value)
+                .addOperationRequests(HistoryEvent.newBuilder().setEntityOperationSignaled(
+                    EntityOperationSignaledEvent.newBuilder().setInput(value)))).build());
     }
 }

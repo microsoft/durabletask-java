@@ -246,7 +246,7 @@ class BlobPayloadStoreTest {
 
         assertTrue(token.startsWith("blob:v2:https://configured.invalid/durabletask-payloads/"));
         verify(mockContainerClient, times(2)).createIfNotExists();
-        verify(mockContainerClient, times(2)).getBlobClient(anyString());
+        verify(mockContainerClient, times(3)).getBlobClient(anyString());
         verify(mockBlobClient, times(3)).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(), nullable(BlobHttpHeaders.class),
             isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
@@ -264,7 +264,7 @@ class BlobPayloadStoreTest {
 
         assertSame(missing, failure.getCause());
         verify(mockContainerClient, times(2)).createIfNotExists();
-        verify(mockContainerClient).getBlobClient(anyString());
+        verify(mockContainerClient, times(2)).getBlobClient(anyString());
         verify(mockBlobClient, times(2)).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(), any(BlobHttpHeaders.class),
             isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
@@ -544,16 +544,15 @@ class BlobPayloadStoreTest {
     }
 
     @Test
-    void isKnownPayloadToken_nonHexBlobName_returnsFalse() {
+    void isKnownPayloadToken_nonHexBlobName_returnsTrue() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        assertFalse(store.isKnownPayloadToken("blob:v1:container:not-a-uuid"));
+        assertTrue(store.isKnownPayloadToken("blob:v1:container:not-a-uuid"));
     }
 
     @Test
-    void isKnownPayloadToken_shortBlobName_returnsFalse() {
+    void isKnownPayloadToken_shortBlobName_returnsTrue() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        // 31 hex chars — one short of 32.
-        assertFalse(store.isKnownPayloadToken(
+        assertTrue(store.isKnownPayloadToken(
             "blob:v1:container:0123456789abcdef0123456789abcde"));
     }
 

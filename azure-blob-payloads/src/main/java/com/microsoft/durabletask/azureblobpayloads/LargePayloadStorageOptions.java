@@ -6,6 +6,9 @@ import com.azure.core.credential.TokenCredential;
 
 import javax.annotation.Nullable;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Configuration options for externalized payload storage using Azure Blob Storage.
@@ -38,6 +41,8 @@ public final class LargePayloadStorageOptions {
     private TokenCredential credential;
     private String containerName = "durabletask-payloads";
     private boolean compressionEnabled = true;
+    private boolean allowAllContainersInConfiguredAccount;
+    private List<URI> additionalAccountUris = Collections.emptyList();
 
     /**
      * Gets the threshold in bytes at which payloads are externalized to blob storage.
@@ -183,6 +188,68 @@ public final class LargePayloadStorageOptions {
      */
     public LargePayloadStorageOptions setContainerName(String containerName) {
         this.containerName = containerName;
+        return this;
+    }
+
+    /**
+     * Gets whether reads may access all containers in the configured account.
+     * The default is {@code false}, restricting reads to the configured container.
+     *
+     * @return whether primary-account-wide access is enabled
+     */
+    public boolean isAllowAllContainersInConfiguredAccount() {
+        return this.allowAllContainersInConfiguredAccount;
+    }
+
+    /**
+     * Allows reads from all containers in the configured account when enabled.
+     * This does not allow other account endpoints or change Storage permissions.
+     * Connection-string and identity authentication are both supported.
+     *
+     * @param enabled whether to allow primary-account-wide reads
+     * @return this options object
+     */
+    public LargePayloadStorageOptions setAllowAllContainersInConfiguredAccount(boolean enabled) {
+        this.allowAllContainersInConfiguredAccount = enabled;
+        return this;
+    }
+
+    /**
+     * Gets the additional account endpoints whose containers may be read.
+     * The returned list is immutable and empty by default.
+     *
+     * @return the additional account URIs
+     */
+    public List<URI> getAdditionalAccountUris() {
+        return this.additionalAccountUris;
+    }
+
+    /**
+     * Allows reads from all containers at the specified additional account endpoints.
+     * Each URI identifies an SDK-recognized Blob account service endpoint, including its scheme, host,
+     * effective port, and any account path, not a hostname or container URL.
+     * Endpoints must use HTTPS. Requires {@link #setAccountUri(URI)} and {@link #setCredential(TokenCredential)};
+     * connection-string credentials cannot be reused for additional accounts.
+     * Primary-account container access remains controlled by
+     * {@link #setAllowAllContainersInConfiguredAccount(boolean)}. Uploads stay in the configured container.
+     * Invalid service endpoints and entries equivalent to the primary endpoint are rejected when the
+     * store is constructed; equivalent additional entries are deduplicated.
+     * Read scopes are copied when a {@link BlobPayloadStore} is constructed.
+     *
+     * @param accountUris additional endpoints, or an empty list to clear them
+     * @return this options object
+     * @throws IllegalArgumentException if the list or any element is null
+     */
+    public LargePayloadStorageOptions setAdditionalAccountUris(List<URI> accountUris) {
+        if (accountUris == null) {
+            throw new IllegalArgumentException("Additional account URIs must not be null.");
+        }
+        for (URI accountUri : accountUris) {
+            if (accountUri == null) {
+                throw new IllegalArgumentException("Additional account URIs must not contain null.");
+            }
+        }
+        this.additionalAccountUris = Collections.unmodifiableList(new ArrayList<>(accountUris));
         return this;
     }
 

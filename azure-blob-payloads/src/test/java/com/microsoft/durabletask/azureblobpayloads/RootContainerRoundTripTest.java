@@ -38,7 +38,7 @@ class RootContainerRoundTripTest {
         BlobPayloadStore store = service.createStore("$root", compressed);
         LargePayloadStorageOptions options = new LargePayloadStorageOptions().setThresholdBytes(1024);
         String payload = "root payload \u00e9\n".repeat(200);
-        String literal = "blob:v1:$root:not-a-guid";
+        String literal = "blob:v1:$root:";
         AtomicReference<CreateInstanceRequest> scheduled = new AtomicReference<>();
         AtomicReference<ActivityResponse> completion = new AtomicReference<>();
         AtomicReference<String> activityInput = new AtomicReference<>();

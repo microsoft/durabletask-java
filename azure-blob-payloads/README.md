@@ -55,16 +55,86 @@ The storage identity needs permission to create the container and read and write
 ## Payload references and storage location
 
 The built-in store now writes self-describing `blob:v2:<absolute-blob-URL>` tokens, matching the .NET token
-format. It reads both v2 tokens and legacy `blob:v1:<container>:<32-lowercase-hex-blob-name>` tokens. Blob names
-remain 32 lowercase hexadecimal characters. V2 URLs retain the blob's location but never include SAS query
-parameters or credentials. Upgrade all readers before deploying writers that emit v2 tokens.
+format. It reads both v2 tokens and legacy `blob:v1:<container>:<blob-name>` tokens, including named and nested
+blobs. New blob names remain 32 lowercase hexadecimal characters. New v2 URLs retain the blob's location but
+never include user information, query parameters, fragments, or credentials. Upgrade all readers before
+deploying writers that emit v2 tokens.
 
-Both formats use only the configured storage endpoint and container. V2 downloads compare the scheme, host,
-effective port, and complete normalized path, including any account path for path-style endpoints and the
-container, before requesting credentials or sending HTTP requests. Recognizing a URL does not authorize access
-to its destination: references to other storage locations are rejected, even when the configured identity has
-permissions there. Direct downloads require the same complete token grammar as automatic resolution;
-previously accepted nonstandard blob names are no longer supported.
+Both formats default to the configured storage endpoint **and container**. A reference to another container in
+the same account or to another account is rejected, even when the configured identity has Storage permissions
+there. Recognizing a self-describing URL does not authorize its destination. Direct downloads and automatic
+resolution use the same token parsing and destination policy; blob-name shape does not authorize access.
+Token-formatted strings are treated as references even when their blob names are not generated UUIDs.
+
+### Explicit read scopes
+
+Configure read scopes on `LargePayloadStorageOptions` before constructing the store:
+
+| Configuration | Permitted reads |
+|---|---|
+| Default: `allowAllContainersInConfiguredAccount = false`, no additional account URIs | Configured account endpoint and configured container only |
+| `setAllowAllContainersInConfiguredAccount(true)` | All containers at the configured account endpoint |
+| `setAdditionalAccountUris(...)` | All containers at each explicitly listed additional account endpoint |
+
+These settings are independent. Listing additional accounts does not widen primary-account container access.
+To allow every container across the primary and additional accounts, enable the boolean and list those accounts.
+Listing the primary endpoint is rejected during construction; use `setAllowAllContainersInConfiguredAccount(true)`
+to widen its container scope. Equivalent additional endpoints are deduplicated. Uploads and upload
+verification always use the configured container, regardless of read scope.
+
+For primary-account-wide reads using the existing authentication mode:
+
+```java
+payloadOptions.setAllowAllContainersInConfiguredAccount(true);
+```
+
+For additional-account reads using an explicitly configured Storage identity:
+
+```java
+LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
+    .setAccountUri(URI.create("https://primary.blob.core.windows.net"))
+    .setCredential(new DefaultAzureCredentialBuilder().build())
+    .setAdditionalAccountUris(Arrays.asList(
+        URI.create("https://archive.blob.core.windows.net")));
+```
+
+An account URI is an exact service endpoint, not a hostname allowlist, container URL, or path-prefix grant.
+Authorization compares scheme, hostname (case-insensitive), effective port (including default ports), and the
+complete account path. Container-scoped access additionally compares the container. Account-wide access relaxes
+only that container check: it does not permit different ports, schemes, path-style accounts, or subpaths.
+For Azurite, an account endpoint includes the account path, for example `http://127.0.0.1:10000/devstoreaccount1`.
+
+Endpoint validation and the final SDK account/container/name check run before HTTP requests or credential
+acquisition. Additional entries must be genuine Blob service endpoints, not container/blob URLs or arbitrary
+URL prefixes. Endpoint query parameters, fragments, user information, traversal segments, encoded separators,
+double-encoded account paths, duplicate account-path slashes, and control characters are rejected.
+Escaped account paths must use the same spelling as the configured URI; alternate escaped spellings are not
+treated as aliases. Endpoints whose Azure Blob SDK parsing changes the account boundary are rejected during
+construction. One trailing slash on an account endpoint is accepted. Policy, account endpoints, configured
+container, and selected authentication are captured when a store is constructed; construct a new store to
+change its grants.
+
+V2 reads discard legacy query and fragment suffixes before selecting an endpoint or constructing a client.
+These suffixes never supply SAS credentials, snapshots, or version selection. User information remains invalid.
+Account selection uses only configured service endpoints, then decodes the container and remaining blob name
+once, preserving escaped and nested names. Encoded separators cannot change the selected account or container.
+V1 names are literal names passed through the SDK: percent sequences are not pre-decoded. Traversal segments
+and control characters are rejected. Denied destinations and SDK destination mismatches propagate as errors.
+
+### Authentication and Storage permissions
+
+Default and primary-account-wide reads support connection strings using account keys or SAS credentials, and
+identity authentication using `AccountUri` plus `TokenCredential`. Same-account routing reuses the configured
+authentication pipeline, including its SAS restrictions. Storage can still reject another container when a
+container SAS is used; opting in does not expand the SAS's permissions.
+
+Additional-account reads require `AccountUri` **and** `TokenCredential`, and additional endpoints must use HTTPS.
+Account keys and SAS credentials are not reused across accounts. Unsupported combinations fail during store
+construction. As with existing configuration, complete identity configuration takes precedence if a connection
+string is also supplied. Every permitted destination uses that same selected authentication pipeline and
+identity; there is no credential discovery, mode switching, or fallback after Storage rejects a request.
+The identity must independently have read permission on the relevant account and containers. Storage redirects
+are not followed by the configured SDK pipeline, and retries do not select a primary-account secondary host.
 
 Keep the configured container dedicated to payloads shared by the same trusted clients and workers; a known
 blob name within it can be resolved using the store's configured credentials. Custom `PayloadStore`
@@ -75,10 +145,17 @@ its configured URL length so worker action-size validation accounts for v2 token
 Changing the configured storage location requires explicit migration of the payload blobs while preserving their
 names and updating v2 references to the new URLs, or a store configured for the original location. V1 tokens
 do not record the original account, so changing the account does not locate or migrate existing payloads
-automatically. V2 tokens retain the original location and are rejected by a differently configured store.
+automatically, and v1 references are never searched for in additional accounts. V2 tokens retain the original
+location: either migrate blobs and update their references, keep a store configured for the original location,
+or explicitly authorize the original account/container through the scopes above. These scopes do not migrate
+payloads, rewrite URLs, or locate missing blobs.
 
 This module does not implement dashboard reads or delete payload blobs during instance purge. Purge operations
 are forwarded to the scheduler; payload retention is managed separately through Storage lifecycle policies.
+Client and worker interceptors share this store for inputs, activity and orchestration results, events,
+streamed history, custom status, failure traces, and entity state. The history-export module obtains resolved
+history through that client path; its separate archive writer is not a payload-reference reader. There is no
+service implementation or delegated dashboard credential flow in this repository to modify.
 
 ## Upload failures
 
@@ -105,6 +182,10 @@ in-memory HTTP transport that commits a PUT and loses its response, exercising S
 and off. In-process gRPC tests cover `$root` tokens through client, worker, and streamed history paths and resolved
 nested failure traces in decoded JSON and JSONL exports. An orchestration replay regression also verifies that
 entity callers receive the original nested failure diagnostics after work-item payload resolution.
+Access-scope tests use the real Azure SDK with an offline HTTP transport and instrumented credentials. They
+cover the restrictive default, both opt-in scopes, exact endpoint/path boundaries, v1/v2 resolution across
+client and worker surfaces, selected authentication modes, and failures before HTTP or token acquisition.
+A loopback-only HTTP test exercises the default SDK transport and verifies that a Storage redirect is not followed.
 
 ## Integration tests
 
