@@ -369,7 +369,7 @@ class BlobPayloadStoreTest {
         mockDownloadResponse(payloadBytes, null);
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "testblob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         String result = store.download(token);
 
@@ -390,7 +390,7 @@ class BlobPayloadStoreTest {
         mockDownloadResponse(compressedBytes, "gzip");
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "compressed-blob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         String result = store.download(token);
 
@@ -405,7 +405,7 @@ class BlobPayloadStoreTest {
             any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "missing-blob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         PayloadStorageException ex = assertThrows(PayloadStorageException.class,
             () -> store.download(token));
@@ -415,7 +415,7 @@ class BlobPayloadStoreTest {
     @Test
     void download_nonMatchingContainer_throwsIllegalArgument() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("other-container", "some-blob");
+        String token = BlobPayloadStore.encodeToken("other-container", "0123456789abcdef0123456789abcdef");
 
         assertThrows(IllegalArgumentException.class, () -> store.download(token));
     }
@@ -428,7 +428,7 @@ class BlobPayloadStoreTest {
             any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "error-blob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         assertThrows(PayloadStorageException.class, () -> store.download(token));
     }

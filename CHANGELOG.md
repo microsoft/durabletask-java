@@ -1,5 +1,7 @@
 ## Unreleased
 
+* Require complete v1 payload tokens for direct blob downloads, matching automatic resolution; previously accepted nonstandard blob names are no longer supported.
+
 ## v1.10.0
 * Enable custom exception providers for Durable Functions Java activities ([#294](https://github.com/microsoft/durabletask-java/pull/294))
 * Recover verified ambiguous payload uploads on HTTP 409 `BlobAlreadyExists` as well as HTTP 412, while rejecting unrelated conflicts.

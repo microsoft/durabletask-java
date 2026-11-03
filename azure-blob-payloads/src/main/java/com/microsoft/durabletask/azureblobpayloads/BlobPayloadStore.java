@@ -252,6 +252,9 @@ public final class BlobPayloadStore extends PayloadStore {
 
     @Override
     public String download(String token) {
+        if (!isKnownPayloadToken(token)) {
+            throw new IllegalArgumentException("Invalid external payload token.");
+        }
         String[] decoded = decodeToken(token);
         String container = decoded[0];
         String name = decoded[1];

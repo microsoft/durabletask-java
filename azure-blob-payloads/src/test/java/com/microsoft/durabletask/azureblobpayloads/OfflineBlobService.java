@@ -31,6 +31,7 @@ import static org.mockito.Mockito.*;
 final class OfflineBlobService implements HttpClient {
     private final Map<String, byte[]> blobs = new HashMap<>();
     private final Map<String, String> encodings = new HashMap<>();
+    final List<String> requestUrls = new ArrayList<>();
     final List<String> putUrls = new ArrayList<>();
     final List<byte[]> putBodies = new ArrayList<>();
     boolean loseFirstPutResponse;
@@ -58,6 +59,7 @@ final class OfflineBlobService implements HttpClient {
 
     private synchronized HttpResponse respond(HttpRequest request, byte[] body) throws IOException {
         String url = request.getUrl().toString();
+        requestUrls.add(url);
         if (request.getHttpMethod() == HttpMethod.PUT && url.contains("restype=container")) {
             return response(request, 201, new byte[0], null);
         }

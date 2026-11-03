@@ -52,6 +52,27 @@ LargePayloadStorageOptions payloadOptions = new LargePayloadStorageOptions()
 
 The storage identity needs permission to create the container and read and write blobs. Payload blobs are retained after orchestration processing, so configure an Azure Storage lifecycle policy appropriate for the application's retention requirements.
 
+## Payload references and storage location
+
+The built-in store emits `blob:v1:<container>:<32-lowercase-hex-blob-name>` tokens. Downloads use only the
+account endpoint configured when the store is constructed (including its scheme, host, port, and account path
+for path-style endpoints) and require the token's container to match the configured container. Tokens cannot
+select another endpoint or account. Keep this container dedicated to payloads shared by the same trusted clients
+and workers; a known blob name within that container can be resolved using the store's configured credentials.
+
+Direct `BlobPayloadStore.download()` calls now require the same complete token grammar as automatic resolution.
+Previously accepted nonstandard blob names are no longer supported. Tokens returned by `upload()` are unchanged.
+Self-describing `blob:v2:<absolute-blob-URL>` references are not supported by this implementation: automatic
+resolution leaves them unchanged as literal data, and direct downloads reject them without Storage requests
+or credential acquisition. Custom `PayloadStore` implementations are responsible for their own destination checks.
+
+Changing the configured storage location requires explicit migration of the payload blobs while preserving their
+names, or a store configured for the original location. V1 tokens do not record the original account, so changing
+the account does not locate or migrate existing payloads automatically.
+
+This module does not implement dashboard reads or delete payload blobs during instance purge. Purge operations
+are forwarded to the scheduler; payload retention is managed separately through Storage lifecycle policies.
+
 ## Upload failures
 
 Transient upload failures (including HTTP 408, 429, and 5xx responses) propagate without sending a worker
