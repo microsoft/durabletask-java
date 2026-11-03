@@ -320,8 +320,14 @@ class BlobPayloadAccessScopeTest {
         List<URI> endpoints = new ArrayList<>(Collections.singletonList(URI.create(ADDITIONAL)));
         LargePayloadStorageOptions options = new LargePayloadStorageOptions().setAdditionalAccountUris(endpoints);
         endpoints.clear();
-        assertEquals(1, options.getAdditionalAccountUris().size());
-        assertThrows(UnsupportedOperationException.class, () -> options.getAdditionalAccountUris().clear());
+        List<URI> snapshot = options.getAdditionalAccountUris();
+        assertEquals(Collections.singletonList(URI.create(ADDITIONAL)), snapshot);
+        assertNotSame(snapshot, options.getAdditionalAccountUris());
+        assertThrows(UnsupportedOperationException.class, snapshot::clear);
+        assertThrows(UnsupportedOperationException.class, () -> snapshot.set(0, URI.create(PRIMARY)));
+        options.setAdditionalAccountUris(Collections.singletonList(URI.create("https://replacement.invalid")));
+        assertEquals(Collections.singletonList(URI.create(ADDITIONAL)), snapshot);
+        assertEquals(Collections.singletonList(URI.create("https://replacement.invalid")), options.getAdditionalAccountUris());
         assertThrows(IllegalArgumentException.class, () -> options.setAdditionalAccountUris(null));
         assertThrows(IllegalArgumentException.class, () -> options.setAdditionalAccountUris(Arrays.asList((URI) null)));
     }

@@ -216,12 +216,12 @@ public final class LargePayloadStorageOptions {
 
     /**
      * Gets the additional account endpoints whose containers may be read.
-     * The returned list is immutable and empty by default.
+     * Returns a fresh immutable snapshot, empty by default.
      *
      * @return the additional account URIs
      */
     public List<URI> getAdditionalAccountUris() {
-        return this.additionalAccountUris;
+        return Collections.unmodifiableList(new ArrayList<>(this.additionalAccountUris));
     }
 
     /**
