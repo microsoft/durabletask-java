@@ -121,7 +121,7 @@ class RootContainerRoundTripTest {
              DurableTaskGrpcWorker worker = workerBuilder.build()) {
             client.scheduleNewOrchestrationInstance("Root", payload);
             String inputToken = scheduled.get().getInput().getValue();
-            assertTrue(inputToken.startsWith("blob:v1:$root:"));
+                assertTrue(inputToken.startsWith("blob:v2:https://offline.invalid/$root/"));
             assertTrue(store.isKnownPayloadToken(inputToken));
             worker.start();
             assertTrue(completed.await(10, TimeUnit.SECONDS), "Worker must complete the activity");

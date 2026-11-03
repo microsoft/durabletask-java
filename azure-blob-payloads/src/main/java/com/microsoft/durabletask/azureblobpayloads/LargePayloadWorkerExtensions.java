@@ -37,6 +37,7 @@ public final class LargePayloadWorkerExtensions {
         builder.addInterceptor(new LargePayloadInterceptor(store, options));
         builder.setSupportsLargePayloads(true);
         builder.setLargePayloadThresholdBytes(options.getThresholdBytes());
+        builder.setLargePayloadTokenSizeBytes(store.getEstimatedTokenSizeBytes());
         return builder;
     }
 
@@ -61,6 +62,7 @@ public final class LargePayloadWorkerExtensions {
         builder.addInterceptor(new LargePayloadInterceptor(store, options));
         builder.setSupportsLargePayloads(true);
         builder.setLargePayloadThresholdBytes(options.getThresholdBytes());
+        builder.setLargePayloadTokenSizeBytes(store.getEstimatedTokenSizeBytes());
         return builder;
     }
 }

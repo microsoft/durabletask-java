@@ -54,21 +54,28 @@ The storage identity needs permission to create the container and read and write
 
 ## Payload references and storage location
 
-The built-in store emits `blob:v1:<container>:<32-lowercase-hex-blob-name>` tokens. Downloads use only the
-account endpoint configured when the store is constructed (including its scheme, host, port, and account path
-for path-style endpoints) and require the token's container to match the configured container. Tokens cannot
-select another endpoint or account. Keep this container dedicated to payloads shared by the same trusted clients
-and workers; a known blob name within that container can be resolved using the store's configured credentials.
+The built-in store now writes self-describing `blob:v2:<absolute-blob-URL>` tokens, matching the .NET token
+format. It reads both v2 tokens and legacy `blob:v1:<container>:<32-lowercase-hex-blob-name>` tokens. Blob names
+remain 32 lowercase hexadecimal characters. V2 URLs retain the blob's location but never include SAS query
+parameters or credentials. Upgrade all readers before deploying writers that emit v2 tokens.
 
-Direct `BlobPayloadStore.download()` calls now require the same complete token grammar as automatic resolution.
-Previously accepted nonstandard blob names are no longer supported. Tokens returned by `upload()` are unchanged.
-Self-describing `blob:v2:<absolute-blob-URL>` references are not supported by this implementation: automatic
-resolution leaves them unchanged as literal data, and direct downloads reject them without Storage requests
-or credential acquisition. Custom `PayloadStore` implementations are responsible for their own destination checks.
+Both formats use only the configured storage endpoint and container. V2 downloads compare the scheme, host,
+effective port, and complete normalized path, including any account path for path-style endpoints and the
+container, before requesting credentials or sending HTTP requests. Recognizing a URL does not authorize access
+to its destination: references to other storage locations are rejected, even when the configured identity has
+permissions there. Direct downloads require the same complete token grammar as automatic resolution;
+previously accepted nonstandard blob names are no longer supported.
+
+Keep the configured container dedicated to payloads shared by the same trusted clients and workers; a known
+blob name within it can be resolved using the store's configured credentials. Custom `PayloadStore`
+implementations are responsible for their own destination checks and can override `getEstimatedTokenSizeBytes()`
+when their upload tokens exceed the default size estimate. The built-in store supplies an estimate based on
+its configured URL length so worker action-size validation accounts for v2 tokens.
 
 Changing the configured storage location requires explicit migration of the payload blobs while preserving their
-names, or a store configured for the original location. V1 tokens do not record the original account, so changing
-the account does not locate or migrate existing payloads automatically.
+names and updating v2 references to the new URLs, or a store configured for the original location. V1 tokens
+do not record the original account, so changing the account does not locate or migrate existing payloads
+automatically. V2 tokens retain the original location and are rejected by a differently configured store.
 
 This module does not implement dashboard reads or delete payload blobs during instance purge. Purge operations
 are forwarded to the scheduler; payload retention is managed separately through Storage lifecycle policies.

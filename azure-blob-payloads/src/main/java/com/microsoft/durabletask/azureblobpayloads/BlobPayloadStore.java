@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.UUID;
@@ -32,13 +33,15 @@ import java.util.zip.GZIPOutputStream;
 /**
  * Azure Blob Storage implementation of {@link PayloadStore}.
  * <p>
- * Stores payloads as blobs and returns opaque tokens in the form {@code blob:v1:<container>:<blobName>}.
+ * Stores payloads as blobs and returns self-describing tokens in the form {@code blob:v2:<absolute-blob-URL>}.
+ * Reads both v2 and legacy {@code blob:v1:<container>:<blobName>} tokens from the configured storage location.
  * Supports optional gzip compression. The blob container is created automatically on first upload.
  * If the container is subsequently deleted, a new upload recreates it and retries once.
  */
 public final class BlobPayloadStore extends PayloadStore {
 
     static final String TOKEN_PREFIX = "blob:v1:";
+    static final String TOKEN_PREFIX_V2 = "blob:v2:";
     private static final String CONTENT_ENCODING_GZIP = "gzip";
 
     // Blob name is UUID.randomUUID().toString().replace("-", ""): exactly 32 lowercase hex chars.
@@ -117,6 +120,12 @@ public final class BlobPayloadStore extends PayloadStore {
     }
 
     @Override
+    public int getEstimatedTokenSizeBytes() {
+        String url = this.containerClient.getBlobClient("00000000000000000000000000000000").getBlobUrl();
+        return encodeToken(url).getBytes(StandardCharsets.UTF_8).length + 16;
+    }
+
+    @Override
     public String upload(String payload) {
         String blobName = UUID.randomUUID().toString().replace("-", "");
         BlobClient blob = this.containerClient.getBlobClient(blobName);
@@ -128,7 +137,7 @@ public final class BlobPayloadStore extends PayloadStore {
             Object generation = ensureContainerExists();
             try {
                 uploadBlob(blob, payloadBytes);
-                return encodeToken(this.containerClient.getBlobContainerName(), blobName);
+                return encodeToken(blob.getBlobUrl());
             } catch (BlobStorageException e) {
                 if (retryAfterContainerNotFound
                         && e.getStatusCode() == 404
@@ -264,6 +273,10 @@ public final class BlobPayloadStore extends PayloadStore {
         }
 
         BlobClient blob = this.containerClient.getBlobClient(name);
+        if (token.startsWith(TOKEN_PREFIX_V2)
+                && !sameDestination(decodeV2Token(token), URI.create(blob.getBlobUrl()))) {
+            throw new IllegalArgumentException("Token endpoint or container does not match configured storage location.");
+        }
 
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -313,14 +326,22 @@ public final class BlobPayloadStore extends PayloadStore {
         if (value == null || value.isEmpty()) {
             return false;
         }
-        // Validate the full token grammar (prefix + container + blob name), not just the
-        // prefix, so arbitrary user strings that happen to start with "blob:v1:" are not
-        // treated as tokens. This avoids spurious blob GETs (DoS surface) and spurious
-        // "container mismatch" failures on the response path.
-        if (value.length() < TOKEN_PREFIX.length() || !value.startsWith(TOKEN_PREFIX)) {
-            return false;
+        if (value.startsWith(TOKEN_PREFIX_V2)) {
+            try {
+                decodeV2Token(value);
+                return true;
+            } catch (IllegalArgumentException ex) {
+                return false;
+            }
         }
         return TOKEN_PATTERN.matcher(value).matches();
+    }
+
+    static String encodeToken(String blobUrl) {
+        // Authentication stays in the configured pipeline, never in persisted tokens.
+        String token = TOKEN_PREFIX_V2 + blobUrl.split("[?#]", 2)[0];
+        decodeV2Token(token);
+        return token;
     }
 
     static String encodeToken(String container, String name) {
@@ -328,6 +349,14 @@ public final class BlobPayloadStore extends PayloadStore {
     }
 
     static String[] decodeToken(String token) {
+        if (token.startsWith(TOKEN_PREFIX_V2)) {
+            String path = decodeV2Token(token).getRawPath();
+            int nameSeparator = path.lastIndexOf('/');
+            int containerSeparator = path.lastIndexOf('/', nameSeparator - 1);
+            return new String[] {
+                path.substring(containerSeparator + 1, nameSeparator), path.substring(nameSeparator + 1)
+            };
+        }
         if (!token.startsWith(TOKEN_PREFIX)) {
             throw new IllegalArgumentException("Invalid external payload token.");
         }
@@ -337,5 +366,35 @@ public final class BlobPayloadStore extends PayloadStore {
             throw new IllegalArgumentException("Invalid external payload token format.");
         }
         return new String[] { rest.substring(0, sep), rest.substring(sep + 1) };
+    }
+
+    private static URI decodeV2Token(String token) {
+        URI uri = URI.create(token.substring(TOKEN_PREFIX_V2.length()));
+        String path = uri.getRawPath();
+        if (!uri.isAbsolute() || uri.getHost() == null
+                || !("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+                || uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null
+                || uri.getPort() > 65535 || path == null || !path.equals(uri.normalize().getRawPath())) {
+            throw new IllegalArgumentException("Invalid external payload URL.");
+        }
+        int separator = path.lastIndexOf('/');
+        int containerSeparator = path.lastIndexOf('/', separator - 1);
+        if (containerSeparator < 0
+                || !TOKEN_PATTERN.matcher(TOKEN_PREFIX + path.substring(containerSeparator + 1, separator)
+                    + ":" + path.substring(separator + 1)).matches()) {
+            throw new IllegalArgumentException("Invalid external payload URL path.");
+        }
+        return uri;
+    }
+
+    private static boolean sameDestination(URI token, URI configured) {
+        return token.getScheme().equalsIgnoreCase(configured.getScheme())
+            && token.getHost().equalsIgnoreCase(configured.getHost())
+            && effectivePort(token) == effectivePort(configured)
+            && token.normalize().getRawPath().equals(configured.normalize().getRawPath());
+    }
+
+    private static int effectivePort(URI uri) {
+        return uri.getPort() >= 0 ? uri.getPort() : ("https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80);
     }
 }

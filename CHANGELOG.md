@@ -1,6 +1,6 @@
 ## Unreleased
 
-* Require complete v1 payload tokens for direct blob downloads, matching automatic resolution; previously accepted nonstandard blob names are no longer supported.
+* Write self-describing v2 blob payload tokens by default while retaining v1 and v2 reads from the configured storage endpoint and container. Require complete token formats for direct downloads and account for URL token length in worker action-size estimates. Upgrade readers before deploying v2 writers; changing storage locations requires explicit migration or a store configured for the original location.
 
 ## v1.10.0
 * Enable custom exception providers for Durable Functions Java activities ([#294](https://github.com/microsoft/durabletask-java/pull/294))

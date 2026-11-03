@@ -591,6 +591,28 @@ public class OrchestratorChunkingTest {
 
     // ==================== Helpers ====================
 
+    @Test
+    void validateActionsSize_accountsForConfiguredTokenSize() throws Exception {
+        OrchestratorAction action = OrchestratorAction.newBuilder().setScheduleTask(
+            ScheduleTaskAction.newBuilder().setName("Echo").setInput(StringValue.of("x".repeat(2000)))).build();
+        Method method = DurableTaskGrpcWorker.class.getDeclaredMethod(
+            "validateActionsSize", List.class, int.class, boolean.class, int.class);
+        method.setAccessible(true);
+        for (int tokenSize : new int[] {160, 1024}) {
+            try (DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+                    .grpcChannel(inProcessChannel).setLargePayloadTokenSizeBytes(tokenSize).build()) {
+                Object failure = method.invoke(worker, java.util.Collections.singletonList(action), 512, true, 1024);
+                assertEquals(tokenSize > 512, failure != null);
+                OrchestratorAction small = action.toBuilder().setScheduleTask(
+                    action.getScheduleTask().toBuilder().setInput(StringValue.of("short"))).build();
+                Object expansionFailure = method.invoke(worker, java.util.Collections.singletonList(small), 512, true, 0);
+                assertEquals(tokenSize > 512, expansionFailure != null);
+            }
+        }
+        assertThrows(IllegalArgumentException.class,
+            () -> new DurableTaskGrpcWorkerBuilder().setLargePayloadTokenSizeBytes(0));
+    }
+
     private DurableTaskGrpcWorker buildWorkerWithChannel(boolean supportsLargePayloads, int maxChunkSizeBytes) {
         DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder()
             .grpcChannel(inProcessChannel);
@@ -600,7 +622,7 @@ public class OrchestratorChunkingTest {
     }
 
     /**
-     * Invokes the private static validateActionsSize method via reflection.
+     * Invokes the private validateActionsSize method via reflection.
      */
     @SuppressWarnings("unchecked")
     private TaskFailureDetails invokeValidateActionsSize(
@@ -608,7 +630,9 @@ public class OrchestratorChunkingTest {
         Method method = DurableTaskGrpcWorker.class.getDeclaredMethod(
             "validateActionsSize", List.class, int.class, boolean.class, int.class);
         method.setAccessible(true);
-        return (TaskFailureDetails) method.invoke(null, actions, maxChunkBytes, false, 0);
+        try (DurableTaskGrpcWorker worker = buildWorkerWithChannel(false, maxChunkBytes)) {
+            return (TaskFailureDetails) method.invoke(worker, actions, maxChunkBytes, false, 0);
+        }
     }
 
     /**
