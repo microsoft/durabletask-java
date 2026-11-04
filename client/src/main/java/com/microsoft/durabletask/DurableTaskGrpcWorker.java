@@ -59,6 +59,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final boolean supportsLargePayloads;
     private final int maxChunkSizeBytes;
     private final int largePayloadThresholdBytes;
+    private final int largePayloadTokenSizeBytes;
 
     DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
@@ -95,6 +96,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         this.supportsLargePayloads = builder.supportsLargePayloads;
         this.maxChunkSizeBytes = builder.maxChunkSizeBytes;
         this.largePayloadThresholdBytes = builder.largePayloadThresholdBytes;
+        this.largePayloadTokenSizeBytes = builder.largePayloadTokenSizeBytes;
         this.dataConverter = builder.dataConverter != null ? builder.dataConverter : new JacksonDataConverter();
         this.maximumTimerInterval = builder.maximumTimerInterval != null ? builder.maximumTimerInterval : DEFAULT_MAXIMUM_TIMER_INTERVAL;
         this.versioningOptions = builder.versioningOptions;
@@ -625,7 +627,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      * <p>
      * If an oversized action is found, the orchestration is failed with a non-retriable error.
      */
-    private static TaskFailureDetails validateActionsSize(
+    private TaskFailureDetails validateActionsSize(
             List<OrchestratorAction> actions,
             int maxChunkBytes,
             boolean largePayloadsEnabled,
@@ -657,10 +659,6 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         return null;
     }
 
-    // Approximate on-wire cost of a blob-reference token (e.g. "blob:v1:<container>:<32hex>")
-    // plus protobuf tag/length overhead. Kept conservative (high) to avoid under-estimating size.
-    private static final int APPROX_TOKEN_WIRE_SIZE = 160;
-
     /**
      * Estimates how many bytes would be saved from this action's serialized size if the
      * large-payload interceptor externalized every StringValue payload field whose UTF-8 byte
@@ -668,7 +666,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
      * {@code LargePayloadInterceptor.externalizeOrchestratorAction} walks, so the savings
      * estimate stays aligned with actual externalization behavior.
      */
-    private static int estimateExternalizationSavings(OrchestratorAction action, int thresholdBytes) {
+    private int estimateExternalizationSavings(OrchestratorAction action, int thresholdBytes) {
         int savings = 0;
         switch (action.getOrchestratorActionTypeCase()) {
             case COMPLETEORCHESTRATION: {
@@ -722,7 +720,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         return savings;
     }
 
-    private static int historyEventExternalizationSavings(
+    private int historyEventExternalizationSavings(
             com.microsoft.durabletask.implementation.protobuf.OrchestratorService.HistoryEvent e,
             int thresholdBytes) {
         int savings = 0;
@@ -810,7 +808,7 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
         return savings;
     }
 
-    private static int failureDetailsSavings(
+    private int failureDetailsSavings(
             TaskFailureDetails fd, int thresholdBytes) {
         if (fd == null) return 0;
         int savings = 0;
@@ -825,20 +823,21 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
 
     /**
      * Returns the bytes saved if a StringValue whose UTF-8 byte length meets or exceeds
-     * {@code thresholdBytes} is replaced by a fixed-size blob-reference token.
+     * {@code thresholdBytes} is replaced by a blob-reference token. Negative savings
+     * account for tokens longer than the original value.
      * Zero if the value is null, empty, or below the threshold.
      * <p>
      * Uses the same UTF-8 byte-counting logic as {@code LargePayloadInterceptor.utf8ByteLength}
      * to ensure the estimation threshold and the interceptor's externalization threshold
      * are compared in consistent units.
      */
-    private static int stringValueSavings(StringValue sv, int thresholdBytes) {
+    private int stringValueSavings(StringValue sv, int thresholdBytes) {
         if (sv == null) return 0;
         String v = sv.getValue();
         if (v == null || v.isEmpty()) return 0;
         int n = utf8ByteLength(v);
         if (n < thresholdBytes) return 0;
-        return Math.max(0, n - APPROX_TOKEN_WIRE_SIZE);
+        return n - this.largePayloadTokenSizeBytes;
     }
 
     /**

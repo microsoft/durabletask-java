@@ -105,7 +105,7 @@ final class LargePayloadSample {
             public TaskActivity create() {
                 return ctx -> {
                     String payload = ctx.getInput(String.class);
-                    if (payload != null && payload.startsWith("blob:v1:")) {
+                    if (payloadStore.isKnownPayloadToken(payload)) {
                         throw new IllegalStateException(
                             "Activity received a blob token instead of the resolved payload!");
                     }

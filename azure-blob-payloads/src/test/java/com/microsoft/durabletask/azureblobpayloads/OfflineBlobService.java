@@ -17,6 +17,7 @@ import reactor.core.publisher.Mono;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +32,8 @@ import static org.mockito.Mockito.*;
 final class OfflineBlobService implements HttpClient {
     private final Map<String, byte[]> blobs = new HashMap<>();
     private final Map<String, String> encodings = new HashMap<>();
+    final List<String> requestUrls = new ArrayList<>();
+    final List<String> authorizationHeaders = new ArrayList<>();
     final List<String> putUrls = new ArrayList<>();
     final List<byte[]> putBodies = new ArrayList<>();
     boolean loseFirstPutResponse;
@@ -40,6 +43,17 @@ final class OfflineBlobService implements HttpClient {
     String duplicatePutErrorCode = "ConditionNotMet";
     int downloadStatus = 200;
     int downloads;
+
+    void addBlob(String url, String payload) {
+        blobs.put(blobKey(url), payload.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String blobKey(String url) {
+        URI uri = URI.create(url);
+        int port = uri.getPort() >= 0 ? uri.getPort() : ("https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80);
+        return uri.getScheme().toLowerCase(java.util.Locale.ROOT) + "://" + uri.getHost().toLowerCase(java.util.Locale.ROOT)
+            + ":" + port + uri.getPath();
+    }
 
     BlobPayloadStore createStore(String container, boolean compressed) {
         return new BlobPayloadStore(new BlobContainerClientBuilder()
@@ -58,10 +72,12 @@ final class OfflineBlobService implements HttpClient {
 
     private synchronized HttpResponse respond(HttpRequest request, byte[] body) throws IOException {
         String url = request.getUrl().toString();
+        requestUrls.add(url);
+        authorizationHeaders.add(request.getHeaders().getValue("Authorization"));
         if (request.getHttpMethod() == HttpMethod.PUT && url.contains("restype=container")) {
             return response(request, 201, new byte[0], null);
         }
-        String path = request.getUrl().getPath();
+        String path = blobKey(url);
         if (request.getHttpMethod() == HttpMethod.PUT) {
             assertEquals("*", request.getHeaders().getValue("If-None-Match"));
             putUrls.add(url);

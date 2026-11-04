@@ -1,5 +1,8 @@
 ## Unreleased
 
+* Write self-describing v2 blob payload tokens by default while retaining v1 and v2 reads from the configured storage endpoint and container. Require complete token formats for direct downloads and account for URL token length in worker action-size estimates. Upgrade readers before deploying v2 writers; changing storage locations requires explicit migration or a store configured for the original location.
+* Add explicit primary-account-wide and additional-account read scopes for Azure Blob payloads while retaining configured-container access by default. Additional accounts require identity authentication and exact HTTPS account service endpoints. Preserve named and nested v1/v2 references and ignore legacy v2 URL query and fragment suffixes.
+
 ## v1.10.0
 * Enable custom exception providers for Durable Functions Java activities ([#294](https://github.com/microsoft/durabletask-java/pull/294))
 * Recover verified ambiguous payload uploads on HTTP 409 `BlobAlreadyExists` as well as HTTP 412, while rejecting unrelated conflicts.

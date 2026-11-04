@@ -21,6 +21,8 @@ class LargePayloadStorageOptionsTest {
         assertNull(options.getCredential());
         assertEquals("durabletask-payloads", options.getContainerName());
         assertTrue(options.isCompressionEnabled());
+        assertFalse(options.isAllowAllContainersInConfiguredAccount());
+        assertTrue(options.getAdditionalAccountUris().isEmpty());
     }
 
     @Test
@@ -51,6 +53,8 @@ class LargePayloadStorageOptionsTest {
         assertSame(options, options.setConnectionString("test"));
         assertSame(options, options.setContainerName("my-container"));
         assertSame(options, options.setCompressionEnabled(false));
+        assertSame(options, options.setAllowAllContainersInConfiguredAccount(true));
+        assertSame(options, options.setAdditionalAccountUris(java.util.Collections.emptyList()));
     }
 
     @Test
