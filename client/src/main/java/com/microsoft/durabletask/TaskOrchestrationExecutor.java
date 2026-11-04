@@ -122,6 +122,7 @@ final class TaskOrchestrationExecutor {
         private String orchestratorName;
         private String rawInput;
         private String instanceId;
+        private String sourceInstanceId;
         private Instant currentInstant;
         private boolean isComplete;
         private boolean isSuspended;
@@ -206,6 +207,12 @@ final class TaskOrchestrationExecutor {
         public String getInstanceId() {
             // TODO: Throw if instance ID is null
             return this.instanceId;
+        }
+
+        @Override
+        @Nullable
+        public String getSourceInstanceId() {
+            return this.sourceInstanceId;
         }
 
         @Override
@@ -1707,6 +1714,9 @@ final class TaskOrchestrationExecutor {
                         this.setInput(input);
                         String version = startedEvent.getVersion().getValue();
                         this.setVersion(version);
+                        String sourceInstanceId = startedEvent.getTagsMap().get("MS_DurableFunctions_SourceInstanceId");
+                        this.sourceInstanceId = !startedEvent.hasParentInstance() && !Helpers.isNullOrEmpty(sourceInstanceId)
+                                ? sourceInstanceId : null;
                         if (startedEvent.hasParentTraceContext()) {
                             this.parentTraceContext = startedEvent.getParentTraceContext();
                         } else {
