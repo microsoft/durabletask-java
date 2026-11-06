@@ -1714,9 +1714,9 @@ final class TaskOrchestrationExecutor {
                         this.setInput(input);
                         String version = startedEvent.getVersion().getValue();
                         this.setVersion(version);
-                        String sourceInstanceId = startedEvent.getTagsMap().get("MS_DurableFunctions_SourceInstanceId");
-                        this.sourceInstanceId = !startedEvent.hasParentInstance() && !Helpers.isNullOrEmpty(sourceInstanceId)
-                                ? sourceInstanceId : null;
+                        String tagSourceInstanceId = startedEvent.getTagsMap().get("MS_DurableFunctions_SourceInstanceId");
+                        this.sourceInstanceId = !startedEvent.hasParentInstance() && !Helpers.isNullOrEmpty(tagSourceInstanceId)
+                                ? tagSourceInstanceId : null;
                         if (startedEvent.hasParentTraceContext()) {
                             this.parentTraceContext = startedEvent.getParentTraceContext();
                         } else {
