@@ -94,6 +94,17 @@ public interface TaskOrchestrationContext {
     String getVersion();
 
     /**
+     * Gets the immediate source instance ID when this orchestration was created as a clone.
+     * This reference is available during replay and is not inherited by sub-orchestrations.
+     *
+     * @return the source instance ID, or {@code null} if this is not a clone or the backend does not persist it
+     */
+    @Nullable
+    default String getSourceInstanceId() {
+        return null;
+    }
+
+    /**
      * Returns a new {@code Task} that is completed when all tasks in {@code tasks} completes.
      * See {@link #allOf(Task[])} for more detailed information.
      *

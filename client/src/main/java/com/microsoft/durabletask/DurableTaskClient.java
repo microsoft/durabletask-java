@@ -331,6 +331,25 @@ public abstract class DurableTaskClient implements AutoCloseable {
     public abstract String restartInstance(String instanceId, boolean restartWithNewInstanceId);
 
     /**
+     * Restarts an orchestration from the beginning with its original name and input and a required target ID.
+     * Execution history is not copied. When the target differs from the source, the clone exposes the immediate
+     * source via {@link TaskOrchestrationContext#getSourceInstanceId()} if the backend persists orchestration tags.
+     * Sub-orchestrations do not inherit this reference. Existing-instance conflicts are handled by the backend.
+     * Requires a backend that supports explicit restart targets and versions.
+     *
+     * @param instanceId the ID of the source orchestration
+     * @param options the restart options, including a required nonblank new instance ID and an optional version;
+     *                a {@code null} version preserves the backend's default restart behavior, and an empty
+     *                version selects an unversioned orchestration
+     * @throws IllegalArgumentException if the source ID is blank, the options are {@code null},
+     *                                  or the target ID is missing or blank
+     * @return the ID of the restarted orchestration
+     */
+    public String restartInstance(String instanceId, RestartInstanceOptions options) {
+        throw new UnsupportedOperationException("Explicit restart targets are not supported by this client.");
+    }
+
+    /**
      * Rewinds a failed orchestration instance to the last known good state and replays from there.
      * <p>
      * This method can only be used on orchestration instances that are in a <code>Failed</code> state.
