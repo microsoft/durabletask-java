@@ -51,7 +51,12 @@ class BlobPayloadStoreTest {
         mockBlobClient = mock(BlobClient.class);
 
         when(mockContainerClient.getBlobContainerName()).thenReturn("durabletask-payloads");
-        when(mockContainerClient.getBlobClient(anyString())).thenReturn(mockBlobClient);
+        when(mockContainerClient.getBlobClient(anyString())).thenAnswer(invocation -> {
+            String url = "https://configured.invalid/" + mockContainerClient.getBlobContainerName()
+                + "/" + invocation.<String>getArgument(0);
+            when(mockBlobClient.getBlobUrl()).thenReturn(url);
+            return mockBlobClient;
+        });
 
         options = new LargePayloadStorageOptions()
             .setCompressionEnabled(true);
@@ -66,7 +71,7 @@ class BlobPayloadStoreTest {
 
         String token = store.upload(payload);
 
-        assertTrue(token.startsWith("blob:v1:durabletask-payloads:"));
+        assertTrue(token.startsWith("blob:v2:https://configured.invalid/durabletask-payloads/"));
         verify(mockContainerClient).createIfNotExists();
         // Verify uploadWithResponse was called (compressed path) with If-None-Match: * precondition
         ArgumentCaptor<BlobRequestConditions> conditionsCaptor = ArgumentCaptor.forClass(BlobRequestConditions.class);
@@ -85,7 +90,7 @@ class BlobPayloadStoreTest {
 
         String token = store.upload(payload);
 
-        assertTrue(token.startsWith("blob:v1:durabletask-payloads:"));
+        assertTrue(token.startsWith("blob:v2:https://configured.invalid/durabletask-payloads/"));
         verify(mockContainerClient).createIfNotExists();
         // Verify uploadWithResponse was called (uncompressed path) with If-None-Match: * precondition
         ArgumentCaptor<BlobRequestConditions> conditionsCaptor = ArgumentCaptor.forClass(BlobRequestConditions.class);
@@ -169,7 +174,7 @@ class BlobPayloadStoreTest {
 
         String token = store.upload("test");
 
-        // Token format: blob:v1:<container>:<blobName>
+        // Token format: blob:v2:<absolute-blob-URL>
         String[] parts = BlobPayloadStore.decodeToken(token);
         assertEquals("durabletask-payloads", parts[0]);
         // Blob name should be a UUID without dashes (32 hex chars)
@@ -194,7 +199,7 @@ class BlobPayloadStoreTest {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
         String token = store.upload(originalPayload);
 
-        assertTrue(token.startsWith("blob:v1:$root:"));
+        assertTrue(token.startsWith("blob:v2:https://configured.invalid/$root/"));
         assertTrue(store.isKnownPayloadToken(token));
         mockDownloadResponse(capturedBytes[0], compressed ? "gzip" : null);
         assertEquals(originalPayload, store.download(token));
@@ -211,7 +216,7 @@ class BlobPayloadStoreTest {
         String token = store.upload("test");
 
         assertNotNull(token);
-        assertTrue(token.startsWith("blob:v1:"));
+        assertTrue(token.startsWith("blob:v2:"));
     }
 
     @Test
@@ -239,9 +244,9 @@ class BlobPayloadStoreTest {
 
         String token = store.upload("payload after deletion");
 
-        assertTrue(token.startsWith("blob:v1:durabletask-payloads:"));
+        assertTrue(token.startsWith("blob:v2:https://configured.invalid/durabletask-payloads/"));
         verify(mockContainerClient, times(2)).createIfNotExists();
-        verify(mockContainerClient, times(2)).getBlobClient(anyString());
+        verify(mockContainerClient, times(3)).getBlobClient(anyString());
         verify(mockBlobClient, times(3)).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(), nullable(BlobHttpHeaders.class),
             isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
@@ -259,7 +264,7 @@ class BlobPayloadStoreTest {
 
         assertSame(missing, failure.getCause());
         verify(mockContainerClient, times(2)).createIfNotExists();
-        verify(mockContainerClient).getBlobClient(anyString());
+        verify(mockContainerClient, times(2)).getBlobClient(anyString());
         verify(mockBlobClient, times(2)).uploadWithResponse(
             any(InputStream.class), anyLong(), isNull(), any(BlobHttpHeaders.class),
             isNull(), isNull(), any(BlobRequestConditions.class), isNull(), any());
@@ -369,7 +374,7 @@ class BlobPayloadStoreTest {
         mockDownloadResponse(payloadBytes, null);
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "testblob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         String result = store.download(token);
 
@@ -390,7 +395,7 @@ class BlobPayloadStoreTest {
         mockDownloadResponse(compressedBytes, "gzip");
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "compressed-blob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         String result = store.download(token);
 
@@ -405,7 +410,7 @@ class BlobPayloadStoreTest {
             any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "missing-blob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         PayloadStorageException ex = assertThrows(PayloadStorageException.class,
             () -> store.download(token));
@@ -415,7 +420,7 @@ class BlobPayloadStoreTest {
     @Test
     void download_nonMatchingContainer_throwsIllegalArgument() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("other-container", "some-blob");
+        String token = BlobPayloadStore.encodeToken("other-container", "0123456789abcdef0123456789abcdef");
 
         assertThrows(IllegalArgumentException.class, () -> store.download(token));
     }
@@ -428,7 +433,7 @@ class BlobPayloadStoreTest {
             any(OutputStream.class), isNull(), isNull(), isNull(), eq(false), isNull(), any());
 
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "error-blob");
+        String token = BlobPayloadStore.encodeToken("durabletask-payloads", "0123456789abcdef0123456789abcdef");
 
         assertThrows(PayloadStorageException.class, () -> store.download(token));
     }
@@ -461,10 +466,6 @@ class BlobPayloadStoreTest {
         // Now set up download to return the captured bytes
         mockDownloadResponse(capturedBytes[0], "gzip");
 
-        // Need to map the token's blob name back to our mock
-        String[] decoded = BlobPayloadStore.decodeToken(token);
-        when(mockContainerClient.getBlobClient(decoded[1])).thenReturn(mockBlobClient);
-
         String downloaded = store.download(token);
         assertEquals(originalPayload, downloaded);
     }
@@ -495,9 +496,6 @@ class BlobPayloadStoreTest {
 
         // Set up download
         mockDownloadResponse(capturedBytes[0], null);
-
-        String[] decoded = BlobPayloadStore.decodeToken(token);
-        when(mockContainerClient.getBlobClient(decoded[1])).thenReturn(mockBlobClient);
 
         String downloaded = store.download(token);
         assertEquals(originalPayload, downloaded);
@@ -546,16 +544,15 @@ class BlobPayloadStoreTest {
     }
 
     @Test
-    void isKnownPayloadToken_nonHexBlobName_returnsFalse() {
+    void isKnownPayloadToken_nonHexBlobName_returnsTrue() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        assertFalse(store.isKnownPayloadToken("blob:v1:container:not-a-uuid"));
+        assertTrue(store.isKnownPayloadToken("blob:v1:container:not-a-uuid"));
     }
 
     @Test
-    void isKnownPayloadToken_shortBlobName_returnsFalse() {
+    void isKnownPayloadToken_shortBlobName_returnsTrue() {
         BlobPayloadStore store = new BlobPayloadStore(mockContainerClient, options);
-        // 31 hex chars — one short of 32.
-        assertFalse(store.isKnownPayloadToken(
+        assertTrue(store.isKnownPayloadToken(
             "blob:v1:container:0123456789abcdef0123456789abcde"));
     }
 

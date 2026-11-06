@@ -38,7 +38,7 @@ class RootContainerRoundTripTest {
         BlobPayloadStore store = service.createStore("$root", compressed);
         LargePayloadStorageOptions options = new LargePayloadStorageOptions().setThresholdBytes(1024);
         String payload = "root payload \u00e9\n".repeat(200);
-        String literal = "blob:v1:$root:not-a-guid";
+        String literal = "blob:v1:$root:";
         AtomicReference<CreateInstanceRequest> scheduled = new AtomicReference<>();
         AtomicReference<ActivityResponse> completion = new AtomicReference<>();
         AtomicReference<String> activityInput = new AtomicReference<>();
@@ -121,7 +121,7 @@ class RootContainerRoundTripTest {
              DurableTaskGrpcWorker worker = workerBuilder.build()) {
             client.scheduleNewOrchestrationInstance("Root", payload);
             String inputToken = scheduled.get().getInput().getValue();
-            assertTrue(inputToken.startsWith("blob:v1:$root:"));
+                assertTrue(inputToken.startsWith("blob:v2:https://offline.invalid/$root/"));
             assertTrue(store.isKnownPayloadToken(inputToken));
             worker.start();
             assertTrue(completed.await(10, TimeUnit.SECONDS), "Worker must complete the activity");

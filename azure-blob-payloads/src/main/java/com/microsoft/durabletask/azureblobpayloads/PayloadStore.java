@@ -39,4 +39,15 @@ public abstract class PayloadStore {
      * @return {@code true} if the value is a token issued by this store; otherwise {@code false}
      */
     public abstract boolean isKnownPayloadToken(String value);
+
+    /**
+     * Gets an upper bound on the UTF-8 token size including protobuf field overhead,
+     * used by workers to estimate post-externalization action sizes.
+     * Custom stores with longer tokens should override this method.
+     *
+     * @return the estimated token wire size in bytes
+     */
+    public int getEstimatedTokenSizeBytes() {
+        return 160;
+    }
 }

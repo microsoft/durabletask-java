@@ -51,6 +51,7 @@ public final class DurableTaskGrpcWorkerBuilder {
     // Used by the worker to estimate post-externalization action sizes during
     // pre-send validation when supportsLargePayloads=true.
     int largePayloadThresholdBytes = 256 * 1024;
+    int largePayloadTokenSizeBytes = 160;
 
     /**
      * Adds an orchestration factory to be used by the constructed {@link DurableTaskGrpcWorker}.
@@ -401,6 +402,21 @@ public final class DurableTaskGrpcWorkerBuilder {
      */
     public DurableTaskGrpcWorkerBuilder setSupportsLargePayloads(boolean enabled) {
         this.supportsLargePayloads = enabled;
+        return this;
+    }
+
+    /**
+     * Sets the estimated replacement token size, including protobuf field overhead,
+     * for pre-send action size validation. The default is 160 bytes.
+     *
+     * @param tokenSizeBytes the positive estimated wire size in bytes
+     * @return this builder object
+     */
+    public DurableTaskGrpcWorkerBuilder setLargePayloadTokenSizeBytes(int tokenSizeBytes) {
+        if (tokenSizeBytes <= 0) {
+            throw new IllegalArgumentException("Token size must be positive.");
+        }
+        this.largePayloadTokenSizeBytes = tokenSizeBytes;
         return this;
     }
 

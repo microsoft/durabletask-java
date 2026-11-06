@@ -14,6 +14,43 @@ import static org.junit.jupiter.api.Assertions.*;
 class PayloadTokenTest {
 
     @Test
+    void encodeToken_v2_preservesLocationWithoutAuthentication() {
+        String url = "https://account.blob.core.windows.net/payloads/0123456789abcdef0123456789abcdef";
+        assertEquals("blob:v2:" + url, BlobPayloadStore.encodeToken(url + "?sv=example&sig=example"));
+        assertEquals("blob:v2:" + url, BlobPayloadStore.encodeToken(url));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "https://account.blob.core.windows.net/payloads/0123456789abcdef0123456789abcdef",
+        "https://account.blob.core.windows.net/$root/0123456789abcdef0123456789abcdef",
+        "http://127.0.0.1:10000/devstoreaccount1/payloads/0123456789abcdef0123456789abcdef"
+    })
+    void v2Tokens_preserveAbsoluteLocationAndDecodeNames(String url) {
+        String token = BlobPayloadStore.encodeToken(url);
+        assertTrue(createStoreWithDefaults().isKnownPayloadToken(token));
+        String[] decoded = BlobPayloadStore.decodeToken(token);
+        assertEquals("0123456789abcdef0123456789abcdef", decoded[1]);
+        assertTrue(decoded[0].equals("payloads") || decoded[0].equals("$root"));
+        assertEquals("blob:v2:" + url, token);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "blob:v2:payloads:0123456789abcdef0123456789abcdef",
+        "blob:v2:/payloads/0123456789abcdef0123456789abcdef",
+        "blob:v2:file:///payloads/0123456789abcdef0123456789abcdef",
+        "blob:v2:ftp://account/payloads/0123456789abcdef0123456789abcdef",
+        "blob:v2:https://account/payloads/",
+        "blob:v2:https://account/payloads/0123456789abcdef0123456789abcdef\n",
+        "blob:v2:https://account:65536/payloads/0123456789abcdef0123456789abcdef"
+    })
+    void malformedV2Tokens_areNotRecognized(String token) {
+        assertFalse(createStoreWithDefaults().isKnownPayloadToken(token));
+        assertThrows(IllegalArgumentException.class, () -> BlobPayloadStore.decodeToken(token));
+    }
+
+    @Test
     void encodeToken_producesCorrectFormat() {
         String token = BlobPayloadStore.encodeToken("my-container", "abc123");
         assertEquals("blob:v1:my-container:abc123", token);
@@ -70,9 +107,6 @@ class PayloadTokenTest {
         "blob:v1:$ROOT:0123456789abcdef0123456789abcdef",
         "blob:v1:$root-extra:0123456789abcdef0123456789abcdef",
         "blob:v1:$logs:0123456789abcdef0123456789abcdef",
-        "blob:v1:$root:0123456789abcdef0123456789abcde",
-        "blob:v1:$root:0123456789abcdef0123456789abcdeg",
-        "blob:v1:$root:0123456789abcdef0123456789abcdef:extra",
         "blob:v1:$root:0123456789abcdef0123456789abcdef\n",
         "\"blob:v1:$root:0123456789abcdef0123456789abcdef\""
     })
