@@ -84,7 +84,8 @@ class DurableTaskGrpcClientRestartTest {
     @ValueSource(strings = {"2.0"})
     void explicitTargetPreservesVersionPresence(String version) throws Exception {
         DurableTaskClient client = startClient();
-        assertEquals("order-123-retry", client.restartInstance("order-123", "order-123-retry", version));
+        assertEquals("order-123-retry", client.restartInstance("order-123",
+                new RestartInstanceOptions().setNewInstanceId("order-123-retry").setVersion(version)));
         assertEquals("order-123", this.restartRequest.getInstanceId());
         assertTrue(this.restartRequest.getRestartWithNewInstanceId());
         assertTrue(this.restartRequest.hasNewInstanceId());
@@ -100,10 +101,12 @@ class DurableTaskGrpcClientRestartTest {
     @Test
     void omittedVersionAndChainedCloneUseBackendRestart() throws Exception {
         DurableTaskClient client = startClient();
-        assertEquals("order-123-retry", client.restartInstance("order-123", "order-123-retry"));
+        assertEquals("order-123-retry", client.restartInstance("order-123",
+                new RestartInstanceOptions().setNewInstanceId("order-123-retry")));
         assertFalse(this.restartRequest.hasVersion());
         assertEquals("order-123-retry-again",
-                client.restartInstance("order-123-retry", "order-123-retry-again"));
+                client.restartInstance("order-123-retry",
+                        new RestartInstanceOptions().setNewInstanceId("order-123-retry-again")));
         assertEquals("order-123-retry", this.restartRequest.getInstanceId());
         assertFalse(this.restartRequest.hasVersion());
     }
@@ -111,7 +114,8 @@ class DurableTaskGrpcClientRestartTest {
     @Test
     void explicitTargetMayBeTheSourceId() throws Exception {
         DurableTaskClient client = startClient();
-        assertEquals("order-123", client.restartInstance("order-123", "order-123", ""));
+        assertEquals("order-123", client.restartInstance("order-123",
+                new RestartInstanceOptions().setNewInstanceId("order-123").setVersion("")));
         assertEquals("order-123", this.restartRequest.getNewInstanceId().getValue());
     }
 
@@ -120,10 +124,23 @@ class DurableTaskGrpcClientRestartTest {
     @ValueSource(strings = {" ", "\t"})
     void invalidSourceOrTargetIsRejectedBeforeRpc(String id) throws Exception {
         DurableTaskClient client = startClient();
-        assertThrows(IllegalArgumentException.class, () -> client.restartInstance("source", id));
-        assertThrows(IllegalArgumentException.class, () -> client.restartInstance(id, "target", "2.0"));
+        assertThrows(IllegalArgumentException.class, () -> client.restartInstance("source",
+                new RestartInstanceOptions().setNewInstanceId(id)));
+        assertThrows(IllegalArgumentException.class, () -> client.restartInstance(id,
+                new RestartInstanceOptions().setNewInstanceId("target").setVersion("2.0")));
         assertNull(this.restartRequest);
         assertEquals(0, this.metadataRequests);
+    }
+
+    @Test
+    void missingOptionsOrTargetIsRejectedBeforeRpc() throws Exception {
+        DurableTaskClient client = startClient();
+        assertThrows(IllegalArgumentException.class, () -> client.restartInstance("source", null));
+        assertThrows(IllegalArgumentException.class,
+                () -> client.restartInstance("source", new RestartInstanceOptions()));
+        assertNull(this.restartRequest);
+        assertEquals(0, this.metadataRequests);
+        assertNull(this.createRequest);
     }
 
     @ParameterizedTest
@@ -132,7 +149,7 @@ class DurableTaskGrpcClientRestartTest {
         DurableTaskClient client = startClient();
         this.restartError = Status.fromCode(Status.Code.valueOf(status));
         StatusRuntimeException error = assertThrows(StatusRuntimeException.class,
-                () -> client.restartInstance("source", "target"));
+                () -> client.restartInstance("source", new RestartInstanceOptions().setNewInstanceId("target")));
         assertEquals(this.restartError.getCode(), error.getStatus().getCode());
         assertEquals(0, this.metadataRequests);
         assertNull(this.createRequest);

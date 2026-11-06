@@ -332,30 +332,20 @@ public abstract class DurableTaskClient implements AutoCloseable {
 
     /**
      * Restarts an orchestration from the beginning with its original name and input and a required target ID.
-     * Execution history is not copied. Requires a backend that supports explicit restart targets.
-     *
-     * @param instanceId the ID of the source orchestration
-     * @param newInstanceId the non-empty target instance ID
-     * @return the ID of the restarted orchestration
-     */
-    public String restartInstance(String instanceId, String newInstanceId) {
-        return this.restartInstance(instanceId, newInstanceId, null);
-    }
-
-    /**
-     * Restarts an orchestration from the beginning with its original name and input and a required target ID.
      * Execution history is not copied. When the target differs from the source, the clone exposes the immediate
      * source via {@link TaskOrchestrationContext#getSourceInstanceId()} if the backend persists orchestration tags.
      * Sub-orchestrations do not inherit this reference. Existing-instance conflicts are handled by the backend.
      * Requires a backend that supports explicit restart targets and versions.
      *
      * @param instanceId the ID of the source orchestration
-     * @param newInstanceId the non-empty target instance ID
-     * @param version the version override; {@code null} preserves the backend's default restart behavior,
-     *                and an empty string selects an unversioned orchestration
+     * @param options the restart options, including a required nonblank new instance ID and an optional version;
+     *                a {@code null} version preserves the backend's default restart behavior, and an empty
+     *                version selects an unversioned orchestration
+     * @throws IllegalArgumentException if the source ID is blank, the options are {@code null},
+     *                                  or the target ID is missing or blank
      * @return the ID of the restarted orchestration
      */
-    public String restartInstance(String instanceId, String newInstanceId, @Nullable String version) {
+    public String restartInstance(String instanceId, RestartInstanceOptions options) {
         throw new UnsupportedOperationException("Explicit restart targets are not supported by this client.");
     }
 
