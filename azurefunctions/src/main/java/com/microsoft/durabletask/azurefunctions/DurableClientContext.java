@@ -25,6 +25,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -35,6 +36,7 @@ public class DurableClientContext {
     private String rpcBaseUrl;
     private String taskHubName;
     private String requiredQueryStringParameters;
+    private Map<String, String> requiredHeaders;
     private DurableTaskClient client;
 
     /**
@@ -120,11 +122,12 @@ public class DurableClientContext {
         //       More info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Forwarded.
         //       One potential workaround is to set ASPNETCORE_FORWARDEDHEADERS_ENABLED to true.
 
-        // Construct the response as an HTTP 202 with a JSON object payload
+        HttpManagementPayload payload = this.getClientResponseLinks(request, instanceId);
         return request.createResponseBuilder(HttpStatus.ACCEPTED)
-                .header("Location", this.getInstanceStatusURL(request, instanceId) + "?" + this.requiredQueryStringParameters)
+                .header("Location", payload.getStatusQueryGetUri())
                 .header("Content-Type", "application/json")
-                .body(this.getClientResponseLinks(request, instanceId))
+                .header("Cache-Control", "no-store")
+                .body(payload)
                 .build();
     }
 
@@ -215,7 +218,7 @@ public class DurableClientContext {
 
     private HttpManagementPayload getClientResponseLinks(HttpRequestMessage<?> request, String instanceId) {
         String instanceStatusURL = this.getInstanceStatusURL(request, instanceId);
-        return new HttpManagementPayload(instanceId, instanceStatusURL, this.requiredQueryStringParameters);
+        return new HttpManagementPayload(instanceId, instanceStatusURL, this.requiredQueryStringParameters, this.requiredHeaders);
     }
 
     private String getInstanceStatusURL(HttpRequestMessage<?> request, String instanceId) {

@@ -4,6 +4,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
+import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
@@ -11,21 +12,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static io.restassured.RestAssured.get;
-import static io.restassured.RestAssured.post;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("e2e")
 public class EndToEndTests {
+    private Map<String, String> requiredHeaders = Collections.emptyMap();
 
     @BeforeAll
     public static void setup() {
@@ -68,6 +72,26 @@ public class EndToEndTests {
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
         boolean pass = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(20));
         assertTrue(pass);
+    }
+
+    @Test
+    public void managementAuthenticationIsSeparateFromUrls() throws InterruptedException {
+        Response response = post("/api/StartOrchestration");
+        assertEquals(202, response.statusCode());
+        assertEquals("no-store", response.header("Cache-Control"));
+        JsonPath management = response.jsonPath();
+        assertTrue(this.requiredHeaders.containsKey("x-functions-key"));
+        Map<String, Object> payload = management.getMap("");
+        for (Map.Entry<String, Object> entry : payload.entrySet()) {
+            if (entry.getKey().endsWith("Uri")) {
+                String url = (String) entry.getValue();
+                assertTrue(!url.toLowerCase(java.util.Locale.ROOT).contains("code="));
+                assertTrue(!url.contains(this.requiredHeaders.get("x-functions-key")));
+            }
+        }
+        String statusUrl = management.getString("statusQueryGetUri");
+        assertEquals(statusUrl, response.header("Location"));
+        assertTrue(pollingCheck(statusUrl, "Completed", null, Duration.ofSeconds(30)));
     }
 
     @Test
@@ -132,8 +156,7 @@ public class EndToEndTests {
         sendEventPostUri = sendEventPostUri.replace("{eventName}", "event");
 
         // empty request body
-        RestAssured
-                .given()
+        requestFor(sendEventPostUri)
                 .contentType(ContentType.JSON) // Set the request content type
                 .body("{}")
                 .post(sendEventPostUri)
@@ -167,7 +190,9 @@ public class EndToEndTests {
         Response statusResponse = get(statusQueryGetUri);
         String instanceId = statusResponse.jsonPath().get("instanceId");
 
-        String restartPostUri = jsonPath.get("restartPostUri") + "&restartWithNewInstanceId=" + restartWithNewInstanceId;
+        String restartUrl = jsonPath.get("restartPostUri");
+        String restartPostUri = restartUrl + (restartUrl.contains("?") ? "&" : "?")
+                + "restartWithNewInstanceId=" + restartWithNewInstanceId;
         Response restartResponse = post(restartPostUri);
         JsonPath restartJsonPath = restartResponse.jsonPath();
         String restartStatusQueryGetUri = restartJsonPath.get("statusQueryGetUri");
@@ -216,8 +241,7 @@ public class EndToEndTests {
         sendEventPostUri = sendEventPostUri.replace("{eventName}", "test");
 
         String requestBody = "{\"value\":\"Test\"}";
-        RestAssured
-                .given()
+        requestFor(sendEventPostUri)
                 .contentType(ContentType.JSON) // Set the request content type
                 .body(requestBody) // Set the request body
                 .post(sendEventPostUri)
@@ -311,8 +335,7 @@ public class EndToEndTests {
         sendEventPostUri = sendEventPostUri.replace("{eventName}", "event");
 
         String requestBody = "{\"value\":\"Test\"}";
-        RestAssured
-            .given()
+        requestFor(sendEventPostUri)
             .contentType(ContentType.JSON) // Set the request content type
             .body(requestBody) // Set the request body
             .post(sendEventPostUri)
@@ -588,6 +611,42 @@ public class EndToEndTests {
         Response statusResponse = get(statusQueryGetUri);
         Integer output = statusResponse.jsonPath().get("output");
         assertEquals(200, output);
+    }
+
+    private RequestSpecification requestFor(String url) {
+        RequestSpecification request = RestAssured.given().redirects().follow(false);
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            int queryStart = url.indexOf('?');
+            URI target = URI.create(queryStart < 0 ? url : url.substring(0, queryStart));
+            URI base = URI.create(RestAssured.baseURI);
+            assertEquals(base.getScheme(), target.getScheme(), "Unexpected management URL scheme");
+            assertEquals(base.getHost(), target.getHost(), "Unexpected management URL host");
+            int port = target.getPort() < 0
+                    ? ("https".equals(target.getScheme()) ? 443 : 80) : target.getPort();
+            assertEquals(RestAssured.port, port, "Unexpected management URL port");
+            assertTrue(target.getPath().startsWith("/runtime/webhooks/durabletask/"));
+            request.headers(this.requiredHeaders);
+        }
+        return request;
+    }
+
+    private Response get(String url) {
+        return requestFor(url).get(url);
+    }
+
+    private Response post(String url, Object... pathParameters) {
+        Response response = requestFor(url).post(url, pathParameters);
+        if (response.statusCode() == 202 && response.contentType() != null
+                && response.contentType().contains("application/json")
+                && !response.getBody().asString().isEmpty()) {
+            JsonPath payload = response.jsonPath();
+            if (payload.get("statusQueryGetUri") != null) {
+                Map<String, String> headers = payload.getMap("requiredHeaders");
+                assertNotNull(headers, "Management responses must include requiredHeaders");
+                this.requiredHeaders = headers;
+            }
+        }
+        return response;
     }
 
     private boolean pollingCheck(String statusQueryGetUri,
