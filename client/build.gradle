@@ -75,7 +75,8 @@ compileTestJava {
 }
 
 task downloadProtoFiles {
-    ext.branch = project.hasProperty('protoBranch') ? project.protoBranch : 'main'
+    // Includes the dedicated CloneInstance RPC from durabletask-protobuf PR #82.
+    ext.branch = project.hasProperty('protoBranch') ? project.protoBranch : '0a4f8075e383f6ac783acfd5aee9ecb791334e87'
 
     doLast {
         def protoDir = file("${rootProject.projectDir}/internal/durabletask-protobuf/protos")
@@ -89,6 +90,10 @@ task downloadProtoFiles {
 
         // Get and save the commit hash
         def commitHashFile = new File("${rootProject.projectDir}/internal/durabletask-protobuf/PROTO_SOURCE_COMMIT_HASH")
+        if (ext.branch ==~ /[0-9a-fA-F]{40}/) {
+            commitHashFile.text = ext.branch
+            return
+        }
         def commitApiUrl = new URL("https://api.github.com/repos/microsoft/durabletask-protobuf/commits?path=protos/orchestrator_service.proto&sha=${ext.branch}&per_page=1")
         def connection = commitApiUrl.openConnection()
         connection.setRequestProperty('Accept', 'application/vnd.github.v3+json')
