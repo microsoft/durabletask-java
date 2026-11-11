@@ -75,8 +75,8 @@ compileTestJava {
 }
 
 task downloadProtoFiles {
-    // Includes the explicit restart target/version contract from durabletask-protobuf PR #82.
-    ext.branch = project.hasProperty('protoBranch') ? project.protoBranch : '962a493037e72b5e08f07a55eff0f121c1aaae80'
+    // Includes the dedicated CloneInstance RPC from durabletask-protobuf PR #82.
+    ext.branch = project.hasProperty('protoBranch') ? project.protoBranch : '0a4f8075e383f6ac783acfd5aee9ecb791334e87'
 
     doLast {
         def protoDir = file("${rootProject.projectDir}/internal/durabletask-protobuf/protos")

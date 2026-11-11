@@ -463,14 +463,13 @@ public final class DurableTaskGrpcClient extends DurableTaskClient {
         Helpers.throwIfArgumentNullOrWhiteSpace(newInstanceId, "newInstanceId");
         String version = options.getVersion();
 
-        RestartInstanceRequest.Builder request = RestartInstanceRequest.newBuilder()
-                .setInstanceId(instanceId)
-                .setRestartWithNewInstanceId(true)
-                .setNewInstanceId(StringValue.of(newInstanceId));
+        CloneInstanceRequest.Builder request = CloneInstanceRequest.newBuilder()
+                .setSourceInstanceId(instanceId)
+                .setNewInstanceId(newInstanceId);
         if (version != null) {
             request.setVersion(StringValue.of(version));
         }
-        return this.sidecarClient.restartInstance(request.build()).getInstanceId();
+        return this.sidecarClient.cloneInstance(request.build()).getInstanceId();
     }
 
     private PurgeResult toPurgeResult(PurgeInstancesResponse response){

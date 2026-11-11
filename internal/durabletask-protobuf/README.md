@@ -15,6 +15,11 @@ The proto files are automatically downloaded and updated when running Gradle bui
 2. Saves the current commit hash for tracking purposes
 3. Updates these files before proto compilation begins
 
+The pinned schema includes the dedicated `CloneInstance` RPC from
+[microsoft/durabletask-protobuf#82](https://github.com/microsoft/durabletask-protobuf/pull/82).
+The options-based Java restart API uses this RPC without falling back to legacy restart or scheduling APIs.
+The existing `RestartInstanceRequest` message remains unchanged.
+
 ## Manual Update
 
 If you need to manually update the proto files, you can run:

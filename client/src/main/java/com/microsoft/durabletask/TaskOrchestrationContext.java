@@ -95,9 +95,10 @@ public interface TaskOrchestrationContext {
 
     /**
      * Gets the immediate source instance ID when this orchestration was created as a clone.
-     * This reference is available during replay and is not inherited by sub-orchestrations.
+     * The backend must supply this reference in orchestration tags; the cloning protocol does not expose it.
+     * When supplied, it is available during replay and is not inherited by sub-orchestrations.
      *
-     * @return the source instance ID, or {@code null} if this is not a clone or the backend does not persist it
+     * @return the source instance ID, or {@code null} if this is not a clone or the backend does not expose it in tags
      */
     @Nullable
     default String getSourceInstanceId() {

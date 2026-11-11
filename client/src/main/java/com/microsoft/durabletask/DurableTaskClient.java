@@ -332,10 +332,13 @@ public abstract class DurableTaskClient implements AutoCloseable {
 
     /**
      * Restarts an orchestration from the beginning with its original name and input and a required target ID.
-     * Execution history is not copied. When the target differs from the source, the clone exposes the immediate
-     * source via {@link TaskOrchestrationContext#getSourceInstanceId()} if the backend persists orchestration tags.
-     * Sub-orchestrations do not inherit this reference. Existing-instance conflicts are handled by the backend.
-     * Requires a backend that supports explicit restart targets and versions.
+     * Execution history is not copied. The target may be the source instance ID; existing-instance conflicts
+     * are handled by the backend. Source lineage is stored internally by the backend and is not exposed by the
+     * cloning protocol. {@link TaskOrchestrationContext#getSourceInstanceId()} is available only if the backend
+     * also supplies the source reference in orchestration tags.
+     * Requires a backend implementing the {@code CloneInstance} RPC and the requested version behavior.
+     * Unsupported backends reject the request without creating an orchestration. This method does not fall
+     * back to the legacy restart or scheduling APIs.
      *
      * @param instanceId the ID of the source orchestration
      * @param options the restart options, including a required nonblank new instance ID and an optional version;

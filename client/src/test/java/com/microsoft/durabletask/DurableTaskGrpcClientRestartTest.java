@@ -7,6 +7,8 @@ import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
 import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
+import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -23,25 +25,39 @@ import static org.junit.jupiter.api.Assertions.*;
 class DurableTaskGrpcClientRestartTest {
     private Server server;
     private ManagedChannel channel;
+    private CloneInstanceRequest cloneRequest;
     private RestartInstanceRequest restartRequest;
     private CreateInstanceRequest createRequest;
     private int metadataRequests;
-    private Status restartError;
+    private Status cloneError;
 
     private DurableTaskClient startClient() throws Exception {
+        return startClient(true);
+    }
+
+    private DurableTaskClient startClient(boolean supportsCloning) throws Exception {
         String name = InProcessServerBuilder.generateName();
-        this.server = InProcessServerBuilder.forName(name).directExecutor()
-                .addService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
+        TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase service =
+                new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
+                    @Override
+                    public void cloneInstance(CloneInstanceRequest request,
+                                              StreamObserver<CloneInstanceResponse> observer) {
+                        cloneRequest = request;
+                        if (cloneError != null) {
+                            observer.onError(cloneError.asRuntimeException());
+                            return;
+                        }
+                        observer.onNext(CloneInstanceResponse.newBuilder()
+                                .setInstanceId(request.getNewInstanceId()).build());
+                        observer.onCompleted();
+                    }
+
                     @Override
                     public void restartInstance(RestartInstanceRequest request,
                                                 StreamObserver<RestartInstanceResponse> observer) {
                         restartRequest = request;
-                        if (restartError != null) {
-                            observer.onError(restartError.asRuntimeException());
-                            return;
-                        }
                         observer.onNext(RestartInstanceResponse.newBuilder()
-                                .setInstanceId(request.getNewInstanceId().getValue()).build());
+                                .setInstanceId("legacy-restart").build());
                         observer.onCompleted();
                     }
 
@@ -64,7 +80,17 @@ class DurableTaskGrpcClientRestartTest {
                                 .setInstanceId(request.getInstanceId()).build());
                         observer.onCompleted();
                     }
-                }).build().start();
+                };
+        ServerServiceDefinition.Builder serviceDefinition =
+                ServerServiceDefinition.builder(TaskHubSidecarServiceGrpc.SERVICE_NAME);
+        for (ServerMethodDefinition<?, ?> method : service.bindService().getMethods()) {
+            if (supportsCloning || !method.getMethodDescriptor().getFullMethodName()
+                    .equals(TaskHubSidecarServiceGrpc.getCloneInstanceMethod().getFullMethodName())) {
+                serviceDefinition.addMethod(method);
+            }
+        }
+        this.server = InProcessServerBuilder.forName(name).directExecutor()
+                .addService(serviceDefinition.build()).build().start();
         this.channel = InProcessChannelBuilder.forName(name).directExecutor().build();
         return new DurableTaskGrpcClientBuilder().grpcChannel(this.channel).defaultVersion("client-default").build();
     }
@@ -86,29 +112,32 @@ class DurableTaskGrpcClientRestartTest {
         DurableTaskClient client = startClient();
         assertEquals("order-123-retry", client.restartInstance("order-123",
                 new RestartInstanceOptions().setNewInstanceId("order-123-retry").setVersion(version)));
-        assertEquals("order-123", this.restartRequest.getInstanceId());
-        assertTrue(this.restartRequest.getRestartWithNewInstanceId());
-        assertTrue(this.restartRequest.hasNewInstanceId());
-        assertEquals("order-123-retry", this.restartRequest.getNewInstanceId().getValue());
-        assertEquals(version != null, this.restartRequest.hasVersion());
+        assertEquals("order-123", this.cloneRequest.getSourceInstanceId());
+        assertEquals("order-123-retry", this.cloneRequest.getNewInstanceId());
+        assertEquals(version != null, this.cloneRequest.hasVersion());
         if (version != null) {
-            assertEquals(version, this.restartRequest.getVersion().getValue());
+            assertEquals(version, this.cloneRequest.getVersion().getValue());
         }
+        assertNull(this.restartRequest);
         assertEquals(0, this.metadataRequests);
         assertNull(this.createRequest);
     }
 
     @Test
-    void omittedVersionAndChainedCloneUseBackendRestart() throws Exception {
+    void omittedVersionAndChainedCloneUseCloneRpc() throws Exception {
         DurableTaskClient client = startClient();
         assertEquals("order-123-retry", client.restartInstance("order-123",
                 new RestartInstanceOptions().setNewInstanceId("order-123-retry")));
-        assertFalse(this.restartRequest.hasVersion());
+        assertFalse(this.cloneRequest.hasVersion());
         assertEquals("order-123-retry-again",
                 client.restartInstance("order-123-retry",
                         new RestartInstanceOptions().setNewInstanceId("order-123-retry-again")));
-        assertEquals("order-123-retry", this.restartRequest.getInstanceId());
-        assertFalse(this.restartRequest.hasVersion());
+        assertEquals("order-123-retry", this.cloneRequest.getSourceInstanceId());
+        assertEquals("order-123-retry-again", this.cloneRequest.getNewInstanceId());
+        assertFalse(this.cloneRequest.hasVersion());
+        assertNull(this.restartRequest);
+        assertEquals(0, this.metadataRequests);
+        assertNull(this.createRequest);
     }
 
     @Test
@@ -116,7 +145,11 @@ class DurableTaskGrpcClientRestartTest {
         DurableTaskClient client = startClient();
         assertEquals("order-123", client.restartInstance("order-123",
                 new RestartInstanceOptions().setNewInstanceId("order-123").setVersion("")));
-        assertEquals("order-123", this.restartRequest.getNewInstanceId().getValue());
+        assertEquals("order-123", this.cloneRequest.getSourceInstanceId());
+        assertEquals("order-123", this.cloneRequest.getNewInstanceId());
+        assertTrue(this.cloneRequest.hasVersion());
+        assertEquals("", this.cloneRequest.getVersion().getValue());
+        assertNull(this.restartRequest);
     }
 
     @ParameterizedTest
@@ -128,8 +161,10 @@ class DurableTaskGrpcClientRestartTest {
                 new RestartInstanceOptions().setNewInstanceId(id)));
         assertThrows(IllegalArgumentException.class, () -> client.restartInstance(id,
                 new RestartInstanceOptions().setNewInstanceId("target").setVersion("2.0")));
+        assertNull(this.cloneRequest);
         assertNull(this.restartRequest);
         assertEquals(0, this.metadataRequests);
+        assertNull(this.createRequest);
     }
 
     @Test
@@ -138,19 +173,37 @@ class DurableTaskGrpcClientRestartTest {
         assertThrows(IllegalArgumentException.class, () -> client.restartInstance("source", null));
         assertThrows(IllegalArgumentException.class,
                 () -> client.restartInstance("source", new RestartInstanceOptions()));
+        assertNull(this.cloneRequest);
         assertNull(this.restartRequest);
         assertEquals(0, this.metadataRequests);
         assertNull(this.createRequest);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"NOT_FOUND", "ALREADY_EXISTS", "UNIMPLEMENTED"})
+    @ValueSource(strings = {"INVALID_ARGUMENT", "NOT_FOUND", "ALREADY_EXISTS", "UNIMPLEMENTED"})
     void backendErrorsAreNotReplacedWithSchedulingFallback(String status) throws Exception {
         DurableTaskClient client = startClient();
-        this.restartError = Status.fromCode(Status.Code.valueOf(status));
+        this.cloneError = Status.fromCode(Status.Code.valueOf(status));
         StatusRuntimeException error = assertThrows(StatusRuntimeException.class,
                 () -> client.restartInstance("source", new RestartInstanceOptions().setNewInstanceId("target")));
-        assertEquals(this.restartError.getCode(), error.getStatus().getCode());
+        assertEquals(this.cloneError.getCode(), error.getStatus().getCode());
+        assertNotNull(this.cloneRequest);
+        assertNull(this.restartRequest);
+        assertEquals(0, this.metadataRequests);
+        assertNull(this.createRequest);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"2.0"})
+    void unsupportedServerRejectsCloneWithoutCallingLegacyRestart(String version) throws Exception {
+        DurableTaskClient client = startClient(false);
+        StatusRuntimeException error = assertThrows(StatusRuntimeException.class,
+                () -> client.restartInstance("source",
+                        new RestartInstanceOptions().setNewInstanceId("target").setVersion(version)));
+        assertEquals(Status.Code.UNIMPLEMENTED, error.getStatus().getCode());
+        assertNull(this.cloneRequest);
+        assertNull(this.restartRequest);
         assertEquals(0, this.metadataRequests);
         assertNull(this.createRequest);
     }
@@ -158,7 +211,7 @@ class DurableTaskGrpcClientRestartTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void legacyRestartStillSchedulesOriginalNameAndInput(boolean newId) throws Exception {
-        DurableTaskClient client = startClient();
+        DurableTaskClient client = startClient(false);
         String result = client.restartInstance("order-123", newId);
         assertEquals(this.createRequest.getInstanceId(), result);
         if (newId) {
@@ -170,6 +223,7 @@ class DurableTaskGrpcClientRestartTest {
         assertEquals("{\"order\":123}", this.createRequest.getInput().getValue());
         assertEquals("client-default", this.createRequest.getVersion().getValue());
         assertEquals(1, this.metadataRequests);
+        assertNull(this.cloneRequest);
         assertNull(this.restartRequest);
     }
 }
