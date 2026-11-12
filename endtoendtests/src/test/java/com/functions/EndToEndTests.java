@@ -4,7 +4,9 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
+import io.restassured.specification.QueryableRequestSpecification;
 import io.restassured.specification.RequestSpecification;
+import io.restassured.specification.SpecificationQuerier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
@@ -24,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("e2e")
@@ -105,6 +108,34 @@ public class EndToEndTests {
             assertTrue(status == 200 || status == 202);
         }
         assertTrue(pollingCheck(statusUrl, "Completed", null, Duration.ofSeconds(30)));
+    }
+
+    @Test
+    public void requestsWithoutManagementCredentialsKeepDefaultHttpBehavior() {
+        RequestSpecification request = requestFor(
+                "https://proxy.example/runtime/webhooks/durabletask/instances/test", null);
+        QueryableRequestSpecification specification = SpecificationQuerier.query(request);
+
+        assertFalse(specification.getHeaders().hasHeaderWithName("x-functions-key"));
+        assertEquals(RestAssured.config.getRedirectConfig().followsRedirects(),
+                specification.getConfig().getRedirectConfig().followsRedirects());
+    }
+
+    @Test
+    public void managementCredentialsAreScopedToTrustedEndpoints() {
+        String key = "synthetic-management-key";
+        String path = "/runtime/webhooks/durabletask/instances/test";
+        String trustedUrl = RestAssured.baseURI + ":" + RestAssured.port + path;
+        QueryableRequestSpecification management = SpecificationQuerier.query(requestFor(trustedUrl, key));
+        assertEquals(key, management.getHeaders().getValue("x-functions-key"));
+
+        assertThrows(AssertionError.class,
+                () -> requestFor("http://untrusted.example:" + RestAssured.port + path, key));
+        QueryableRequestSpecification anonymous = SpecificationQuerier.query(
+                requestFor("https://proxy.example/api/start", key));
+        assertFalse(anonymous.getHeaders().hasHeaderWithName("x-functions-key"));
+        assertEquals(RestAssured.config.getRedirectConfig().followsRedirects(),
+                anonymous.getConfig().getRedirectConfig().followsRedirects());
     }
 
     @Test
@@ -627,20 +658,26 @@ public class EndToEndTests {
     }
 
     private RequestSpecification requestFor(String url) {
-        RequestSpecification request = RestAssured.given().redirects().follow(false);
-        if (url.startsWith("http://") || url.startsWith("https://")) {
+        return requestFor(url, SYSTEM_KEY);
+    }
+
+    private RequestSpecification requestFor(String url, String systemKey) {
+        RequestSpecification request = RestAssured.given();
+        if (systemKey != null && !systemKey.isEmpty()
+                && (url.startsWith("http://") || url.startsWith("https://"))) {
             int queryStart = url.indexOf('?');
             URI target = URI.create(queryStart < 0 ? url : url.substring(0, queryStart));
+            if (!target.getPath().startsWith("/runtime/webhooks/durabletask/")) {
+                return request;
+            }
+
             URI base = URI.create(RestAssured.baseURI);
             assertEquals(base.getScheme(), target.getScheme(), "Unexpected management URL scheme");
             assertEquals(base.getHost(), target.getHost(), "Unexpected management URL host");
             int port = target.getPort() < 0
                     ? ("https".equals(target.getScheme()) ? 443 : 80) : target.getPort();
             assertEquals(RestAssured.port, port, "Unexpected management URL port");
-            assertTrue(target.getPath().startsWith("/runtime/webhooks/durabletask/"));
-            if (SYSTEM_KEY != null && !SYSTEM_KEY.isEmpty()) {
-                request.header("x-functions-key", SYSTEM_KEY);
-            }
+            request.header("x-functions-key", systemKey).redirects().follow(false);
         }
         return request;
     }

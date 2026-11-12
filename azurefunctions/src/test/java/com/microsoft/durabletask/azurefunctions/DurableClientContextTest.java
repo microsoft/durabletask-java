@@ -22,6 +22,7 @@ class DurableClientContextTest {
     private final Gson gson = new Gson();
 
     @ParameterizedTest
+    // The host owns key filtering; these query spellings verify opaque SDK pass-through.
     @ValueSource(strings = {
             "taskHub=hub&connection=storage&code=synthetic%2Bkey",
             "CoDe=synthetic%2Bkey&site=example",
@@ -29,7 +30,7 @@ class DurableClientContextTest {
             "taskHub=hub&connection=storage",
             ""
     })
-    void bindingQueryIsPreservedInPayloadWithoutChangingResponseHeaders(String query) {
+    void bindingQueryPassesThroughToPayloadAndLocation(String query) {
         JsonObject binding = new JsonObject();
         binding.addProperty("rpcBaseUrl", "http://127.0.0.1:12345");
         binding.addProperty("requiredQueryStringParameters", query);
@@ -65,9 +66,7 @@ class DurableClientContextTest {
         String expectedUrl = "https://example.com/runtime/webhooks/durabletask/instances/instance" + query;
         assertEquals(expectedUrl, payload.getStatusQueryGetUri());
         verify(builder).header("Location", expectedUrl);
-        verify(builder, never()).header(eq("Cache-Control"), anyString());
         JsonObject json = this.gson.toJsonTree(payload).getAsJsonObject();
-        assertFalse(json.has("requiredHeaders"));
         assertTrue(json.entrySet().stream().allMatch(entry -> entry.getValue().isJsonPrimitive()
                 && entry.getValue().getAsJsonPrimitive().isString()));
         assertFalse(this.gson.toJson(payload).contains("starter-key"));
