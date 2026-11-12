@@ -9,6 +9,8 @@ import com.microsoft.azure.functions.HttpRequestMessage;
 import com.microsoft.azure.functions.HttpResponseMessage;
 import com.microsoft.azure.functions.HttpStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import java.net.URI;
@@ -19,36 +21,35 @@ import static org.mockito.Mockito.*;
 class DurableClientContextTest {
     private final Gson gson = new Gson();
 
-    @Test
-    void bindingHeadersAreIncludedInPayloadAndLocationIsKeyFree() {
-        String binding = "{\"rpcBaseUrl\":\"http://127.0.0.1:12345\","
-                + "\"requiredQueryStringParameters\":\"taskHub=hub&connection=storage\","
-                + "\"requiredHeaders\":{\"x-functions-key\":\"synthetic-key\"}}";
-        assertCheckStatusResponse(binding, "synthetic-key",
-                "?taskHub=hub&connection=storage");
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "taskHub=hub&connection=storage&code=synthetic%2Bkey",
+            "CoDe=synthetic%2Bkey&site=example",
+            "%63ode=synthetic%2Bkey&site=example&CODE=duplicate",
+            "taskHub=hub&connection=storage",
+            ""
+    })
+    void bindingQueryIsPreservedInPayloadWithoutChangingResponseHeaders(String query) {
+        JsonObject binding = new JsonObject();
+        binding.addProperty("rpcBaseUrl", "http://127.0.0.1:12345");
+        binding.addProperty("requiredQueryStringParameters", query);
+        assertCheckStatusResponse(binding, query.isEmpty() ? "" : "?" + query);
     }
 
     @Test
-    void legacyBindingQueryKeyIsConvertedToHeaderMetadata() {
-        String binding = "{\"requiredQueryStringParameters\":\"CoDe=synthetic%2Bkey&site=example\"}";
-        assertCheckStatusResponse(binding, "synthetic+key", "?site=example");
-    }
-
-    @Test
-    void bindingCredentialsRemainScopedToEachContext() {
+    void bindingQueriesRemainScopedToEachContext() {
         DurableClientContext first = this.gson.fromJson(
-                "{\"requiredHeaders\":{\"x-functions-key\":\"first\"}}", DurableClientContext.class);
+                "{\"requiredQueryStringParameters\":\"code=first\"}", DurableClientContext.class);
         DurableClientContext second = this.gson.fromJson(
-                "{\"requiredHeaders\":{\"x-functions-key\":\"second\"}}", DurableClientContext.class);
+                "{\"requiredQueryStringParameters\":\"\"}", DurableClientContext.class);
         HttpRequestMessage<?> request = request();
 
-        assertEquals("first", first.createHttpManagementPayload(request, "instance")
-                .getRequiredHeaders().get("x-functions-key"));
-        assertEquals("second", second.createHttpManagementPayload(request, "instance")
-                .getRequiredHeaders().get("x-functions-key"));
+        assertTrue(first.createHttpManagementPayload(request, "instance").getStatusQueryGetUri().endsWith("?code=first"));
+        assertEquals("https://example.com/runtime/webhooks/durabletask/instances/instance",
+                second.createHttpManagementPayload(request, "instance").getStatusQueryGetUri());
     }
 
-    private void assertCheckStatusResponse(String binding, String key, String query) {
+    private void assertCheckStatusResponse(JsonObject binding, String query) {
         DurableClientContext context = this.gson.fromJson(binding, DurableClientContext.class);
         HttpRequestMessage<?> request = request();
         HttpResponseMessage.Builder builder = mock(HttpResponseMessage.Builder.class, RETURNS_SELF);
@@ -64,11 +65,12 @@ class DurableClientContextTest {
         String expectedUrl = "https://example.com/runtime/webhooks/durabletask/instances/instance" + query;
         assertEquals(expectedUrl, payload.getStatusQueryGetUri());
         verify(builder).header("Location", expectedUrl);
-        verify(builder).header("Cache-Control", "no-store");
+        verify(builder, never()).header(eq("Cache-Control"), anyString());
         JsonObject json = this.gson.toJsonTree(payload).getAsJsonObject();
-        assertEquals(key, json.getAsJsonObject("requiredHeaders").get("x-functions-key").getAsString());
-        assertFalse(payload.getStatusQueryGetUri().contains("code="));
-        assertFalse(payload.getStatusQueryGetUri().contains("synthetic"));
+        assertFalse(json.has("requiredHeaders"));
+        assertTrue(json.entrySet().stream().allMatch(entry -> entry.getValue().isJsonPrimitive()
+                && entry.getValue().getAsJsonPrimitive().isString()));
+        assertFalse(this.gson.toJson(payload).contains("starter-key"));
     }
 
     private static HttpRequestMessage<?> request() {

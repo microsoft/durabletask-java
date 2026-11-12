@@ -16,23 +16,29 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("e2e")
 public class EndToEndTests {
-    private Map<String, String> requiredHeaders = Collections.emptyMap();
+    private static final String EXCLUDE_KEY_SETTING =
+            "AzureFunctionsJobHost__extensions__durableTask__httpSettings__excludeManagementKeyFromUrls";
+    private static final String SYSTEM_KEY = System.getenv("E2E_TEST_DURABLE_SYSTEM_KEY");
 
     @BeforeAll
     public static void setup() {
+        if (Boolean.parseBoolean(System.getenv(EXCLUDE_KEY_SETTING))
+                && (SYSTEM_KEY == null || SYSTEM_KEY.isEmpty())) {
+            throw new IllegalStateException(
+                    "E2E_TEST_DURABLE_SYSTEM_KEY is required when management URL key exclusion is enabled.");
+        }
         RestAssured.baseURI = "http://localhost";
         // Use port 8080 for Docker, 7071 for local func start
         String port = System.getenv("FUNCTIONS_PORT");
@@ -75,22 +81,29 @@ public class EndToEndTests {
     }
 
     @Test
-    public void managementAuthenticationIsSeparateFromUrls() throws InterruptedException {
+    public void managementUrlsFollowHostSetting() throws InterruptedException {
         Response response = post("/api/StartOrchestration");
         assertEquals(202, response.statusCode());
-        assertEquals("no-store", response.header("Cache-Control"));
         JsonPath management = response.jsonPath();
-        assertTrue(this.requiredHeaders.containsKey("x-functions-key"));
         Map<String, Object> payload = management.getMap("");
+        assertFalse(payload.containsKey("requiredHeaders"));
+        boolean excludeKey = Boolean.parseBoolean(System.getenv(EXCLUDE_KEY_SETTING));
         for (Map.Entry<String, Object> entry : payload.entrySet()) {
             if (entry.getKey().endsWith("Uri")) {
                 String url = (String) entry.getValue();
-                assertTrue(!url.toLowerCase(java.util.Locale.ROOT).contains("code="));
-                assertTrue(!url.contains(this.requiredHeaders.get("x-functions-key")));
+                assertEquals(!excludeKey, url.toLowerCase(java.util.Locale.ROOT).contains("code="));
             }
         }
         String statusUrl = management.getString("statusQueryGetUri");
         assertEquals(statusUrl, response.header("Location"));
+        if (excludeKey) {
+            assertEquals(401, RestAssured.given().redirects().follow(false).get(statusUrl).statusCode());
+            assertEquals(401, RestAssured.given().redirects().follow(false)
+                    .header("x-functions-key", "invalid-system-key").get(statusUrl).statusCode());
+        } else {
+            int status = RestAssured.given().redirects().follow(false).get(statusUrl).statusCode();
+            assertTrue(status == 200 || status == 202);
+        }
         assertTrue(pollingCheck(statusUrl, "Completed", null, Duration.ofSeconds(30)));
     }
 
@@ -625,7 +638,9 @@ public class EndToEndTests {
                     ? ("https".equals(target.getScheme()) ? 443 : 80) : target.getPort();
             assertEquals(RestAssured.port, port, "Unexpected management URL port");
             assertTrue(target.getPath().startsWith("/runtime/webhooks/durabletask/"));
-            request.headers(this.requiredHeaders);
+            if (SYSTEM_KEY != null && !SYSTEM_KEY.isEmpty()) {
+                request.header("x-functions-key", SYSTEM_KEY);
+            }
         }
         return request;
     }
@@ -635,18 +650,7 @@ public class EndToEndTests {
     }
 
     private Response post(String url, Object... pathParameters) {
-        Response response = requestFor(url).post(url, pathParameters);
-        if (response.statusCode() == 202 && response.contentType() != null
-                && response.contentType().contains("application/json")
-                && !response.getBody().asString().isEmpty()) {
-            JsonPath payload = response.jsonPath();
-            if (payload.get("statusQueryGetUri") != null) {
-                Map<String, String> headers = payload.getMap("requiredHeaders");
-                assertNotNull(headers, "Management responses must include requiredHeaders");
-                this.requiredHeaders = headers;
-            }
-        }
-        return response;
+        return requestFor(url).post(url, pathParameters);
     }
 
     private boolean pollingCheck(String statusQueryGetUri,

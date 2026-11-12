@@ -6,9 +6,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -94,42 +91,24 @@ public class HttpManagementPayloadTest {
             "site=value%2Bone&CoDe=synthetic%2Bkey%2F%3D",
             "%63ode=synthetic%2Bkey%2F%3D&site=value%2Bone&CODE=duplicate"
     })
-    void legacyQueryKeyIsMovedToRequiredHeaders(String query) {
+    void hostQueryIsPreservedWithoutMovingKeysToMetadata(String query) {
         HttpManagementPayload payload = new HttpManagementPayload(INSTANCE_ID, INSTANCE_STATUS_URL, query);
 
-        assertEquals("synthetic+key/=", payload.getRequiredHeaders().get("x-functions-key"));
-        assertEquals(INSTANCE_STATUS_URL + "?site=value%2Bone", payload.getStatusQueryGetUri());
+        assertEquals(INSTANCE_STATUS_URL + "?" + query, payload.getStatusQueryGetUri());
         for (String url : Arrays.asList(
                 payload.getStatusQueryGetUri(), payload.getSendEventPostUri(), payload.getTerminatePostUri(),
                 payload.getRewindPostUri(), payload.getPurgeHistoryDeleteUri(), payload.getRestartPostUri(),
                 payload.getSuspendPostUri(), payload.getResumePostUri())) {
-            assertTrue(url.contains("site=value%2Bone"));
-            assertFalse(url.toLowerCase().contains("code="));
-            assertFalse(url.contains("synthetic"));
-            assertFalse(url.contains("duplicate"));
+            assertTrue(url.endsWith(query));
         }
-    }
-
-    @Test
-    void explicitHeadersOverrideLegacyKeyAndAreDefensivelyCopied() {
-        Map<String, String> headers = new HashMap<>();
-        headers.put("X-Functions-Key", "current-key");
-        HttpManagementPayload payload = new HttpManagementPayload(
-                INSTANCE_ID, INSTANCE_STATUS_URL, "code=old-key&" + QUERY_STRING, headers);
-        headers.put("X-Functions-Key", "changed");
-
-        assertEquals(Collections.singletonMap("x-functions-key", "current-key"), payload.getRequiredHeaders());
-        assertThrows(UnsupportedOperationException.class, () -> payload.getRequiredHeaders().put("extra", "value"));
-        assertEquals(INSTANCE_STATUS_URL + "?" + QUERY_STRING, payload.getStatusQueryGetUri());
     }
 
     @Test
     void missingOrEmptyQueryDoesNotAddNullOrTrailingSeparators() {
-        for (String query : new String[] { null, "", "code=synthetic-key" }) {
+        for (String query : new String[] { null, "" }) {
             HttpManagementPayload payload = new HttpManagementPayload(INSTANCE_ID, INSTANCE_STATUS_URL, query);
             assertEquals(INSTANCE_STATUS_URL, payload.getStatusQueryGetUri());
             assertEquals(INSTANCE_STATUS_URL + "/terminate?reason={text}", payload.getTerminatePostUri());
         }
-        assertTrue(createPayload().getRequiredHeaders().isEmpty());
     }
 }

@@ -6,18 +6,11 @@
 
 package com.microsoft.durabletask.azurefunctions;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
 /**
  * The class that holds the webhook URLs to manage orchestration instances.
+ * The Functions host controls whether these URLs include a system key.
+ * When {@code httpSettings.excludeManagementKeyFromUrls} is enabled, callers
+ * must obtain a key separately and send it in the {@code x-functions-key} request header.
  */
 public class HttpManagementPayload {
     private final String id;
@@ -29,68 +22,26 @@ public class HttpManagementPayload {
     private final String terminatePostUri;
     private final String resumePostUri;
     private final String suspendPostUri;
-    private final Map<String, String> requiredHeaders;
 
     /**
      * Creates a {@link HttpManagementPayload} to manage orchestration instances
      *
      * @param instanceId The ID of the orchestration instance
      * @param instanceStatusURL The base webhook url of the orchestration instance
-     * @param requiredQueryStringParameters The query parameters to include with the http request
+     * @param requiredQueryStringParameters The query parameters supplied by the Functions host, preserved unchanged
      */
     public HttpManagementPayload(
             String instanceId,
             String instanceStatusURL,
             String requiredQueryStringParameters) {
-        this(instanceId, instanceStatusURL, requiredQueryStringParameters, Collections.emptyMap());
-    }
-
-    /**
-     * Creates management URLs with authentication supplied separately from the query string.
-     *
-     * @param instanceId The ID of the orchestration instance
-     * @param instanceStatusURL The base webhook URL of the orchestration instance
-     * @param requiredQueryStringParameters The non-secret query parameters to include with requests
-     * @param requiredHeaders The headers callers must send when using the management URLs
-     */
-    public HttpManagementPayload(
-            String instanceId,
-            String instanceStatusURL,
-            String requiredQueryStringParameters,
-            Map<String, String> requiredHeaders) {
-        Map<String, String> headers = new LinkedHashMap<>();
-        if (requiredHeaders != null) {
-            requiredHeaders.forEach((name, value) -> headers.put(name.toLowerCase(Locale.ROOT), value));
-        }
-
-        List<String> parameters = new ArrayList<>();
         String query = requiredQueryStringParameters == null ? "" : requiredQueryStringParameters;
         if (query.startsWith("?")) {
             query = query.substring(1);
         }
 
-        // Older hosts include the system key in the binding query string.
-        for (String parameter : query.split("&")) {
-            if (parameter.isEmpty()) {
-                continue;
-            }
-
-            int separator = parameter.indexOf('=');
-            String name = separator < 0 ? parameter : parameter.substring(0, separator);
-            if (decode(name).equalsIgnoreCase("code")) {
-                if (separator >= 0) {
-                    headers.putIfAbsent("x-functions-key", decode(parameter.substring(separator + 1)));
-                }
-            } else {
-                parameters.add(parameter);
-            }
-        }
-
-        String queryString = String.join("&", parameters);
-        String querySuffix = queryString.isEmpty() ? "" : "?" + queryString;
-        String reasonSuffix = "?reason={text}" + (queryString.isEmpty() ? "" : "&" + queryString);
+        String querySuffix = query.isEmpty() ? "" : "?" + query;
+        String reasonSuffix = "?reason={text}" + (query.isEmpty() ? "" : "&" + query);
         this.id = instanceId;
-        this.requiredHeaders = Collections.unmodifiableMap(headers);
         this.purgeHistoryDeleteUri = instanceStatusURL + querySuffix;
         this.restartPostUri = instanceStatusURL + "/restart" + querySuffix;
         this.rewindPostUri = instanceStatusURL + "/rewind" + reasonSuffix;
@@ -99,24 +50,6 @@ public class HttpManagementPayload {
         this.terminatePostUri = instanceStatusURL + "/terminate" + reasonSuffix;
         this.resumePostUri = instanceStatusURL + "/resume" + reasonSuffix;
         this.suspendPostUri = instanceStatusURL + "/suspend" + reasonSuffix;
-    }
-
-    /**
-     * Gets the headers callers must send when using the management URLs.
-     * Treat these values as secrets; do not log them or append them to URLs.
-     *
-     * @return An immutable map of required HTTP request headers.
-     */
-    public Map<String, String> getRequiredHeaders() {
-        return this.requiredHeaders;
-    }
-
-    private static String decode(String value) {
-        try {
-            return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
-        } catch (UnsupportedEncodingException ex) {
-            throw new IllegalStateException("UTF-8 encoding is unavailable.", ex);
-        }
     }
 
     /**

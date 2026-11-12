@@ -25,7 +25,6 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -36,7 +35,6 @@ public class DurableClientContext {
     private String rpcBaseUrl;
     private String taskHubName;
     private String requiredQueryStringParameters;
-    private Map<String, String> requiredHeaders;
     private DurableTaskClient client;
 
     /**
@@ -126,7 +124,6 @@ public class DurableClientContext {
         return request.createResponseBuilder(HttpStatus.ACCEPTED)
                 .header("Location", payload.getStatusQueryGetUri())
                 .header("Content-Type", "application/json")
-                .header("Cache-Control", "no-store")
                 .body(payload)
                 .build();
     }
@@ -218,7 +215,7 @@ public class DurableClientContext {
 
     private HttpManagementPayload getClientResponseLinks(HttpRequestMessage<?> request, String instanceId) {
         String instanceStatusURL = this.getInstanceStatusURL(request, instanceId);
-        return new HttpManagementPayload(instanceId, instanceStatusURL, this.requiredQueryStringParameters, this.requiredHeaders);
+        return new HttpManagementPayload(instanceId, instanceStatusURL, this.requiredQueryStringParameters);
     }
 
     private String getInstanceStatusURL(HttpRequestMessage<?> request, String instanceId) {
