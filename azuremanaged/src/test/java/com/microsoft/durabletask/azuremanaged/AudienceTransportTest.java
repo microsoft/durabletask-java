@@ -26,6 +26,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -112,6 +114,19 @@ class AudienceTransportTest {
                 assertTrue(channel.awaitTermination(10, TimeUnit.SECONDS));
             }
             assertTrue(server.awaitTermination(10, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void invalidWorkerProcessIdFailsWithAnExplicitError() {
+        RuntimeMXBean runtime = mock(RuntimeMXBean.class);
+        when(runtime.getName()).thenReturn("not-a-pid@host");
+        try (MockedStatic<ManagementFactory> management = mockStatic(ManagementFactory.class)) {
+            management.when(ManagementFactory::getRuntimeMXBean).thenReturn(runtime);
+            IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> new DurableTaskGrpcWorkerBuilder().build());
+            assertEquals("Cannot determine the worker process ID.", error.getMessage());
+            assertInstanceOf(NumberFormatException.class, error.getCause());
         }
     }
 

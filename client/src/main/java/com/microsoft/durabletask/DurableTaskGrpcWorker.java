@@ -127,10 +127,12 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     }
 
     private static String createWorkerId() {
-        // Java 8 has no ProcessHandle API; the runtime MXBean exposes the PID as pid@hostname.
-        long processId = Long.parseLong(ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]);
         try {
+            // Java 8 has no ProcessHandle API; the runtime MXBean exposes the PID as pid@hostname.
+            long processId = Long.parseLong(ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]);
             return InetAddress.getLocalHost().getHostName() + ":" + processId + ":" + UUID.randomUUID();
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("Cannot determine the worker process ID.", e);
         } catch (UnknownHostException e) {
             throw new IllegalStateException("Cannot determine the hostname for the worker ID.", e);
         }
