@@ -1,6 +1,7 @@
 ## Unreleased
 
 * Preserve host-provided Durable Functions management URL query parameters and support null, empty, or `?`-prefixed binding queries without extra URL separators. Key-free URLs are controlled by the host's opt-in setting; existing URL authentication remains unchanged by default.
+* Send a unique `hostname:pid:uuid` identifier in the `workerid` gRPC header for each worker instance, matching Python. Retain the ID across requests and reconnects while keeping IDs distinct for workers sharing a channel or builder.
 * Write self-describing v2 blob payload tokens by default while retaining v1 and v2 reads from the configured storage endpoint and container. Require complete token formats for direct downloads and account for URL token length in worker action-size estimates. Upgrade readers before deploying v2 writers; changing storage locations requires explicit migration or a store configured for the original location.
 * Add explicit primary-account-wide and additional-account read scopes for Azure Blob payloads while retaining configured-container access by default. Additional accounts require identity authentication and exact HTTPS account service endpoints. Preserve named and nested v1/v2 references and ignore legacy v2 URL query and fragment suffixes.
 
