@@ -13,11 +13,15 @@ import com.microsoft.durabletask.util.VersionUtils;
 
 import io.grpc.*;
 import io.grpc.ClientInterceptors;
+import io.grpc.stub.MetadataUtils;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
 
+import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -32,6 +36,8 @@ import java.util.stream.Stream;
 
 /**
  * Task hub worker that connects to a sidecar process over gRPC to execute orchestrator and activity events.
+ * Each instance sends a unique {@code hostname:pid:uuid} identifier in the {@code workerid}
+ * gRPC header, retained across requests and reconnections even when the channel is shared.
  */
 public final class DurableTaskGrpcWorker implements AutoCloseable {
     private static final int DEFAULT_PORT = 4001;
@@ -62,6 +68,9 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
     private final int largePayloadTokenSizeBytes;
 
     DurableTaskGrpcWorker(DurableTaskGrpcWorkerBuilder builder, WorkItemFilter workItemFilter) {
+        Metadata workerHeaders = new Metadata();
+        workerHeaders.put(Metadata.Key.of("workerid", Metadata.ASCII_STRING_MARSHALLER), createWorkerId());
+
         this.orchestrationFactories.putAll(builder.orchestrationFactories);
         this.activityFactories.putAll(builder.activityFactories);
         this.entityFactories.putAll(builder.entityFactories);
@@ -92,7 +101,8 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             sidecarGrpcChannel = ClientInterceptors.intercept(sidecarGrpcChannel, builder.interceptors);
         }
 
-        this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
+        this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel)
+                .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(workerHeaders));
         this.supportsLargePayloads = builder.supportsLargePayloads;
         this.maxChunkSizeBytes = builder.maxChunkSizeBytes;
         this.largePayloadThresholdBytes = builder.largePayloadThresholdBytes;
@@ -114,6 +124,16 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
                 new ThreadPoolExecutor.CallerRunsPolicy());
         this.workItemFilter = workItemFilter;
         this.getWorkItemsRequest = buildGetWorkItemsRequest();
+    }
+
+    private static String createWorkerId() {
+        // Java 8 has no ProcessHandle API; the runtime MXBean exposes the PID as pid@hostname.
+        long processId = Long.parseLong(ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]);
+        try {
+            return InetAddress.getLocalHost().getHostName() + ":" + processId + ":" + UUID.randomUUID();
+        } catch (UnknownHostException e) {
+            throw new IllegalStateException("Cannot determine the hostname for the worker ID.", e);
+        }
     }
 
     /**
