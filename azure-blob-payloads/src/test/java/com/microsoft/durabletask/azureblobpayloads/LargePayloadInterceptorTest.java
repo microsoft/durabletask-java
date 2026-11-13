@@ -8,17 +8,29 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Empty;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
+import com.microsoft.durabletask.DurableTaskGrpcWorker;
+import com.microsoft.durabletask.DurableTaskGrpcWorkerBuilder;
 import com.microsoft.durabletask.EntityInstanceId;
 import com.microsoft.durabletask.EntityOperationFailedException;
 import com.microsoft.durabletask.FailureDetails;
 import com.microsoft.durabletask.OrchestrationRunner;
 import com.microsoft.durabletask.TaskOrchestration;
 import com.microsoft.durabletask.implementation.protobuf.OrchestratorService.*;
+import com.microsoft.durabletask.implementation.protobuf.TaskHubSidecarServiceGrpc;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
+import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Server;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.protobuf.ProtoUtils;
+import io.grpc.stub.StreamObserver;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +39,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -623,6 +640,67 @@ class LargePayloadInterceptorTest {
     void isPermanentStorageFailure_runtimeException_returnsFalse() {
         assertFalse(LargePayloadInterceptor.isPermanentStorageFailure(
             new RuntimeException("test")));
+    }
+
+    @Test
+    void permanentPayloadFailureCompletionsRetainWorkerId() throws Exception {
+        String token = "blob:v1:durabletask-payloads:missing";
+        BlobStorageException failure = storageFailure(404);
+        when(mockStore.download(token)).thenThrow(failure);
+        List<String> workerIds = Collections.synchronizedList(new ArrayList<>());
+        AtomicReference<ActivityResponse> completion = new AtomicReference<>();
+        String serverName = InProcessServerBuilder.generateName();
+        Server server = InProcessServerBuilder.forName(serverName).directExecutor()
+            .intercept(new ServerInterceptor() {
+                @Override
+                public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+                        ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                    workerIds.add(headers.get(Metadata.Key.of("workerid", Metadata.ASCII_STRING_MARSHALLER)));
+                    return next.startCall(call, headers);
+                }
+            })
+            .addService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
+                @Override
+                public void getWorkItems(GetWorkItemsRequest request, StreamObserver<WorkItem> observer) {
+                    observer.onNext(WorkItem.newBuilder().setCompletionToken("failure-token")
+                        .setActivityRequest(ActivityRequest.newBuilder().setName("Echo").setTaskId(1)
+                            .setOrchestrationInstance(OrchestrationInstance.newBuilder().setInstanceId("test"))
+                            .setInput(StringValue.of(token))).build());
+                    observer.onCompleted();
+                }
+
+                @Override
+                public void completeActivityTask(ActivityResponse request, StreamObserver<CompleteTaskResponse> observer) {
+                    completion.set(request);
+                    observer.onNext(CompleteTaskResponse.getDefaultInstance());
+                    observer.onCompleted();
+                }
+            }).build().start();
+        ManagedChannel channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
+        try (DurableTaskGrpcWorker worker = new DurableTaskGrpcWorkerBuilder()
+                .grpcChannel(channel).addInterceptor(interceptor).build()) {
+            Field field = DurableTaskGrpcWorker.class.getDeclaredField("sidecarClient");
+            field.setAccessible(true);
+            TaskHubSidecarServiceGrpc.TaskHubSidecarServiceBlockingStub stub =
+                (TaskHubSidecarServiceGrpc.TaskHubSidecarServiceBlockingStub) field.get(worker);
+            assertFalse(stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+                .getWorkItems(GetWorkItemsRequest.getDefaultInstance()).hasNext(),
+                "The permanently unresolvable work item must be failed and removed from the stream");
+
+            assertNotNull(completion.get());
+            assertTrue(completion.get().getFailureDetails().getIsNonRetriable());
+            assertEquals("failure-token", completion.get().getCompletionToken());
+            assertEquals(2, workerIds.size());
+            assertNotNull(workerIds.get(0));
+            assertFalse(workerIds.get(0).isEmpty());
+            assertEquals(workerIds.get(0), workerIds.get(1),
+                "The interceptor's downstream failure completion must carry the polling worker's ID");
+        } finally {
+            channel.shutdownNow();
+            server.shutdownNow();
+            assertTrue(channel.awaitTermination(5, TimeUnit.SECONDS));
+            assertTrue(server.awaitTermination(5, TimeUnit.SECONDS));
+        }
     }
 
     // ==================== Helpers ====================

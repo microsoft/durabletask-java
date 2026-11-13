@@ -19,9 +19,11 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -38,6 +40,7 @@ public class OrchestratorChunkingTest {
     private final List<OrchestratorResponse> capturedResponses =
         Collections.synchronizedList(new ArrayList<>());
     private final List<String> abandonedTokens = new ArrayList<>();
+    private final List<String> capturedWorkerIds = new ArrayList<>();
 
     private Server inProcessServer;
     private ManagedChannel inProcessChannel;
@@ -48,6 +51,14 @@ public class OrchestratorChunkingTest {
 
         inProcessServer = InProcessServerBuilder.forName(serverName)
             .directExecutor()
+            .intercept(new ServerInterceptor() {
+                @Override
+                public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+                        ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                    capturedWorkerIds.add(headers.get(Metadata.Key.of("workerid", Metadata.ASCII_STRING_MARSHALLER)));
+                    return next.startCall(call, headers);
+                }
+            })
             .addService(new TaskHubSidecarServiceGrpc.TaskHubSidecarServiceImplBase() {
                 @Override
                 public void completeOrchestratorTask(
@@ -86,6 +97,35 @@ public class OrchestratorChunkingTest {
     }
 
     // ==================== validateActionsSize tests ====================
+
+    @Test
+    void workerIdsMatchPythonFormatAndRemainUniqueWhenSharingBuilderAndChannel() throws Exception {
+        DurableTaskGrpcWorkerBuilder builder = new DurableTaskGrpcWorkerBuilder().grpcChannel(inProcessChannel);
+        OrchestratorResponse response = OrchestratorResponse.getDefaultInstance();
+        try (DurableTaskGrpcWorker first = builder.build();
+             DurableTaskGrpcWorker second = builder.build()) {
+            invokeChunkingMethod(first, response);
+            invokeChunkingMethod(second, response);
+            invokeChunkingMethod(first, response);
+        }
+        TaskHubSidecarServiceGrpc.newBlockingStub(inProcessChannel).completeOrchestratorTask(response);
+
+        assertEquals(4, capturedWorkerIds.size());
+        String firstId = capturedWorkerIds.get(0);
+        String secondId = capturedWorkerIds.get(1);
+        assertNotNull(firstId);
+        assertNotNull(secondId);
+        assertNotEquals(firstId, secondId, "Workers must not share an ID even when their channel and builder are shared");
+        assertEquals(firstId, capturedWorkerIds.get(2), "A worker must retain its ID across requests");
+        assertNull(capturedWorkerIds.get(3), "The underlying shared channel must not acquire a worker ID");
+        for (String id : new String[] {firstId, secondId}) {
+            String[] parts = id.split(":", -1);
+            assertEquals(3, parts.length);
+            assertEquals(InetAddress.getLocalHost().getHostName(), parts[0]);
+            assertEquals(Long.toString(ProcessHandle.current().pid()), parts[1]);
+            assertEquals(4, UUID.fromString(parts[2]).version());
+        }
+    }
 
     @Test
     void workerBuilder_defaultLargePayloadThreshold_matchesStorageDefault() {
