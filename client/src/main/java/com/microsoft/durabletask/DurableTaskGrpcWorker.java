@@ -96,13 +96,16 @@ public final class DurableTaskGrpcWorker implements AutoCloseable {
             sidecarGrpcChannel = this.managedSidecarChannel;
         }
 
+        // Include worker metadata on downstream calls made by registered interceptors.
+        sidecarGrpcChannel = ClientInterceptors.intercept(
+                sidecarGrpcChannel, MetadataUtils.newAttachHeadersInterceptor(workerHeaders));
+
         // Apply any registered interceptors (e.g., large payload externalization)
         if (!builder.interceptors.isEmpty()) {
             sidecarGrpcChannel = ClientInterceptors.intercept(sidecarGrpcChannel, builder.interceptors);
         }
 
-        this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel)
-                .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(workerHeaders));
+        this.sidecarClient = TaskHubSidecarServiceGrpc.newBlockingStub(sidecarGrpcChannel);
         this.supportsLargePayloads = builder.supportsLargePayloads;
         this.maxChunkSizeBytes = builder.maxChunkSizeBytes;
         this.largePayloadThresholdBytes = builder.largePayloadThresholdBytes;
