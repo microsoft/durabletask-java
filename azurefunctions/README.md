@@ -228,3 +228,44 @@ Server: Kestrel
 ```
 
 At this point, you now have a fully function Durable Functions for Java development environment!
+
+## Opt-in management URL key exclusion
+
+The examples above show the default behavior: management URLs contain the Durable
+system key in `code`. The Java SDK preserves the query parameters supplied by the
+Functions host; it does not remove keys or return authentication headers.
+
+On a host extension version that supports the option, an app can exclude the key
+from generated management URLs by adding the following to `host.json`:
+
+```json
+{
+  "extensions": {
+    "durableTask": {
+      "httpSettings": {
+        "excludeManagementKeyFromUrls": true
+      }
+    }
+  }
+}
+```
+
+This setting defaults to `false`. Before enabling it, ensure every HTTP management
+caller can obtain an authorized Durable system key independently and send it in
+`x-functions-key` on each request. Following `Location` alone will not authenticate
+key-free URLs. For example, with the key and returned status URL supplied through
+environment variables:
+
+```bash
+curl -i -H "x-functions-key: ${DURABLE_SYSTEM_KEY}" "${STATUS_QUERY_GET_URI}"
+```
+
+Do not log the key, append it to URLs, or forward it to unrelated origins. The
+option does not redact incoming requests or existing logs, and callers that
+continue sending `code` in query strings can still expose keys in HTTP logs.
+
+The repository's CI currently tests the default mode. An authenticated opt-in CI
+leg is tracked as a follow-up in the E2E workflow until the released host extension
+bundle supports this setting. Local opt-in E2E runs require authentication and the
+setting enabled on the host, the same setting enabled for the test process, and
+the host's independently obtained system key in `E2E_TEST_DURABLE_SYSTEM_KEY`.

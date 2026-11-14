@@ -120,11 +120,11 @@ public class DurableClientContext {
         //       More info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Forwarded.
         //       One potential workaround is to set ASPNETCORE_FORWARDEDHEADERS_ENABLED to true.
 
-        // Construct the response as an HTTP 202 with a JSON object payload
+        HttpManagementPayload payload = this.getClientResponseLinks(request, instanceId);
         return request.createResponseBuilder(HttpStatus.ACCEPTED)
-                .header("Location", this.getInstanceStatusURL(request, instanceId) + "?" + this.requiredQueryStringParameters)
+                .header("Location", payload.getStatusQueryGetUri())
                 .header("Content-Type", "application/json")
-                .body(this.getClientResponseLinks(request, instanceId))
+                .body(payload)
                 .build();
     }
 

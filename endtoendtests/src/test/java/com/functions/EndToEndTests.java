@@ -4,6 +4,9 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
+import io.restassured.specification.QueryableRequestSpecification;
+import io.restassured.specification.RequestSpecification;
+import io.restassured.specification.SpecificationQuerier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
@@ -11,24 +14,34 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static io.restassured.RestAssured.get;
-import static io.restassured.RestAssured.post;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("e2e")
 public class EndToEndTests {
+    private static final String EXCLUDE_KEY_SETTING =
+            "AzureFunctionsJobHost__extensions__durableTask__httpSettings__excludeManagementKeyFromUrls";
+    private static final String SYSTEM_KEY = System.getenv("E2E_TEST_DURABLE_SYSTEM_KEY");
 
     @BeforeAll
     public static void setup() {
+        if (Boolean.parseBoolean(System.getenv(EXCLUDE_KEY_SETTING))
+                && (SYSTEM_KEY == null || SYSTEM_KEY.isEmpty())) {
+            throw new IllegalStateException(
+                    "E2E_TEST_DURABLE_SYSTEM_KEY is required when management URL key exclusion is enabled.");
+        }
         RestAssured.baseURI = "http://localhost";
         // Use port 8080 for Docker, 7071 for local func start
         String port = System.getenv("FUNCTIONS_PORT");
@@ -68,6 +81,61 @@ public class EndToEndTests {
         String statusQueryGetUri = jsonPath.get("statusQueryGetUri");
         boolean pass = pollingCheck(statusQueryGetUri, "Completed", continueStates, Duration.ofSeconds(20));
         assertTrue(pass);
+    }
+
+    @Test
+    public void managementUrlsFollowHostSetting() throws InterruptedException {
+        Response response = post("/api/StartOrchestration");
+        assertEquals(202, response.statusCode());
+        JsonPath management = response.jsonPath();
+        Map<String, Object> payload = management.getMap("");
+        assertFalse(payload.containsKey("requiredHeaders"));
+        boolean excludeKey = Boolean.parseBoolean(System.getenv(EXCLUDE_KEY_SETTING));
+        for (Map.Entry<String, Object> entry : payload.entrySet()) {
+            if (entry.getKey().endsWith("Uri")) {
+                String url = (String) entry.getValue();
+                assertEquals(!excludeKey, url.toLowerCase(java.util.Locale.ROOT).contains("code="));
+            }
+        }
+        String statusUrl = management.getString("statusQueryGetUri");
+        assertEquals(statusUrl, response.header("Location"));
+        if (excludeKey) {
+            assertEquals(401, RestAssured.given().redirects().follow(false).get(statusUrl).statusCode());
+            assertEquals(401, RestAssured.given().redirects().follow(false)
+                    .header("x-functions-key", "invalid-system-key").get(statusUrl).statusCode());
+        } else {
+            int status = RestAssured.given().redirects().follow(false).get(statusUrl).statusCode();
+            assertTrue(status == 200 || status == 202);
+        }
+        assertTrue(pollingCheck(statusUrl, "Completed", null, Duration.ofSeconds(30)));
+    }
+
+    @Test
+    public void requestsWithoutManagementCredentialsKeepDefaultHttpBehavior() {
+        RequestSpecification request = requestFor(
+                "https://proxy.example/runtime/webhooks/durabletask/instances/test", null);
+        QueryableRequestSpecification specification = SpecificationQuerier.query(request);
+
+        assertFalse(specification.getHeaders().hasHeaderWithName("x-functions-key"));
+        assertEquals(RestAssured.config.getRedirectConfig().followsRedirects(),
+                specification.getConfig().getRedirectConfig().followsRedirects());
+    }
+
+    @Test
+    public void managementCredentialsAreScopedToTrustedEndpoints() {
+        String key = "synthetic-management-key";
+        String path = "/runtime/webhooks/durabletask/instances/test";
+        String trustedUrl = RestAssured.baseURI + ":" + RestAssured.port + path;
+        QueryableRequestSpecification management = SpecificationQuerier.query(requestFor(trustedUrl, key));
+        assertEquals(key, management.getHeaders().getValue("x-functions-key"));
+
+        assertThrows(AssertionError.class,
+                () -> requestFor("http://untrusted.example:" + RestAssured.port + path, key));
+        QueryableRequestSpecification anonymous = SpecificationQuerier.query(
+                requestFor("https://proxy.example/api/start", key));
+        assertFalse(anonymous.getHeaders().hasHeaderWithName("x-functions-key"));
+        assertEquals(RestAssured.config.getRedirectConfig().followsRedirects(),
+                anonymous.getConfig().getRedirectConfig().followsRedirects());
     }
 
     @Test
@@ -132,8 +200,7 @@ public class EndToEndTests {
         sendEventPostUri = sendEventPostUri.replace("{eventName}", "event");
 
         // empty request body
-        RestAssured
-                .given()
+        requestFor(sendEventPostUri)
                 .contentType(ContentType.JSON) // Set the request content type
                 .body("{}")
                 .post(sendEventPostUri)
@@ -167,7 +234,9 @@ public class EndToEndTests {
         Response statusResponse = get(statusQueryGetUri);
         String instanceId = statusResponse.jsonPath().get("instanceId");
 
-        String restartPostUri = jsonPath.get("restartPostUri") + "&restartWithNewInstanceId=" + restartWithNewInstanceId;
+        String restartUrl = jsonPath.get("restartPostUri");
+        String restartPostUri = restartUrl + (restartUrl.contains("?") ? "&" : "?")
+                + "restartWithNewInstanceId=" + restartWithNewInstanceId;
         Response restartResponse = post(restartPostUri);
         JsonPath restartJsonPath = restartResponse.jsonPath();
         String restartStatusQueryGetUri = restartJsonPath.get("statusQueryGetUri");
@@ -216,8 +285,7 @@ public class EndToEndTests {
         sendEventPostUri = sendEventPostUri.replace("{eventName}", "test");
 
         String requestBody = "{\"value\":\"Test\"}";
-        RestAssured
-                .given()
+        requestFor(sendEventPostUri)
                 .contentType(ContentType.JSON) // Set the request content type
                 .body(requestBody) // Set the request body
                 .post(sendEventPostUri)
@@ -311,8 +379,7 @@ public class EndToEndTests {
         sendEventPostUri = sendEventPostUri.replace("{eventName}", "event");
 
         String requestBody = "{\"value\":\"Test\"}";
-        RestAssured
-            .given()
+        requestFor(sendEventPostUri)
             .contentType(ContentType.JSON) // Set the request content type
             .body(requestBody) // Set the request body
             .post(sendEventPostUri)
@@ -588,6 +655,39 @@ public class EndToEndTests {
         Response statusResponse = get(statusQueryGetUri);
         Integer output = statusResponse.jsonPath().get("output");
         assertEquals(200, output);
+    }
+
+    private RequestSpecification requestFor(String url) {
+        return requestFor(url, SYSTEM_KEY);
+    }
+
+    private RequestSpecification requestFor(String url, String systemKey) {
+        RequestSpecification request = RestAssured.given();
+        if (systemKey != null && !systemKey.isEmpty()
+                && (url.startsWith("http://") || url.startsWith("https://"))) {
+            int queryStart = url.indexOf('?');
+            URI target = URI.create(queryStart < 0 ? url : url.substring(0, queryStart));
+            if (!target.getPath().startsWith("/runtime/webhooks/durabletask/")) {
+                return request;
+            }
+
+            URI base = URI.create(RestAssured.baseURI);
+            assertEquals(base.getScheme(), target.getScheme(), "Unexpected management URL scheme");
+            assertEquals(base.getHost(), target.getHost(), "Unexpected management URL host");
+            int port = target.getPort() < 0
+                    ? ("https".equals(target.getScheme()) ? 443 : 80) : target.getPort();
+            assertEquals(RestAssured.port, port, "Unexpected management URL port");
+            request.header("x-functions-key", systemKey).redirects().follow(false);
+        }
+        return request;
+    }
+
+    private Response get(String url) {
+        return requestFor(url).get(url);
+    }
+
+    private Response post(String url, Object... pathParameters) {
+        return requestFor(url).post(url, pathParameters);
     }
 
     private boolean pollingCheck(String statusQueryGetUri,

@@ -2,6 +2,10 @@ package com.microsoft.durabletask.azurefunctions;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -12,7 +16,7 @@ public class HttpManagementPayloadTest {
 
     private static final String INSTANCE_ID = "test-instance-id";
     private static final String INSTANCE_STATUS_URL = "http://localhost:7071/runtime/webhooks/durabletask/instances/test-instance-id";
-    private static final String QUERY_STRING = "code=abc123";
+    private static final String QUERY_STRING = "taskHub=hub&connection=storage";
 
     private HttpManagementPayload createPayload() {
         return new HttpManagementPayload(INSTANCE_ID, INSTANCE_STATUS_URL, QUERY_STRING);
@@ -79,5 +83,32 @@ public class HttpManagementPayloadTest {
     public void getRewindPostUri_ReturnsCorrectUrl() {
         HttpManagementPayload payload = createPayload();
         assertEquals(INSTANCE_STATUS_URL + "/rewind?reason={text}&" + QUERY_STRING, payload.getRewindPostUri());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "code=synthetic%2Bkey%2F%3D&site=value%2Bone",
+            "site=value%2Bone&CoDe=synthetic%2Bkey%2F%3D",
+            "%63ode=synthetic%2Bkey%2F%3D&site=value%2Bone&CODE=duplicate"
+    })
+    void hostQueryIsPreservedWithoutMovingKeysToMetadata(String query) {
+        HttpManagementPayload payload = new HttpManagementPayload(INSTANCE_ID, INSTANCE_STATUS_URL, query);
+
+        assertEquals(INSTANCE_STATUS_URL + "?" + query, payload.getStatusQueryGetUri());
+        for (String url : Arrays.asList(
+                payload.getStatusQueryGetUri(), payload.getSendEventPostUri(), payload.getTerminatePostUri(),
+                payload.getRewindPostUri(), payload.getPurgeHistoryDeleteUri(), payload.getRestartPostUri(),
+                payload.getSuspendPostUri(), payload.getResumePostUri())) {
+            assertTrue(url.endsWith(query));
+        }
+    }
+
+    @Test
+    void missingOrEmptyQueryDoesNotAddNullOrTrailingSeparators() {
+        for (String query : new String[] { null, "" }) {
+            HttpManagementPayload payload = new HttpManagementPayload(INSTANCE_ID, INSTANCE_STATUS_URL, query);
+            assertEquals(INSTANCE_STATUS_URL, payload.getStatusQueryGetUri());
+            assertEquals(INSTANCE_STATUS_URL + "/terminate?reason={text}", payload.getTerminatePostUri());
+        }
     }
 }

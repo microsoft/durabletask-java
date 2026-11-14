@@ -8,6 +8,9 @@ package com.microsoft.durabletask.azurefunctions;
 
 /**
  * The class that holds the webhook URLs to manage orchestration instances.
+ * The Functions host controls whether these URLs include a system key.
+ * When {@code httpSettings.excludeManagementKeyFromUrls} is enabled, callers
+ * must obtain a key separately and send it in the {@code x-functions-key} request header.
  */
 public class HttpManagementPayload {
     private final String id;
@@ -25,21 +28,28 @@ public class HttpManagementPayload {
      *
      * @param instanceId The ID of the orchestration instance
      * @param instanceStatusURL The base webhook url of the orchestration instance
-     * @param requiredQueryStringParameters The query parameters to include with the http request
+     * @param requiredQueryStringParameters The query parameters supplied by the Functions host, preserved unchanged
      */
     public HttpManagementPayload(
             String instanceId,
             String instanceStatusURL,
             String requiredQueryStringParameters) {
+        String query = requiredQueryStringParameters == null ? "" : requiredQueryStringParameters;
+        if (query.startsWith("?")) {
+            query = query.substring(1);
+        }
+
+        String querySuffix = query.isEmpty() ? "" : "?" + query;
+        String reasonSuffix = "?reason={text}" + (query.isEmpty() ? "" : "&" + query);
         this.id = instanceId;
-        this.purgeHistoryDeleteUri = instanceStatusURL + "?" + requiredQueryStringParameters;
-        this.restartPostUri = instanceStatusURL + "/restart?" + requiredQueryStringParameters;
-        this.rewindPostUri = instanceStatusURL + "/rewind?reason={text}&" + requiredQueryStringParameters;
-        this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}?" + requiredQueryStringParameters;
-        this.statusQueryGetUri = instanceStatusURL + "?" + requiredQueryStringParameters;
-        this.terminatePostUri = instanceStatusURL + "/terminate?reason={text}&" + requiredQueryStringParameters;
-        this.resumePostUri = instanceStatusURL + "/resume?reason={text}&" + requiredQueryStringParameters;
-        this.suspendPostUri = instanceStatusURL + "/suspend?reason={text}&" + requiredQueryStringParameters;
+        this.purgeHistoryDeleteUri = instanceStatusURL + querySuffix;
+        this.restartPostUri = instanceStatusURL + "/restart" + querySuffix;
+        this.rewindPostUri = instanceStatusURL + "/rewind" + reasonSuffix;
+        this.sendEventPostUri = instanceStatusURL + "/raiseEvent/{eventName}" + querySuffix;
+        this.statusQueryGetUri = instanceStatusURL + querySuffix;
+        this.terminatePostUri = instanceStatusURL + "/terminate" + reasonSuffix;
+        this.resumePostUri = instanceStatusURL + "/resume" + reasonSuffix;
+        this.suspendPostUri = instanceStatusURL + "/suspend" + reasonSuffix;
     }
 
     /**
