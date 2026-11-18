@@ -21,6 +21,7 @@ Thank you for taking the time to contribute to the DurableTask Java SDK!
 - Apache Maven 3.8.1 or higher (Note: the instructions in this doc were validated using Apache Maven 3.9.9)
 - Gradle 7.4
 - Java 8 or higher (Note: the instructions in this doc were validated using Java 17)
+  - For Java 17, use a build patched for [Java4Shell (CVE-2026-114938)](https://cert.europa.eu/publications/security-advisories/2026-021/) (OpenJDK 17.0.21.1 or later).
 
 ## Pull Request Change Flow
 

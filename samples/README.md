@@ -6,7 +6,7 @@ The Java SDK automatically propagates W3C trace context (traceparent/tracestate)
 
 ## Prerequisites
 
-- Java 17+
+- Java 17 or later. Use a JDK build that includes your vendor's fix for [Java4Shell (CVE-2026-114938)](https://cert.europa.eu/publications/security-advisories/2026-021/).
 - Docker (for DTS emulator and Jaeger)
 
 ## Running the Sample
